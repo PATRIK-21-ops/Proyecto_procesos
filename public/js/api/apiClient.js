@@ -22,7 +22,7 @@ async function readResponse(response) {
 
 async function ensureCsrf() {
   if (csrfToken) return csrfToken;
-  const response = await fetch('/api/auth/csrf', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  const response = await fetch('/api/auth/csrf', { credentials: 'include', headers: { Accept: 'application/json' } });
   const body = await readResponse(response);
   csrfToken = body.csrfToken;
   return csrfToken;
@@ -35,7 +35,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod)) requestHeaders['X-CSRF-Token'] = await ensureCsrf();
   const response = await fetch(`/api${path}`, {
     method: normalizedMethod,
-    credentials: 'same-origin',
+    credentials: 'include',
     headers: requestHeaders,
     body: body === undefined ? undefined : JSON.stringify(body)
   });

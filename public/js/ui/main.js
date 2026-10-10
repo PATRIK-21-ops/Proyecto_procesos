@@ -204,12 +204,17 @@ $('#login-form').addEventListener('submit', async (event) => {
   event.preventDefault(); hideNotice();
   const form = new FormData(event.currentTarget);
   try {
-    const { user } = await api.login({ email: String(form.get('email') || ''), password: String(form.get('password') || '') });
-    setCurrentUser(user);
-    event.currentTarget.reset();
-    showView('home');
-    showNotice(`Sesión iniciada. Bienvenido, ${user.email}.`, 'success');
-  } catch (error) { showApiError(error); }
+    // 1. Enviamos el login al servidor
+    await api.login({ email: String(form.get('email') || ''), password: String(form.get('password') || '') });
+    
+    // 2. Si el login es correcto, forzamos la recarga de la página
+    // Esto obligará al navegador a ejecutar boot() de nuevo, pero esta vez
+    // enviando la cookie válida, lo que sincronizará la sesión perfectamente.
+    window.location.reload(); 
+    
+  } catch (error) { 
+    showApiError(error); 
+  }
 });
 
 $('#logout-button').addEventListener('click', async () => {
@@ -219,7 +224,7 @@ $('#logout-button').addEventListener('click', async () => {
 });
 $('#delete-account-button').addEventListener('click', async () => {
   if (!currentUser || !window.confirm('¿Seguro que quieres eliminar tu cuenta? No podrás volver a iniciar sesión con ella.')) return;
-  try {
+  try {node
     const result = await api.deleteUser(currentUser.id);
     if (result.deletedCurrentUser) {
       setCurrentUser(null); showView('home'); showNotice('Tu cuenta ha sido eliminada.', 'success');
