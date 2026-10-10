@@ -192,18 +192,32 @@ $('#start-game').addEventListener('click', startGame);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
 $('#register-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); hideNotice();
-  const form = new FormData(event.currentTarget);
+  event.preventDefault(); 
+  hideNotice();
+  
+  // Guardamos el formulario de forma segura antes del await
+  const formElement = event.target;
+  const form = new FormData(formElement);
+  
   const email = String(form.get('email') || '');
   const password = String(form.get('password') || '');
   const passwordConfirm = String(form.get('passwordConfirm') || '');
-  if (password !== passwordConfirm) return showNotice('Las contraseñas no coinciden.', 'error');
+  
+  if (password !== passwordConfirm) {
+    return showNotice('Las contraseñas no coinciden.', 'error');
+  }
+  
   try {
     await api.register({ email, password });
-    event.currentTarget.reset();
+    
+    // Usamos la variable segura para resetear el formulario sin crashear
+    formElement.reset();
+    
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
-  } catch (error) { showApiError(error); }
+  } catch (error) { 
+    showApiError(error); 
+  }
 });
 
 $('#login-form').addEventListener('submit', async (event) => {
