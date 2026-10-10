@@ -37,19 +37,28 @@ function showView(name) {
 }
 function setCurrentUser(user) {
   currentUser = user || null;
+  
+  // Actualiza el texto de la esquina superior
   $('#session-badge').textContent = currentUser ? currentUser.email : 'INVITADO';
+  
+  // Elementos que SÓLO ven los usuarios logueados:
   $('#nav-profile').classList.toggle('hidden', !currentUser);
   $('#nav-admin').classList.toggle('hidden', currentUser?.role !== 'admin');
   $('#home-play').textContent = currentUser ? '▶ CONTINUAR' : '▶ JUGAR';
+
+  // Elementos que SÓLO ven los invitados:
+  document.querySelectorAll('[data-view="login"]').forEach(el => {
+    el.classList.toggle('hidden', currentUser !== null);
+  });
+  
+  document.querySelectorAll('[data-view="register"]').forEach(el => {
+    el.classList.toggle('hidden', currentUser !== null);
+  });
 }
 function showApiError(error) {
-  // Comprobación más robusta para detectar tu ApiError
   const isApiError = error.name === 'ApiError' || error instanceof ApiError;
   const message = isApiError ? error.message : 'No se ha podido completar la operación. Revisa la conexión e inténtalo de nuevo.';
-  
-  // Imprimimos el error real en la consola por si es un fallo nativo
   if (!isApiError) console.error("Error nativo interceptado:", error);
-  
   showNotice(message, 'error');
 }
 function createCell(text, className = '') {
@@ -195,7 +204,6 @@ $('#register-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
   hideNotice();
   
-  // Guardamos el formulario de forma segura antes del await
   const formElement = event.target;
   const form = new FormData(formElement);
   
@@ -209,10 +217,7 @@ $('#register-form').addEventListener('submit', async (event) => {
   
   try {
     await api.register({ email, password });
-    
-    // Usamos la variable segura para resetear el formulario sin crashear
     formElement.reset();
-    
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
   } catch (error) { 
@@ -236,14 +241,16 @@ $('#login-form').addEventListener('submit', async (event) => {
     const { user } = await api.me();
     setCurrentUser(user);
     
-    // Usamos nuestra variable segura, que nunca será null
     formElement.reset();
-    
     showNotice('Logueado correctamente', 'success');
     showView('home'); 
     
   } catch (error) { 
-    showApiError(error); 
+    if (error.code === 'INVALID_CREDENTIALS') {
+      showNotice('Correo o contraseña incorrectos (o la cuenta ha sido eliminada).', 'error');
+    } else {
+      showApiError(error); 
+    }
   }
 });
 
