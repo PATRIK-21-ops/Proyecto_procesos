@@ -92,7 +92,7 @@ export class UserService {
   async ensureAdmin(email, password) {
     const normalizedEmail = normalizeEmail(email);
     if (!EMAIL_RE.test(normalizedEmail) || typeof password !== 'string' || password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) {
-      throw new Error('ADMIN_EMAIL debe ser un correo válido y ADMIN_PASSWORD debe tener entre 12 y 72 bytes.');
+      throw new Error('ADMIN_EMAIL debe ser un correo válido y la contraseña debe tener al menos 12 caracteres.');
     }
     const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {

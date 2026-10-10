@@ -106,6 +106,6 @@ describe('UserService — reglas de negocio (PBI 1, 8, 9, 10, 12)', () => {
 
   it('no permite que la contraseña del primer administrador sea corta', async () => {
     await expect(service.ensureAdmin('second@test.local', 'short'))
-      .rejects.toThrow(/al menos 12 caracteres/);
+      .rejects.toThrow(/ADMIN_EMAIL debe ser un correo válido y la contraseña debe tener al menos 12 caracteres./);
   });
 });

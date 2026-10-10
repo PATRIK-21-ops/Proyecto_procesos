@@ -43,7 +43,13 @@ function setCurrentUser(user) {
   $('#home-play').textContent = currentUser ? '▶ CONTINUAR' : '▶ JUGAR';
 }
 function showApiError(error) {
-  const message = error instanceof ApiError ? error.message : 'No se ha podido completar la operación. Revisa la conexión e inténtalo de nuevo.';
+  // Comprobación más robusta para detectar tu ApiError
+  const isApiError = error.name === 'ApiError' || error instanceof ApiError;
+  const message = isApiError ? error.message : 'No se ha podido completar la operación. Revisa la conexión e inténtalo de nuevo.';
+  
+  // Imprimimos el error real en la consola por si es un fallo nativo
+  if (!isApiError) console.error("Error nativo interceptado:", error);
+  
   showNotice(message, 'error');
 }
 function createCell(text, className = '') {
@@ -201,16 +207,26 @@ $('#register-form').addEventListener('submit', async (event) => {
 });
 
 $('#login-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); hideNotice();
-  const form = new FormData(event.currentTarget);
+  event.preventDefault(); 
+  hideNotice();
+  
+  const formElement = event.target;
+  const form = new FormData(formElement);
+  
   try {
-    // 1. Enviamos el login al servidor
-    await api.login({ email: String(form.get('email') || ''), password: String(form.get('password') || '') });
+    await api.login({ 
+      email: String(form.get('email') || ''), 
+      password: String(form.get('password') || '') 
+    });
     
-    // 2. Si el login es correcto, forzamos la recarga de la página
-    // Esto obligará al navegador a ejecutar boot() de nuevo, pero esta vez
-    // enviando la cookie válida, lo que sincronizará la sesión perfectamente.
-    window.location.reload(); 
+    const { user } = await api.me();
+    setCurrentUser(user);
+    
+    // Usamos nuestra variable segura, que nunca será null
+    formElement.reset();
+    
+    showNotice('Logueado correctamente', 'success');
+    showView('home'); 
     
   } catch (error) { 
     showApiError(error); 
@@ -224,7 +240,7 @@ $('#logout-button').addEventListener('click', async () => {
 });
 $('#delete-account-button').addEventListener('click', async () => {
   if (!currentUser || !window.confirm('¿Seguro que quieres eliminar tu cuenta? No podrás volver a iniciar sesión con ella.')) return;
-  try {node
+  try {
     const result = await api.deleteUser(currentUser.id);
     if (result.deletedCurrentUser) {
       setCurrentUser(null); showView('home'); showNotice('Tu cuenta ha sido eliminada.', 'success');

@@ -8,7 +8,7 @@ Aplicación web educativa de FPS retro en primera persona, con un motor raycasti
 
 - **Node.js + Express:** backend y API.
 - **HTML/CSS/JavaScript + Canvas:** interfaz y FPS raycasting sin framework frontend.
-- **PostgreSQL + `pg`:** persistencia real; alternativa en memoria para pruebas y primer hito.
+- **PostgreSQL + `pg`:** persistencia real; alternativa en memoria para pruebas y primer hito. (Docker)
 - **`express-session` + `connect-pg-simple`:** sesiones de servidor y sesiones persistentes en PostgreSQL.
 - **`bcryptjs`:** hash de contraseñas.
 - **Vitest + Supertest:** pruebas automáticas de lógica y API.
@@ -132,46 +132,5 @@ Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticam
 
 El motor de `public/js/game/game.js` dibuja a 320 × 200 y usa DDA/raycasting para las paredes, texturas pixeladas procedurales, billboards para enemigos y objetos, colisiones, daño, munición, kits médicos, HUD, pausa, victoria y Game Over. Los gráficos se generan por código y son originales; no se incluyen sprites ni logotipos de DOOM.
 
-**Nota honesta sobre puntuaciones:** el servidor calcula el total como `kills × 100` y valida el formato y los límites, pero el número de bajas sigue procediendo del navegador. No es un sistema antitrampas apto para competición. Para garantizar resultados habría que mover la simulación de la partida o su verificación a un servidor autoritativo.
 
-## Despliegue de referencia
 
-1. Sube el proyecto a tu repositorio GitHub.
-2. En tu proveedor cloud, crea un servicio Node/Docker conectado a ese repositorio y a `main`.
-3. Configura una PostgreSQL gestionada y las variables `DATABASE_URL`, `PGSSL=require`, `NODE_ENV=production`, `SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` y, opcionalmente, `LOG_LEVEL` / `MAX_SCORE_KILLS`.
-4. Para un servicio Node usa `npm install` como build command y `npm start` como start command. `PORT` lo aporta el proveedor si corresponde.
-5. Comprueba `https://tu-dominio/api/health`; después registra un usuario normal, inicia sesión y prueba el panel administrador.
-6. Habilita el auto-deploy de `main` y comprueba que la ejecución de GitHub Actions pasa. Los nombres, límites de los planes gratuitos y paneles de configuración del proveedor pueden cambiar; compruébalos en tu cuenta antes de la entrega.
-
-No existe ninguna conexión con tu cuenta GitHub ni se ha desplegado el proyecto en tu nombre desde este archivo ZIP. Tienes que subirlo a tu repositorio y configurar esos servicios.
-
-## Checklist de Hitos
-
-### Hito 1 — Esqueleto y backend
-- [ ] Repo y ramas por cambio; cambios integrados por pull request.
-- [ ] Repositorio de usuarios en memoria.
-- [ ] Lógica alta/listado/activo/eliminación con reglas de rol testeables.
-- [ ] API separada de la lógica.
-- [ ] Cinco o más pruebas automatizadas (el proyecto incluye un conjunto mayor).
-- [ ] GitHub Actions ejecuta las pruebas.
-- [ ] URL pública y CI comprobados antes de etiquetar `hito-1`.
-
-### Hito 2 — Frontend y sesión
-- [ ] Interfaz de inicio, registro/login, perfil y juego.
-- [ ] `apiClient.js` centraliza `fetch`; las pantallas no llaman a `fetch`.
-- [ ] Hash seguro de contraseña.
-- [ ] Login, logout, sesión al refrescar, CSRF y rutas protegidas.
-- [ ] Verificar cierre de sesión y etiqueta `hito-2`.
-
-### Hito 3 — Persistencia, secretos y roles
-- [ ] `DATABASE_URL` apunta a una PostgreSQL real.
-- [ ] `schema.sql`, repositorio PostgreSQL de usuarios y puntuaciones.
-- [ ] Sesiones persistentes con PostgreSQL.
-- [ ] Secretos solo como variables de entorno; `.env` no se sube.
-- [ ] Administrador inicial, roles y autorización en el servidor.
-- [ ] Logs de alta, login correcto/fallido, bajas de cuenta y accesos denegados.
-- [ ] Reiniciar servidor y verificar que usuarios/puntuaciones siguen ahí.
-- [ ] Etiquetar el commit validado como `hito-3`.
-
-### Fuera de Hitos 1–3
-Confirmación de cuenta por correo, OAuth y la revisión final de manejo de errores/documentación avanzada corresponden al Hito 4 del documento. La puntuación es una extensión del juego, no un requisito de la especificación original.
