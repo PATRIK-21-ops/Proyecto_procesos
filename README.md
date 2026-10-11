@@ -1,8 +1,8 @@
 # HELLFALL: Pixel Siege
 
-Aplicación web educativa de FPS retro en primera persona, con un motor raycasting en JavaScript, backend Node.js/Express, registro/login, sesiones, roles, PostgreSQL, panel de administración, logs, pruebas y CI. Está organizada para cubrir los **Hitos 1–3** de la especificación de Procesos de Ingeniería del Software. El juego y las puntuaciones son extensiones del proyecto; no son requisitos de esos tres hitos.
+Aplicación FPS retro en primera persona, con motor JavaScript, backend Node.js/Express, registro/login, sesiones, roles, PostgreSQL ejecutado en contenedores docker, panel de administración, logs, pruebas y CI. Está organizada para cubrir con los requisitos de la especificación de Procesos de Ingeniería del Software. 
 
-> **Importante:** este proyecto es una base de trabajo que tienes que ejecutar, revisar y ser capaz de explicar. La confirmación de correo y OAuth se reservan para el Hito 4. El registro activa la cuenta inmediatamente durante los Hitos 1–3. No subas contraseñas, cookies, secretos o archivos `.env` a GitHub.
+> **Importante:** Para realizar la ejecución de este codigo primero debes disponer de una maquina virtual docker mediante la cual instales postgres para la base de datos. Debes tener node.js para la librería de javascript.
 
 ## Tecnologías
 
@@ -37,33 +37,8 @@ Aplicación web educativa de FPS retro en primera persona, con un motor raycasti
 
 Compose crea PostgreSQL y la aplicación. Los datos de PostgreSQL permanecen en el volumen `hellfall_pg_data` al reiniciar los contenedores. Para detenerlos: `docker compose down`. Para borrar también todos los datos de desarrollo: `docker compose down -v`.
 
-## Arranque sin Docker
 
-1. Instala Node.js y PostgreSQL.
-2. Copia `.env.example` a `.env`.
-3. Ajusta, como mínimo, estas variables:
-
-   ```dotenv
-   NODE_ENV=development
-   PORT=8080
-   SESSION_SECRET=un-secreto-local-largo-y-aleatorio
-   DATABASE_URL=postgres://hellfall:TU_CLAVE@localhost:5432/hellfall
-   PGSSL=disable
-   ADMIN_EMAIL=admin@tu-dominio.test
-   ADMIN_PASSWORD=una-clave-local-de-12-caracteres-o-mas
-   ```
-
-4. Crea una base de datos llamada `hellfall` y ejecuta `sql/schema.sql` o deja que la aplicación lo ejecute al arrancar.
-5. En la raíz del proyecto:
-
-   ```bash
-   npm install
-   npm run dev
-   ```
-
-El primer `npm install` genera `package-lock.json`; añádelo a Git. Si no configuras `DATABASE_URL`, el sistema usa un repositorio en memoria solo para desarrollo/pruebas: **los usuarios y puntuaciones desaparecen al reiniciar**. Eso no satisface el Hito 3.
-
-## Pruebas
+## Pruebas automatizadas
 
 ```bash
 npm test

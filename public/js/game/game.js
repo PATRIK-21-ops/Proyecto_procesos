@@ -155,15 +155,53 @@ export class HellfallGame {
   reset() {
     this.player = { x: 1.55, y: 1.55, angle: 0, health: 100, ammo: 12, reserve: 48, kills: 0 };
     this.startTime = performance.now();
-    this.enemies = [
-      { x: 7.5, y: 2.7, health: 2, alive: true, cooldown: 0 },
-      { x: 12.4, y: 4.4, health: 2, alive: true, cooldown: 0 },
-      { x: 8.3, y: 8.5, health: 2, alive: true, cooldown: 0 },
-      { x: 3.5, y: 11.2, health: 2, alive: true, cooldown: 0 },
-      { x: 13.2, y: 12.5, health: 2, alive: true, cooldown: 0 }
-    ];
+    this.level = 1; 
+    this.startLevel();
+  }
+
+  startLevel() {
+    this.recoil = 0; 
+    this.muzzleFlash = 0; 
+    this.finished = false;
+    
+    // Regeneramos botiquines cada nivel
     this.medkits = [{ x: 5.5, y: 5.5, active: true }, { x: 11.5, y: 10.5, active: true }];
-    this.recoil = 0; this.muzzleFlash = 0; this.finished = false;
+
+    // Puntos de aparición fijos en tu mapa
+    const spawns = [
+      { x: 7.5, y: 2.7 }, { x: 12.4, y: 4.4 }, { x: 8.3, y: 8.5 },
+      { x: 3.5, y: 11.2 }, { x: 13.2, y: 12.5 }, { x: 2.5, y: 6.5 }, { x: 13.5, y: 2.5 }
+    ];
+
+    this.enemies = [];
+    // Cada nivel hay más enemigos (máximo 7)
+    const numEnemies = Math.min(spawns.length, 3 + this.level);
+    const isBossLevel = this.level % 3 === 0;
+
+    for(let i = 0; i < numEnemies; i++) {
+      const isBoss = isBossLevel && i === 0; // El primer enemigo del nivel 3, 6, 9... es el Boss
+      
+      this.enemies.push({
+        x: spawns[i].x,
+        y: spawns[i].y,
+        // El boss tiene 15 de vida + bonus, los normales escalan con el nivel
+        health: isBoss ? 15 + (this.level * 2) : 2 + Math.floor(this.level / 2),
+        // La velocidad base es 0.55, escalando cada nivel
+        speedMultiplier: isBoss ? 0.75 : 1 + (this.level * 0.15),
+        isBoss: isBoss,
+        alive: true,
+        cooldown: 0
+      });
+    }
+
+    // Le damos un poco de munición extra al jugador por pasar de nivel
+    this.player.reserve += 12; 
+    
+    if (isBossLevel) {
+      this.onStatus(`NIVEL ${this.level}: ¡AMENAZA DE CLASE BOSS DETECTADA!`);
+    } else {
+      this.onStatus(`NIVEL ${this.level}: Despeja el área`);
+    }
   }
 
   start() {
@@ -237,43 +275,62 @@ export class HellfallGame {
     const player = this.player;
     if (this.keys.has('ArrowLeft')) player.angle -= dt * 1.9;
     if (this.keys.has('ArrowRight')) player.angle += dt * 1.9;
+    
     const fast = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const speed = (fast ? 3.6 : 2.55) * dt;
     let forward = 0, strafe = 0;
+    
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) forward += speed;
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) forward -= speed;
     if (this.keys.has('KeyA')) strafe -= speed;
     if (this.keys.has('KeyD')) strafe += speed;
+    
     const dx = Math.cos(player.angle) * forward + Math.cos(player.angle + Math.PI / 2) * strafe;
     const dy = Math.sin(player.angle) * forward + Math.sin(player.angle + Math.PI / 2) * strafe;
     if (dx || dy) this.moveWithCollision(dx, dy);
 
     for (const medkit of this.medkits) {
-      if (medkit.active && distance(player.x, player.y, medkit.x, medkit.y) < 0.5 && player.health < 100) {
+      // Usar Math.hypot nativo para calcular distancias de forma segura
+      if (medkit.active && Math.hypot(player.x - medkit.x, player.y - medkit.y) < 0.5 && player.health < 100) {
         player.health = Math.min(100, player.health + 30); medkit.active = false;
       }
     }
 
     for (const enemy of this.enemies) {
       if (!enemy.alive) continue;
-      const dist = distance(player.x, player.y, enemy.x, enemy.y);
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       enemy.cooldown = Math.max(0, enemy.cooldown - dt);
+      
       if (dist > 1.15 && dist < 9) {
-        const speedEnemy = 0.55 * dt;
+        // APLICAMOS EL MULTIPLICADOR DE VELOCIDAD DE NIVEL
+        const speedEnemy = (0.55 * enemy.speedMultiplier) * dt;
         const ex = (player.x - enemy.x) / dist * speedEnemy;
         const ey = (player.y - enemy.y) / dist * speedEnemy;
         if (!this.isWall(enemy.x + ex, enemy.y)) enemy.x += ex;
         if (!this.isWall(enemy.x, enemy.y + ey)) enemy.y += ey;
       } else if (dist <= 1.15 && enemy.cooldown <= 0) {
-        player.health = Math.max(0, player.health - 9);
+        // El Boss quita 25 de vida de un golpe, los normales 9
+        const damage = enemy.isBoss ? 25 : 9;
+        player.health = Math.max(0, player.health - damage);
         enemy.cooldown = 0.8;
         this.lastDamageTime = now;
       }
     }
+    
     this.recoil = Math.max(0, this.recoil - dt * 2.6);
     this.muzzleFlash = Math.max(0, this.muzzleFlash - dt * 5);
-    if (player.health <= 0) this.finish(false);
-    else if (this.enemies.every((enemy) => !enemy.alive)) this.finish(true);
+    
+    if (player.health <= 0) {
+      this.finish(false);
+    } else if (this.enemies.every((enemy) => !enemy.alive)) {
+      // SI MUEREN TODOS, SUBIMOS DE NIVEL EN LUGAR DE TERMINAR
+      if (this.level >= 5) {
+        this.finish(true); // Ganas el juego en el nivel 5
+      } else {
+        this.level++;
+        this.startLevel();
+      }
+    }
   }
 
   shoot() {
@@ -448,25 +505,59 @@ export class HellfallGame {
       ...this.enemies.filter((enemy) => enemy.alive).map((enemy) => ({ ...enemy, type: 'enemy', sprite: this.demonSprite })),
       ...this.medkits.filter((item) => item.active).map((item) => ({ ...item, type: 'medkit', sprite: this.medkitSprite }))
     ];
-    objects.sort((a, b) => distance(this.player.x, this.player.y, b.x, b.y) - distance(this.player.x, this.player.y, a.x, a.y));
-    const invDet = 1 / (planeX * dirY - dirX * planeY);
+    
+    // Usamos Math.hypot para evitar problemas con distancias
+    objects.sort((a, b) => 
+      Math.hypot(this.player.x - b.x, this.player.y - b.y) - 
+      Math.hypot(this.player.x - a.x, this.player.y - a.y)
+    );
+    
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    
     for (const object of objects) {
-      const spriteX = object.x - this.player.x, spriteY = object.y - this.player.y;
+      const spriteX = object.x - this.player.x;
+      const spriteY = object.y - this.player.y;
+      
       const transformX = invDet * (dirY * spriteX - dirX * spriteY);
       const transformY = invDet * (-planeY * spriteX + planeX * spriteY);
+      
       if (transformY <= 0.15) continue;
+      
       const spriteScreenX = Math.floor((WIDTH / 2) * (1 + transformX / transformY));
-      const spriteHeight = Math.abs(Math.floor(VIEW_HEIGHT / transformY)) * (object.type === 'medkit' ? 0.42 : 0.94);
+      
+      // AQUÍ ESTÁ LA MAGIA DEL BOSS: Si es jefe, su escala es 1.45 (gigante)
+      const scale = object.type === 'medkit' ? 0.42 : (object.isBoss ? 1.45 : 0.94);
+      const spriteHeight = Math.abs(Math.floor(VIEW_HEIGHT / transformY)) * scale;
       const spriteWidth = spriteHeight * (object.type === 'medkit' ? 1 : 0.67);
+      
       const drawStartY = Math.max(0, Math.floor(VIEW_HEIGHT / 2 - spriteHeight / 2));
       const drawEndY = Math.min(VIEW_HEIGHT - 1, Math.floor(VIEW_HEIGHT / 2 + spriteHeight / 2));
+      
       const drawStartX = Math.max(0, Math.floor(spriteScreenX - spriteWidth / 2));
       const drawEndX = Math.min(WIDTH - 1, Math.floor(spriteScreenX + spriteWidth / 2));
+      
       for (let stripe = drawStartX; stripe <= drawEndX; stripe++) {
         if (transformY >= this.zBuffer[stripe]) continue;
-        const texX = Math.floor((stripe - (spriteScreenX - spriteWidth / 2)) / Math.max(1, spriteWidth) * object.sprite.width);
-        c.drawImage(object.sprite, clamp(texX, 0, object.sprite.width - 1), 0, 1, object.sprite.height, stripe, drawStartY, 1, drawEndY - drawStartY);
-        if (object.type === 'enemy' && object.health === 1 && stripe % 4 === 0) { c.fillStyle = '#d54730'; c.fillRect(stripe, drawStartY, 1, 2); }
+        
+        const texX = Math.floor((stripe - (spriteScreenX - spriteWidth / 2)) * object.sprite.width / Math.max(1, spriteWidth));
+        
+        c.drawImage(
+          object.sprite, 
+          clamp(texX, 0, object.sprite.width - 1), 
+          0, 
+          1, 
+          object.sprite.height, 
+          stripe, 
+          drawStartY, 
+          1, 
+          drawEndY - drawStartY
+        );
+        
+        // Efecto visual: si al enemigo (o boss) le queda 1 de vida, parpadea en rojo
+        if (object.type === 'enemy' && object.health <= 2 && stripe % 4 === 0) { 
+          c.fillStyle = '#d54730'; 
+          c.fillRect(stripe, drawStartY, 1, 2); 
+        }
       }
     }
   }
