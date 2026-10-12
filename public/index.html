@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#120d10">
+  <meta name="description" content="HELLFALL: un FPS retro pixelado de navegador.">
+  <title>HELLFALL // Pixel Siege</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <script type="module" src="/js/ui/main.js"></script>
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#home" data-view="home" aria-label="HELLFALL, inicio">
+      <span class="brand-mark">HF</span>
+      <span><strong>HELLFALL</strong><small>PIXEL SIEGE // 199X</small></span>
+    </a>
+    <div class="topbar-right">
+      <span id="session-badge" class="session-badge">INVITADO</span>
+      <button class="button button-ghost button-small hidden" id="nav-profile" type="button">MI CUENTA</button>
+      <button class="button button-ghost button-small hidden" id="nav-admin" type="button">ADMIN</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
+
+    <section id="view-home" class="view hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span> SYSTEM ONLINE // SECTOR 09</p>
+        <h1>HELL<span>FALL</span><em>PIXEL SIEGE</em></h1>
+        <p class="hero-lede">La instalación ha caído. Las alarmas siguen activas. Ábrete camino por el complejo y sobrevive a la oscuridad.</p>
+        <div class="hero-actions">
+          <button class="button button-primary" id="home-play" type="button">▶ JUGAR</button>
+          <button class="button button-secondary" data-view="login" type="button">INICIAR SESIÓN</button>
+          <button class="button button-ghost" data-view="register" type="button">CREAR CUENTA</button>
+        </div>
+        <div class="spec-row">
+          <div><span class="spec-label">MODO</span><strong>FPS / SINGLE PLAYER</strong></div>
+          <div><span class="spec-label">RENDER</span><strong>320 × 200 PIXELS</strong></div>
+          <div><span class="spec-label">ESTADO</span><strong class="green">PLAYABLE BUILD</strong></div>
+        </div>
+      </div>
+      <div class="hero-art" aria-label="Vista previa estilizada de un pasillo pixelado">
+        <div class="art-topline"><span>CAM 01</span><span>REC ●</span></div>
+        <div class="pixel-scene">
+          <div class="scene-ceiling"></div><div class="scene-floor"></div>
+          <div class="scene-wall wall-left"></div><div class="scene-wall wall-right"></div>
+          <div class="scene-door"></div><div class="scene-light light-left"></div><div class="scene-light light-right"></div>
+          <div class="scene-demon"><i></i><b></b><span></span></div>
+          <div class="scene-crosshair">+</div>
+          <div class="scene-hud"><span>HP <b>100</b></span><span>AMMO <b>12</b></span><span>SECTOR 09</span></div>
+        </div>
+        <div class="art-caption"><span>FIG 01. // INFESTED CORRIDOR</span><span>WARNING: HOSTILES DETECTED</span></div>
+      </div>
+      <div class="home-lower panel">
+        <div><p class="eyebrow">OPERATION BRIEFING</p><h2>NO HAY REFUERZOS</h2><p>Explora el sector, elimina enemigos y registra tus mejores partidas. Tu cuenta conserva el acceso y tus puntuaciones.</p></div>
+        <div class="brief-stats"><div><strong>WASD</strong><span>MOVIMIENTO</span></div><div><strong>MOUSE</strong><span>APUNTAR</span></div><div><strong>CLICK</strong><span>DISPARAR</span></div></div>
+      </div>
+      <section class="panel leaderboard-panel">
+        <div class="section-heading"><div><p class="eyebrow">HALL OF FAME</p><h2>MEJORES PUNTUACIONES</h2></div><span class="micro-tag">GLOBAL // TOP 10</span></div>
+        <div id="home-leaderboard" class="leaderboard-empty">Aún no hay puntuaciones. Sé el primero en entrar.</div>
+      </section>
+    </section>
+
+    <section id="view-login" class="view auth-layout hidden">
+      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>SECTOR.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
+      <form id="login-form" class="panel form-panel">
+        <p class="eyebrow">AUTENTICACIÓN LOCAL</p><h2>INICIAR SESIÓN</h2>
+        <label for="login-email">CORREO ELECTRÓNICO</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
+        <label for="login-password">CONTRASEÑA</label><input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="••••••••">
+        <button class="button button-primary button-wide" type="submit">ENTRAR AL SISTEMA</button>
+        <p class="form-foot">¿No tienes cuenta? <button type="button" class="text-button" data-view="register">Regístrate</button></p>
+      </form>
+    </section>
+
+    <section id="view-register" class="view auth-layout hidden">
+      <div class="auth-copy"><p class="eyebrow">CREATE USER // 02</p><h1>RECLUTA<br><span>NUEVO.</span></h1><p>Abre una cuenta para acceder al juego y guardar las marcas de tus partidas.</p><div class="terminal-line">&gt; ENCRYPTING PASSWORD WITH BCRYPT<span class="blink">_</span></div></div>
+      <form id="register-form" class="panel form-panel">
+        <p class="eyebrow">ALTA DE USUARIO</p><h2>CREAR CUENTA</h2>
+        <label for="register-email">CORREO ELECTRÓNICO</label><input id="register-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
+        <label for="register-password">CONTRASEÑA</label><input id="register-password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Mínimo 8 caracteres">
+        <label for="register-password-confirm">REPETIR CONTRASEÑA</label><input id="register-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Repite la contraseña">
+        <button class="button button-primary button-wide" type="submit">REGISTRAR RECLUTA</button>
+        <p class="form-foot">¿Ya tienes cuenta? <button type="button" class="text-button" data-view="login">Inicia sesión</button></p>
+        <p class="small-note">Esta versión activa la cuenta al registrarse. La verificación por correo está prevista para el Hito 4.</p>
+      </form>
+    </section>
+
+    <section id="view-game" class="view game-layout hidden">
+      <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // SECTOR 09</p><h2>INFESTATION PROTOCOL</h2></div><span class="micro-tag" id="game-status">READY</span></div>
+      <div class="game-frame">
+        <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay"><div class="overlay-box"><p class="eyebrow">MISSION AVAILABLE</p><h2>SECTOR <span>09</span></h2><p>Elimina los hostiles y sobrevive.</p><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><small>WASD moverse · ratón mirar · clic disparar · ESC pausa</small></div></div></div>
+        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>MOUSE <small>MIRAR</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>ESC <small>PAUSA</small></span></div>
+      </div>
+      <div class="game-bottom"><div class="panel mini-panel"><p class="eyebrow">MISSION STATUS</p><strong id="game-status-text">A la espera del despliegue</strong><p id="game-message">Inicia la misión cuando estés preparado.</p></div><div class="panel mini-panel"><p class="eyebrow">PERSONAL BEST</p><strong id="personal-best">— PTS</strong><p>Las mejores puntuaciones se guardan con tu usuario.</p></div></div>
+    </section>
+
+    <section id="view-profile" class="view profile-layout hidden">
+      <div class="section-heading"><div><p class="eyebrow">PERSONNEL FILE // 03</p><h2>MI CUENTA</h2></div><span class="micro-tag" id="profile-role">USER</span></div>
+      <div class="profile-grid"><div class="panel profile-card"><div class="avatar-block">☠</div><p class="eyebrow">IDENTIDAD REGISTRADA</p><h3 id="profile-email">—</h3><div class="data-line"><span>ROL</span><strong id="profile-role-text">USER</strong></div><div class="data-line"><span>ESTADO</span><strong id="profile-status">ACTIVE</strong></div><div class="data-line"><span>REGISTRO</span><strong id="profile-created">—</strong></div><button id="logout-button" class="button button-secondary button-wide" type="button">CERRAR SESIÓN</button><button id="delete-account-button" class="button button-danger button-wide" type="button">ELIMINAR MI CUENTA</button></div>
+        <div class="panel"><div class="section-heading"><div><p class="eyebrow">COMBAT RECORD</p><h2>MIS MEJORES RESULTADOS</h2></div></div><div id="profile-leaderboard" class="leaderboard-empty">Juega una partida para comenzar tu historial.</div></div></div>
+    </section>
+
+    <section id="view-admin" class="view admin-layout hidden">
+      <div class="section-heading"><div><p class="eyebrow">COMMAND CENTER // ADMIN ONLY</p><h2>GESTIÓN DE PERSONAL</h2></div><span class="micro-tag warning-tag">RESTRICTED</span></div>
+      <div class="panel admin-panel"><div class="admin-toolbar"><p>Este listado se autoriza en el servidor. Ocultar el botón no sustituye a los permisos de API.</p><button id="refresh-users" class="button button-secondary button-small" type="button">↻ ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>EMAIL</th><th>ROL</th><th>ESTADO</th><th>REGISTRO</th><th>ACCIÓN</th></tr></thead><tbody id="admin-users-body"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></div>
+    </section>
+
+    <footer class="footer"><span>HELLFALL // PIXEL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.3.0</span></footer>
+  </main>
+</body>
+</html>
