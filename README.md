@@ -107,5 +107,11 @@ Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticam
 
 El motor de `public/js/game/game.js` dibuja a 320 × 200 y usa DDA/raycasting para las paredes, texturas pixeladas procedurales, billboards para enemigos y objetos, colisiones, daño, munición, kits médicos, HUD, pausa, victoria y Game Over. Los gráficos se generan por código y son originales; no se incluyen sprites ni logotipos de DOOM.
 
+## Estructura 
 
+Backend: Carpeta "src" ->  api, config, archivos.js, etc. 
+Dentro del backend: Capa API, capa de lógica de negocio y capa de acceso a datos, claramente separadas
+en distintos módulos/archivos -> rutas de redes entre clientes (authRoutes,scoreRoutes,userRouter), etc. Base de datos vinculada internamente al código (server.js -> Crea automaticamente las tablas dentro del código)
+
+Frontend: Publico (public) -> archivos .js, index.html, etc. Portada para el público, enlaces de las rutas con comandos JavaScript. 
 
