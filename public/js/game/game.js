@@ -3,6 +3,7 @@ const HEIGHT = 200;
 const VIEW_HEIGHT = 168;
 const HUD_HEIGHT = HEIGHT - VIEW_HEIGHT;
 const FOV_PLANE = 0.66;
+const WALL_SCALE = 1.42; // Paredes un 42% más altas e imponentes
 const MAX_LEVELS = 10;
 const CLIP_SIZE = 12;
 const MAX_RESERVE = 60;
@@ -12,7 +13,71 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
 // ============================================================================
-// MOTOR DE AUDIO PROCEDURAL ESTILO DOOM (Armas, Rugidos Graves, Gore y Ambiente)
+// REPRODUCTOR GLOBAL DE DOOM.MP3 (Funciona en Portada y dentro del Juego)
+// ============================================================================
+class DoomMusicPlayer {
+  constructor() {
+    this.bgm = document.getElementById('doom-bgm') || new Audio('/doom.mp3');
+    this.bgm.src = '/doom.mp3';
+    this.bgm.loop = true;
+    this.bgm.preload = 'auto';
+    this.bgm.volume = 0.55;
+    this.muted = false;
+
+    this.toggleBtn = document.getElementById('music-toggle');
+    this.setupListeners();
+  }
+
+  setupListeners() {
+    const unlockAndPlay = () => {
+      if (this.muted) return;
+      if (this.bgm.paused) {
+        this.bgm.play().then(() => {
+          this.updateButton();
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('pointerdown', unlockAndPlay, true);
+    window.addEventListener('mousedown', unlockAndPlay, true);
+    window.addEventListener('keydown', unlockAndPlay, true);
+    window.addEventListener('click', unlockAndPlay, true);
+
+    if (this.toggleBtn) {
+      this.toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.muted = !this.muted;
+        this.bgm.muted = this.muted;
+        if (!this.muted) {
+          this.bgm.play().catch(() => {});
+        }
+        this.updateButton();
+      });
+    }
+
+    unlockAndPlay();
+  }
+
+  updateButton() {
+    if (!this.toggleBtn) {
+      this.toggleBtn = document.getElementById('music-toggle');
+    }
+    if (this.toggleBtn) {
+      this.toggleBtn.textContent = this.muted ? '🔇 BSO: OFF' : '🔊 BSO: ON';
+    }
+  }
+
+  ensurePlaying() {
+    if (!this.muted && this.bgm.paused) {
+      this.bgm.play().catch(() => {});
+    }
+  }
+}
+
+const globalDoomMusic = new DoomMusicPlayer();
+
+// ============================================================================
+// MOTOR DE EFECTOS DE SONIDO (Armas, Rugidos Graves, Gore y Ambiente)
 // ============================================================================
 class HellAudioEngine {
   constructor() {
@@ -22,6 +87,7 @@ class HellAudioEngine {
   }
 
   init() {
+    globalDoomMusic.ensurePlaying();
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -46,7 +112,7 @@ class HellAudioEngine {
     const now = this.ctx.currentTime;
     const masterGain = this.ctx.createGain();
     masterGain.gain.setValueAtTime(0.01, now);
-    masterGain.gain.linearRampToValueAtTime(0.16, now + 1.2);
+    masterGain.gain.linearRampToValueAtTime(0.08, now + 1.2);
     masterGain.connect(this.ctx.destination);
 
     const osc1 = this.ctx.createOscillator();
@@ -67,7 +133,7 @@ class HellAudioEngine {
     lfo.connect(droneFilter.frequency);
 
     const droneGain = this.ctx.createGain();
-    droneGain.gain.setValueAtTime(0.45, now);
+    droneGain.gain.setValueAtTime(0.4, now);
 
     osc1.connect(droneFilter);
     osc2.connect(droneFilter);
@@ -84,7 +150,7 @@ class HellAudioEngine {
     fireFilter.Q.setValueAtTime(1.4, now);
 
     const fireGain = this.ctx.createGain();
-    fireGain.gain.setValueAtTime(0.22, now);
+    fireGain.gain.setValueAtTime(0.2, now);
 
     fireSource.connect(fireFilter);
     fireFilter.connect(fireGain);
@@ -101,7 +167,7 @@ class HellAudioEngine {
   setAmbiencePaused(paused) {
     if (!this.ctx || !this.ambienceNodes) return;
     const now = this.ctx.currentTime;
-    const target = paused ? 0.0001 : 0.16;
+    const target = paused ? 0.0001 : 0.08;
     this.ambienceNodes.masterGain.gain.setTargetAtTime(target, now, 0.08);
   }
 
@@ -174,7 +240,6 @@ class HellAudioEngine {
     });
   }
 
-  // Sonido de disparo rápido de la Ametralladora (Chaingun)
   playChaingun() {
     this.init();
     if (!this.ctx) return;
@@ -210,7 +275,6 @@ class HellAudioEngine {
     noise.stop(now + 0.085);
   }
 
-  // Sonido de llamarada del Lanzallamas Infernal
   playFlamethrower() {
     this.init();
     if (!this.ctx) return;
@@ -236,7 +300,6 @@ class HellAudioEngine {
     noise.stop(now + 0.2);
   }
 
-  // RUGIDO GRAVE Y GUTURAL DE LOS MONSTRUOS AL ACECHAR
   playMonsterGrowl(isBoss = false, dist = 6) {
     this.init();
     if (!this.ctx) return;
@@ -277,14 +340,12 @@ class HellAudioEngine {
     osc2.stop(now + duration + 0.02);
   }
 
-  // Sonido de desmembramiento sangriento + rugido de muerte
   playMonsterDeath(isBoss = false) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     const duration = isBoss ? 0.75 : 0.42;
 
-    // 1. Rugido grave descendente
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
@@ -299,7 +360,6 @@ class HellAudioEngine {
     osc.start(now);
     osc.stop(now + duration + 0.02);
 
-    // 2. Explosión viscosa de sangre / vísceras (Gore Splatter)
     const splatter = this.ctx.createBufferSource();
     splatter.buffer = this.noiseBuffer;
     const filter = this.ctx.createBiquadFilter();
@@ -552,6 +612,80 @@ function makeFloorTexture() {
   return canvas;
 }
 
+// ============================================================================
+// TECHO CERRADO DE INSTALACIÓN INDUSTRIAL DEVORADA POR EL FUEGO INFERNAL
+// ============================================================================
+function makeCeilingTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  // 1. Fondo de fuego y magma hirviendo que ha engullido el techo del complejo
+  ctx.fillStyle = '#7a0c0c';
+  ctx.fillRect(0, 0, 64, 64);
+
+  // Remolinos y lenguas de fuego intenso en los huecos del techo
+  ctx.fillStyle = '#d90429';
+  ctx.fillRect(4, 4, 24, 24);
+  ctx.fillRect(36, 36, 24, 24);
+  ctx.fillRect(36, 4, 24, 24);
+  ctx.fillRect(4, 36, 24, 24);
+
+  ctx.fillStyle = '#ff4d00';
+  ctx.fillRect(6, 6, 20, 20);
+  ctx.fillRect(38, 38, 20, 20);
+  ctx.fillRect(39, 7, 18, 18);
+  ctx.fillRect(7, 39, 18, 18);
+
+  ctx.fillStyle = '#ff9e00';
+  ctx.fillRect(9, 9, 14, 14);
+  ctx.fillRect(41, 41, 14, 14);
+  ctx.fillRect(42, 10, 12, 12);
+  ctx.fillRect(10, 42, 12, 12);
+
+  // Núcleos incandescentes amarillos/blancos
+  ctx.fillStyle = '#ffbe0b';
+  ctx.fillRect(12, 12, 8, 8);
+  ctx.fillRect(44, 44, 8, 8);
+  ctx.fillRect(45, 13, 6, 6);
+  ctx.fillRect(13, 45, 6, 6);
+
+  ctx.fillStyle = '#fff3b0';
+  ctx.fillRect(14, 14, 4, 4);
+  ctx.fillRect(46, 46, 4, 4);
+
+  // 2. Vigas maestras de acero quemado de la instalación (estructura cerrada arriba)
+  ctx.fillStyle = '#14090b';
+  ctx.fillRect(0, 0, 64, 4);
+  ctx.fillRect(0, 28, 64, 8);
+  ctx.fillRect(0, 60, 64, 4);
+  ctx.fillRect(0, 0, 4, 64);
+  ctx.fillRect(28, 0, 8, 64);
+  ctx.fillRect(60, 0, 4, 64);
+
+  // Borde metálico al rojo vivo en las vigas por el calor del techo
+  ctx.fillStyle = '#2b1619';
+  ctx.fillRect(1, 29, 62, 6);
+  ctx.fillRect(29, 1, 6, 62);
+
+  // 3. Rejillas industriales rotas cruzando sobre el fuego del techo
+  ctx.fillStyle = '#1b0d0f';
+  for (let i = 10; i < 26; i += 6) {
+    ctx.fillRect(i, 4, 2, 24);
+    ctx.fillRect(i + 32, 36, 2, 24);
+    ctx.fillRect(4, i + 32, 24, 2);
+    ctx.fillRect(36, i, 24, 2);
+  }
+
+  // Remaches oxidados en las intersecciones de las vigas del techo
+  ctx.fillStyle = '#ff5400';
+  [[2, 2], [30, 2], [30, 30], [2, 30]].forEach(([rx, ry]) => {
+    ctx.fillRect(rx, ry, 2, 2);
+  });
+
+  return canvas;
+}
+
 function makeFirePillarSprite(frame) {
   const canvas = document.createElement('canvas');
   canvas.width = 24;
@@ -582,9 +716,6 @@ function makeFirePillarSprite(frame) {
   return canvas;
 }
 
-// ============================================================================
-// GENERADOR DE ANIMACIONES DE CAMINAR (4 FRAMES) Y DESMEMBRAMIENTO GORE (4 FASES)
-// ============================================================================
 function makeWalkFrame(kind, stepIndex) {
   const canvas = document.createElement('canvas');
   canvas.width = 32;
@@ -596,7 +727,6 @@ function makeWalkFrame(kind, stepIndex) {
     c.fillRect(x, y, w, h);
   };
 
-  // Desplazamientos de piernas, brazos y torso según el paso (0, 1, 2, 3)
   const leftLegY = stepIndex === 1 ? -4 : (stepIndex === 3 ? 2 : 0);
   const rightLegY = stepIndex === 3 ? -4 : (stepIndex === 1 ? 2 : 0);
   const leftLegX = stepIndex === 1 ? -2 : (stepIndex === 3 ? 1 : 0);
@@ -606,14 +736,12 @@ function makeWalkFrame(kind, stepIndex) {
   const rightArmY = stepIndex === 3 ? -3 : (stepIndex === 1 ? 3 : 0);
 
   if (kind === 'CACODEMON') {
-    // Demonio carmesí acorazado con patas de araña / garras inferiores que caminan
     px(8, 8 + torsoBob, 16, 24, '#9e1919');
     px(5, 12 + torsoBob, 22, 16, '#c92a2a');
     px(6, 5 + torsoBob, 4, 5, '#d9d9d9');
     px(22, 5 + torsoBob, 4, 5, '#d9d9d9');
     px(12, 13 + torsoBob, 8, 6, '#52b788');
     px(14, 15 + torsoBob, 4, 3, '#ffffff');
-    // Fauces abriéndose al andar
     const jawOpen = stepIndex % 2 === 1 ? 2 : 0;
     px(7, 21 + torsoBob, 18, 6 + jawOpen, '#1a090d');
     px(9, 22 + torsoBob, 14, 3 + jawOpen, '#ff4d00');
@@ -621,7 +749,6 @@ function makeWalkFrame(kind, stepIndex) {
       px(x, 21 + torsoBob, 2, 2, '#f8f9fa');
       px(x, 25 + torsoBob + jawOpen, 2, 2, '#f8f9fa');
     }
-    // Patas musculosas inferiores caminando por el suelo
     px(6 + leftLegX, 32 + leftLegY, 7, 12 - leftLegY, '#781111');
     px(19 + rightLegX, 32 + rightLegY, 7, 12 - rightLegY, '#781111');
     px(4 + leftLegX, 43 + Math.min(0, leftLegY), 9, 5, '#2b0909');
@@ -640,10 +767,8 @@ function makeWalkFrame(kind, stepIndex) {
       px(x, 17 + torsoBob, 2, 3, '#ffffff');
       px(x, 22 + torsoBob + jaw, 2, 3, '#ffffff');
     }
-    // Brazos con garras oscilando
     px(1, 18 + leftArmY, 4, 11, '#b5485d');
     px(27, 18 + rightArmY, 4, 11, '#b5485d');
-    // Patas corriendo alternativamente
     px(5 + leftLegX, 32 + leftLegY, 8, 12 - leftLegY, '#8f3447');
     px(19 + rightLegX, 32 + rightLegY, 8, 12 - rightLegY, '#8f3447');
     px(4 + leftLegX, 43 + Math.min(0, leftLegY), 10, 5, '#3d131b');
@@ -673,7 +798,6 @@ function makeWalkFrame(kind, stepIndex) {
   px(19, 18 + torsoBob, 2, 2, '#ffffff');
   px(8, 25 + torsoBob, 16, 7, p.dark);
 
-  // Brazos balanceándose al caminar
   px(2, 15 + leftArmY, 4, 15, p.main);
   px(26, 15 + rightArmY, 4, 15, p.main);
 
@@ -686,7 +810,6 @@ function makeWalkFrame(kind, stepIndex) {
     px(26, 26 + rightArmY, 5, 6, p.claws);
   }
 
-  // Piernas dando zancadas
   px(7 + leftLegX, 32 + leftLegY, 7, 11 - leftLegY, p.legs);
   px(18 + rightLegX, 32 + rightLegY, 7, 11 - rightLegY, kind === 'BOSS_CYBER' ? '#adb5bd' : p.legs);
   px(6 + leftLegX, 42 + Math.min(0, leftLegY), 8, 6, '#1b1113');
@@ -695,7 +818,6 @@ function makeWalkFrame(kind, stepIndex) {
   return canvas;
 }
 
-// 4 Fases de Desmembramiento Sangriento (Gore Death Animation + Cadáver en el suelo)
 function makeGoreDeathFrames(bodyColor = '#8a2be2') {
   const frames = [];
 
@@ -711,54 +833,42 @@ function makeGoreDeathFrames(bodyColor = '#8a2be2') {
     };
 
     if (stage === 0) {
-      // Fase 1: El pecho revienta en sangre, costillas blancas al descubierto y cabeza saltando por los aires
-      px(10, 2, 12, 8, bodyColor); // Cabeza separándose arriba
-      px(11, 10, 10, 4, '#d90429'); // Chorro de sangre del cuello
+      px(10, 2, 12, 8, bodyColor);
+      px(11, 10, 10, 4, '#d90429');
       px(5, 16, 22, 16, bodyColor);
-      px(8, 17, 16, 12, '#9e0000'); // Cavidad torácica abierta
-      // Costillas rotas blancas
+      px(8, 17, 16, 12, '#9e0000');
       for (let y = 19; y <= 25; y += 3) {
         px(9, y, 5, 2, '#f8f9fa');
         px(18, y, 5, 2, '#f8f9fa');
       }
-      // Brazos arrancados saliendo hacia los lados
       px(0, 12, 5, 10, bodyColor);
       px(27, 10, 5, 10, bodyColor);
-      // Salpicaduras de sangre brillante
       px(3, 8, 4, 4, '#ff002b');
       px(24, 6, 4, 4, '#ff002b');
       px(14, 12, 5, 6, '#ff002b');
-      // Piernas aún de pie
       px(7, 32, 7, 15, bodyColor);
       px(18, 32, 7, 15, bodyColor);
     } else if (stage === 1) {
-      // Fase 2: El cuerpo se parte en dos y cae de rodillas en una fuente de sangre y vísceras
       px(6, 18, 20, 10, '#d90429');
       px(10, 12, 12, 8, '#ff002b');
-      // Trozos de carne y cráneo cayendo
       px(2, 22, 6, 6, bodyColor);
       px(23, 20, 7, 7, bodyColor);
-      px(13, 20, 6, 6, '#e5e5e5'); // Cráneo ensangrentado
-      // Costillas y tripas cayendo
+      px(13, 20, 6, 6, '#e5e5e5');
       px(8, 26, 16, 12, '#780000');
       px(10, 28, 12, 4, '#f8f9fa');
-      // Piernas dobladas hundiéndose en sangre
       px(5, 36, 22, 11, bodyColor);
       px(3, 42, 26, 6, '#9e0000');
     } else if (stage === 2) {
-      // Fase 3: Impacto contra el suelo, gran salpicadura lateral de sangre
       px(2, 34, 28, 13, '#9e0000');
       px(5, 30, 22, 10, '#d90429');
-      px(8, 32, 7, 6, '#f8f9fa'); // Cráneo y huesos
+      px(8, 32, 7, 6, '#f8f9fa');
       px(17, 35, 9, 6, bodyColor);
       px(4, 26, 3, 5, '#ff002b');
       px(25, 28, 3, 4, '#ff002b');
     } else {
-      // Fase 4 (CORPSE permanente): Charco de sangre en el suelo con cráneo, costillas y restos
       px(1, 41, 30, 7, '#660000');
       px(3, 39, 26, 7, '#a30000');
       px(6, 37, 20, 6, '#d90429');
-      // Restos desmembrados y cráneo sobre el charco
       px(7, 36, 6, 5, '#e5e5e5');
       px(8, 38, 2, 2, '#111111');
       px(11, 38, 2, 2, '#111111');
@@ -783,7 +893,6 @@ function makeEnemyAnimationSet(kind, bodyColor) {
   };
 }
 
-// Sprites de bolas de fuego 3D para el Lanzallamas
 function makeFlameBallSprite(frame) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 20;
@@ -851,9 +960,14 @@ export class HellfallGame {
     };
     this.floorTexture = makeFloorTexture();
     this.floorPixels = this.floorTexture.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, 64, 64).data;
-    this.floorImageData = this.ctx.createImageData(WIDTH, Math.floor(VIEW_HEIGHT / 2) - 1);
 
-    // Conjuntos completos de animación (4 de caminar + 4 de muerte sangrienta)
+    // Textura del techo de fuego e instalación cerrada
+    this.ceilingTexture = makeCeilingTexture();
+    this.ceilingPixels = this.ceilingTexture.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, 64, 64).data;
+
+    // Buffer completo para renderizar Techo 3D y Suelo 3D de una sola pasada
+    this.sceneImageData = this.ctx.createImageData(WIDTH, VIEW_HEIGHT);
+
     this.animSets = {
       IMP: makeEnemyAnimationSet('IMP', '#8a5a36'),
       RUNNER: makeEnemyAnimationSet('PINKY', '#d6687f'),
@@ -960,7 +1074,6 @@ export class HellfallGame {
     this.onStatus(names[num] || names[1]);
   }
 
-  // Genera una explosión de partículas de sangre en 3D
   spawnBlood(x, y, count = 14) {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -1182,8 +1295,8 @@ export class HellfallGame {
       health: 100,
       ammo: 10,
       reserve: 16,
-      fuel: 45, // Gasolina inicial para el Lanzallamas [3]
-      weapon: 1, // 1: Escopeta, 2: Chaingun, 3: Lanzallamas
+      fuel: 45,
+      weapon: 1,
       kills: 0
     };
     this.startTime = performance.now();
@@ -1286,7 +1399,7 @@ export class HellfallGame {
         maxHealth: archetype.health,
         isBoss: false,
         alive: true,
-        state: 'ALIVE', // 'ALIVE', 'DYING', 'CORPSE'
+        state: 'ALIVE',
         deathTimer: 0,
         walkCycle: Math.random() * 10,
         growlTimer: 1.5 + Math.random() * 5,
@@ -1355,6 +1468,7 @@ export class HellfallGame {
     this.running = true;
     this.paused = false;
     this.lastTime = performance.now();
+    globalDoomMusic.ensurePlaying();
     this.audio.startAmbience();
     this.frameId = requestAnimationFrame(this.boundLoop);
   }
@@ -1405,7 +1519,6 @@ export class HellfallGame {
       return;
     }
 
-    // Cambio de armas: [1] Escopeta, [2] Ametralladora, [3] Lanzallamas
     if (!this.paused && this.running) {
       if (event.code === 'Digit1') this.selectWeapon(1);
       if (event.code === 'Digit2') this.selectWeapon(2);
@@ -1516,12 +1629,10 @@ export class HellfallGame {
       this.walkBobY *= 0.82;
     }
 
-    // Fuego continuo si mantiene pulsado clic o Espacio (para Chaingun y Lanzallamas)
     if (this.mouseDown || this.keys.has('Space')) {
       this.shoot();
     }
 
-    // Actualizar proyectiles de fuego 3D del Lanzallamas
     for (let i = this.flameProjectiles.length - 1; i >= 0; i--) {
       const p = this.flameProjectiles[i];
       p.x += p.vx * dt;
@@ -1533,7 +1644,6 @@ export class HellfallGame {
         continue;
       }
 
-      // Comprobar si la bola de fuego quema a algún enemigo
       for (const enemy of this.enemies) {
         if (!enemy.alive) continue;
         if (Math.hypot(p.x - enemy.x, p.y - enemy.y) < 0.75) {
@@ -1548,7 +1658,6 @@ export class HellfallGame {
       }
     }
 
-    // Actualizar partículas de sangre en 3D
     for (let i = this.bloodParticles.length - 1; i >= 0; i--) {
       const bp = this.bloodParticles[i];
       bp.x += bp.vx * dt;
@@ -1560,7 +1669,6 @@ export class HellfallGame {
       }
     }
 
-    // Recoger Botiquines
     for (const medkit of this.medkits) {
       if (medkit.active && Math.hypot(player.x - medkit.x, player.y - medkit.y) < 0.55 && player.health < 100) {
         player.health = Math.min(100, player.health + 35);
@@ -1570,7 +1678,6 @@ export class HellfallGame {
       }
     }
 
-    // Recoger Cajas de Munición y Gasolina del Lanzallamas
     for (const pack of this.ammoPacks) {
       if (!pack.active) continue;
       if (Math.hypot(player.x - pack.x, player.y - pack.y) < 0.55) {
@@ -1591,7 +1698,7 @@ export class HellfallGame {
     const detectionRange = 15 + this.level * 1.8;
     for (const enemy of this.enemies) {
       if (enemy.state === 'DYING') {
-        enemy.deathTimer += dt * 4.5; // Avanza por las 4 fases de desmembramiento
+        enemy.deathTimer += dt * 4.5;
         if (enemy.deathTimer >= 3) {
           enemy.state = 'CORPSE';
           enemy.deathTimer = 3;
@@ -1603,7 +1710,6 @@ export class HellfallGame {
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       enemy.cooldown = Math.max(0, enemy.cooldown - dt);
 
-      // Sonido grave gutural periódico cuando el monstruo está cerca
       enemy.growlTimer -= dt;
       if (enemy.growlTimer <= 0) {
         enemy.growlTimer = (enemy.isBoss ? 2.5 : 4.0) + Math.random() * 4.5;
@@ -1619,7 +1725,6 @@ export class HellfallGame {
         if (!this.isWall(enemy.x + ex, enemy.y)) enemy.x += ex;
         if (!this.isWall(enemy.x, enemy.y + ey)) enemy.y += ey;
 
-        // Avanzar animación de caminar (4 frames de zancada)
         enemy.walkCycle += dt * (4.5 * enemy.speedMultiplier);
       } else if (dist <= 1.05 && enemy.cooldown <= 0) {
         player.health = Math.max(0, player.health - enemy.damage);
@@ -1660,7 +1765,6 @@ export class HellfallGame {
 
     const w = this.player.weapon;
 
-    // ARMA 3: LANZALLAMAS INFERNAL
     if (w === 3) {
       if (this.player.fuel <= 0) {
         this.audio.playEmptyClip();
@@ -1687,7 +1791,6 @@ export class HellfallGame {
       return;
     }
 
-    // ARMAS 1 (ESCOPETA) Y 2 (CHAINGUN) USAN CARTUCHOS
     if (this.player.ammo <= 0) {
       this.audio.playEmptyClip();
       this.shotUntil = now + 250;
@@ -1846,60 +1949,74 @@ export class HellfallGame {
     const px = this.player.x, py = this.player.y;
     const dirX = Math.cos(this.player.angle), dirY = Math.sin(this.player.angle);
     const planeX = -dirY * FOV_PLANE, planeY = dirX * FOV_PLANE;
-    const horizon = VIEW_HEIGHT / 2;
+    const horizon = Math.floor(VIEW_HEIGHT / 2);
 
-    for (let y = 0; y < horizon; y++) {
-      const mix = y / horizon;
-      const r = Math.floor(40 + mix * 145);
-      const g = Math.floor(6 + mix * 38);
-      const b = Math.floor(8 + mix * 6);
-      c.fillStyle = `rgb(${r},${g},${b})`;
-      c.fillRect(0, y, WIDTH, 1);
-    }
-
-    for (let x = 0; x < WIDTH; x += 4) {
-      const flameH = 4 + Math.floor(Math.abs(Math.sin(now * 0.009 + x * 0.17) * 8));
-      c.fillStyle = '#ff4d00';
-      c.fillRect(x, horizon - flameH, 4, flameH);
-      c.fillStyle = '#ffbe0b';
-      c.fillRect(x + 1, horizon - Math.floor(flameH * 0.55), 2, Math.floor(flameH * 0.55));
-    }
-
+    // 1. RENDERIZADO SIMULTÁNEO EN 3D DE SUELO VOLCÁNICO Y TECHO CERRADO EN LLAMAS
     const floorPixels = this.floorPixels;
-    const flicker = 0.94 + Math.sin(now * 0.015) * 0.06;
+    const ceilingPixels = this.ceilingPixels;
+    const sceneData = this.sceneImageData.data;
 
-    for (let y = horizon + 1; y < VIEW_HEIGHT; y++) {
-      const outputY = y - (horizon + 1);
-      const p = y - horizon;
-      const rowDistance = (0.5 * VIEW_HEIGHT) / p;
-      const rayDirX0 = dirX - planeX, rayDirY0 = dirY - planeY;
-      const rayDirX1 = dirX + planeX, rayDirY1 = dirY + planeY;
+    const flicker = 0.94 + Math.sin(now * 0.015) * 0.06;
+    const ceilFirePulse = 1.05 + Math.sin(now * 0.022) * 0.14;
+    const fireDrift = Math.floor(now * 0.025);
+
+    const rayDirX0 = dirX - planeX, rayDirY0 = dirY - planeY;
+    const rayDirX1 = dirX + planeX, rayDirY1 = dirY + planeY;
+
+    for (let p = 1; p <= horizon; p++) {
+      // Escala ajustada a WALL_SCALE para que el techo y el suelo encajen exactos con las paredes más altas
+      const rowDistance = (0.5 * VIEW_HEIGHT * WALL_SCALE) / p;
       const stepX = (rowDistance * (rayDirX1 - rayDirX0)) / WIDTH;
       const stepY = (rowDistance * (rayDirY1 - rayDirY0)) / WIDTH;
-      let floorX = px + rowDistance * rayDirX0;
-      let floorY = py + rowDistance * rayDirY0;
+      let worldX = px + rowDistance * rayDirX0;
+      let worldY = py + rowDistance * rayDirY0;
 
-      const shade = clamp(1 - rowDistance * 0.085, 0.16, 0.85) * flicker;
-      const emberFog = clamp(rowDistance * 0.04, 0, 0.35);
+      const floorShade = clamp(1 - rowDistance * 0.075, 0.16, 0.86) * flicker;
+      const ceilShade = clamp(1 - rowDistance * 0.055, 0.25, 0.98) * ceilFirePulse;
+      const emberFog = clamp(rowDistance * 0.038, 0, 0.42);
+
+      const yFloor = horizon + p - 1;
+      const yCeil = horizon - p;
 
       for (let x = 0; x < WIDTH; x++) {
-        const cellX = Math.floor(floorX), cellY = Math.floor(floorY);
-        const tx = Math.floor(64 * (floorX - cellX)) & 63;
-        const ty = Math.floor(64 * (floorY - cellY)) & 63;
-        const sx = (tx + cellX * 3) & 63, sy = (ty + cellY * 3) & 63;
+        const cellX = Math.floor(worldX), cellY = Math.floor(worldY);
+        const tx = Math.floor(64 * (worldX - cellX)) & 63;
+        const ty = Math.floor(64 * (worldY - cellY)) & 63;
+        const sx = (tx + cellX * 3) & 63;
+        const sy = (ty + cellY * 3) & 63;
         const pixelIndex = (sy * 64 + sx) * 4;
-        const outputIndex = (outputY * WIDTH + x) * 4;
 
-        this.floorImageData.data[outputIndex] = Math.min(255, Math.floor(floorPixels[pixelIndex] * shade + 75 * emberFog));
-        this.floorImageData.data[outputIndex + 1] = Math.floor(floorPixels[pixelIndex + 1] * shade + 12 * emberFog);
-        this.floorImageData.data[outputIndex + 2] = Math.floor(floorPixels[pixelIndex + 2] * shade + 8 * emberFog);
-        this.floorImageData.data[outputIndex + 3] = 255;
-        floorX += stepX;
-        floorY += stepY;
+        // Píxel del Suelo (Mitad inferior)
+        if (yFloor < VIEW_HEIGHT) {
+          const outFloor = (yFloor * WIDTH + x) * 4;
+          sceneData[outFloor] = Math.min(255, Math.floor(floorPixels[pixelIndex] * floorShade + 80 * emberFog));
+          sceneData[outFloor + 1] = Math.floor(floorPixels[pixelIndex + 1] * floorShade + 14 * emberFog);
+          sceneData[outFloor + 2] = Math.floor(floorPixels[pixelIndex + 2] * floorShade + 8 * emberFog);
+          sceneData[outFloor + 3] = 255;
+        }
+
+        // Píxel del Techo de Fuego de la Instalación (Mitad superior)
+        if (yCeil >= 0) {
+          // Si no es viga estructural del techo, el fuego interior se ondula en vivo
+          const isFireCore = tx > 4 && tx < 28 && ty > 4 && ty < 28;
+          const cxTex = isFireCore ? (tx + fireDrift) & 63 : tx;
+          const cyTex = isFireCore ? (ty + (fireDrift >> 1)) & 63 : ty;
+          const ceilIdx = (cyTex * 64 + cxTex) * 4;
+
+          const outCeil = (yCeil * WIDTH + x) * 4;
+          sceneData[outCeil] = Math.min(255, Math.floor(ceilingPixels[ceilIdx] * ceilShade + 95 * emberFog));
+          sceneData[outCeil + 1] = Math.min(255, Math.floor(ceilingPixels[ceilIdx + 1] * ceilShade + 22 * emberFog));
+          sceneData[outCeil + 2] = Math.min(255, Math.floor(ceilingPixels[ceilIdx + 2] * ceilShade + 8 * emberFog));
+          sceneData[outCeil + 3] = 255;
+        }
+
+        worldX += stepX;
+        worldY += stepY;
       }
     }
-    c.putImageData(this.floorImageData, 0, horizon + 1);
+    c.putImageData(this.sceneImageData, 0, 0);
 
+    // 2. RAYCASTING DE LAS PAREDES MÁS ALTAS (WALL_SCALE)
     for (let x = 0; x < WIDTH; x++) {
       const cameraX = (2 * x) / WIDTH - 1;
       const rayDirX = dirX + planeX * cameraX;
@@ -1941,7 +2058,9 @@ export class HellfallGame {
       const rawDist = side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       const wallDist = Math.max(0.001, rawDist);
       this.zBuffer[x] = wallDist;
-      const wallHeight = Math.min(VIEW_HEIGHT * 2, Math.floor(VIEW_HEIGHT / wallDist));
+
+      // Altura de pared aumentada por WALL_SCALE (1.42x más altas)
+      const wallHeight = Math.min(VIEW_HEIGHT * 3, Math.floor((VIEW_HEIGHT * WALL_SCALE) / wallDist));
       const drawStart = Math.max(0, Math.floor(horizon - wallHeight / 2));
       const drawEnd = Math.min(VIEW_HEIGHT - 1, Math.floor(horizon + wallHeight / 2));
 
@@ -1964,6 +2083,11 @@ export class HellfallGame {
         c.fillStyle = `rgba(22, 4, 4, ${1 - darkness})`;
         c.fillRect(x, drawStart, 1, drawEnd - drawStart);
       }
+      // Resplandor naranja superior donde el techo de fuego ilumina la parte alta de las paredes
+      if (drawStart > 0 && wallDist < 10) {
+        c.fillStyle = 'rgba(255, 77, 0, 0.18)';
+        c.fillRect(x, drawStart, 1, Math.min(4, drawEnd - drawStart));
+      }
       if (tile === 3 && wallDist < 7) {
         c.fillStyle = `rgba(255, 80, 0, ${0.14 + 0.08 * Math.sin(now * 0.018 + x * 0.1)})`;
         c.fillRect(x, drawStart, 1, drawEnd - drawStart);
@@ -1985,7 +2109,6 @@ export class HellfallGame {
     const c = this.ctx;
     const animFrame = Math.floor(now / 110) % 3;
 
-    // Seleccionar el fotograma correcto de cada enemigo (Caminando, Desmembrándose o Cadáver en el suelo)
     const enemyObjects = this.enemies.map((enemy) => {
       let sprite;
       let stepBounce = 0;
@@ -2038,14 +2161,15 @@ export class HellfallGame {
       if (transformY <= 0.15 || transformY > 22) continue;
 
       const spriteScreenX = Math.floor((WIDTH / 2) * (1 + transformX / transformY));
-      const fullRoomHeight = Math.abs(Math.floor(VIEW_HEIGHT / transformY));
+      // El suelo está anclado a la base de las paredes altas (WALL_SCALE)
+      const wallSpanHeight = Math.abs(Math.floor((VIEW_HEIGHT * WALL_SCALE) / transformY));
+      const baseSpriteHeight = Math.abs(Math.floor(VIEW_HEIGHT / transformY));
       const scale = object.scale || (object.isBoss ? 1.5 : 0.94);
-      const spriteHeight = fullRoomHeight * scale;
+      const spriteHeight = baseSpriteHeight * scale;
       const isPickup = object.type === 'medkit' || object.type === 'ammo' || object.type === 'flameBall';
       const spriteWidth = spriteHeight * (isPickup ? 1 : 0.65);
 
-      // Anclar los monstruos y objetos al suelo real para que NO vengan volando
-      const floorAnchorY = Math.floor(VIEW_HEIGHT / 2 + fullRoomHeight / 2);
+      const floorAnchorY = Math.floor(VIEW_HEIGHT / 2 + wallSpanHeight / 2);
       const rawStartY = object.type === 'flameBall'
         ? Math.floor(VIEW_HEIGHT / 2 - spriteHeight / 2)
         : Math.floor(floorAnchorY - spriteHeight + (object.stepBounce || 0));
@@ -2077,7 +2201,6 @@ export class HellfallGame {
       }
     }
 
-    // Renderizar las partículas de sangre 3D salpicando por el aire
     for (const bp of this.bloodParticles) {
       const sx = bp.x - this.player.x;
       const sy = bp.y - this.player.y;
@@ -2151,7 +2274,6 @@ export class HellfallGame {
     c.fillRect(WIDTH / 2, cy + 2, 1, 3);
   }
 
-  // Renderiza las 3 armas de DOOM en 1ª persona ([1] Escopeta, [2] Chaingun, [3] Lanzallamas)
   drawWeapon(now) {
     const c = this.ctx;
     const recoilY = Math.floor(this.recoil * 9);
@@ -2161,7 +2283,6 @@ export class HellfallGame {
     const baseY = VIEW_HEIGHT + bobY + recoilY;
     const w = this.player.weapon;
 
-    // ARMA 2: AMETRALLADORA ROTATORIA (CHAINGUN)
     if (w === 2) {
       if (this.muzzleFlash > 0.12) {
         c.fillStyle = '#ff4d00';
@@ -2172,18 +2293,15 @@ export class HellfallGame {
         c.fillRect(cx - 8, baseY - 54, 16, 8);
       }
       const spinOffset = Math.floor(now / 40) % 3;
-      // 4 cañones giratorios pesados
       c.fillStyle = '#1b1d21';
       c.fillRect(cx - 18, baseY - 48, 36, 26);
       c.fillStyle = '#6c757d';
       for (let bx = -14 + spinOffset; bx <= 12; bx += 7) {
         c.fillRect(cx + bx, baseY - 48, 3, 24);
       }
-      // Abrazadera metálica de los cañones
       c.fillStyle = '#adb5bd';
       c.fillRect(cx - 19, baseY - 40, 38, 4);
       c.fillRect(cx - 19, baseY - 28, 38, 4);
-      // Cuerpo motorizado de la Chaingun y cinturón de balas
       c.fillStyle = '#2b2d42';
       c.fillRect(cx - 24, baseY - 22, 48, 22);
       c.fillStyle = '#ffbe0b';
@@ -2193,9 +2311,7 @@ export class HellfallGame {
       return;
     }
 
-    // ARMA 3: LANZALLAMAS INFERNAL (FLAMETHROWER)
     if (w === 3) {
-      // Chorro gigante de llamas al disparar
       if (this.muzzleFlash > 0.1) {
         const flick = Math.floor(Math.sin(now * 0.05) * 6);
         c.fillStyle = 'rgba(255, 50, 0, 0.75)';
@@ -2205,7 +2321,6 @@ export class HellfallGame {
         c.fillStyle = '#fff3b0';
         c.fillRect(cx - 10, baseY - 66, 20, 22);
       } else {
-        // Llama piloto azul/naranja encendida en la boquilla
         const pFlick = Math.floor(Math.sin(now * 0.03) * 2);
         c.fillStyle = '#00b4d8';
         c.fillRect(cx - 3, baseY - 56 + pFlick, 6, 6);
@@ -2213,17 +2328,14 @@ export class HellfallGame {
         c.fillRect(cx - 2, baseY - 59 + pFlick, 4, 4);
       }
 
-      // Boquilla térmica y escudo perforado
       c.fillStyle = '#2b2d33';
       c.fillRect(cx - 10, baseY - 50, 20, 24);
       c.fillStyle = '#ff4d00';
       c.fillRect(cx - 6, baseY - 46, 12, 4);
-      // Tanque de combustible presurizado lateral (naranja/rojo)
       c.fillStyle = '#9e1919';
       c.fillRect(cx + 10, baseY - 34, 16, 26);
       c.fillStyle = '#ff6d00';
       c.fillRect(cx + 12, baseY - 32, 6, 20);
-      // Cuerpo industrial y manguera
       c.fillStyle = '#343a40';
       c.fillRect(cx - 20, baseY - 26, 36, 26);
       c.fillStyle = '#adb5bd';
@@ -2231,7 +2343,6 @@ export class HellfallGame {
       return;
     }
 
-    // ARMA 1: SUPER ESCOPETA DE DOBLE CAÑÓN
     if (this.muzzleFlash > 0.12) {
       c.fillStyle = '#ff4d00';
       c.fillRect(cx - 24, baseY - 68, 48, 22);
@@ -2385,7 +2496,6 @@ export class HellfallGame {
       c.fillText(text, cx, cy);
     };
 
-    // Si tiene el Lanzallamas [3], muestra la gasolina; si tiene [1] o [2], los cartuchos
     if (this.player.weapon === 3) {
       const fuelColor = this.player.fuel <= 15 ? '#ffb703' : '#ff6d00';
       drawDoomNum(`${this.player.fuel}%`, 34, VIEW_HEIGHT + 17, fuelColor);

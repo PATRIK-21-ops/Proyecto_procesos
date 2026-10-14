@@ -4,19 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#120d10">
-  <meta name="description" content="HELLFALL: un FPS retro pixelado de navegador.">
-  <title>HELLFALL // Pixel Siege</title>
+  <meta name="description" content="HELLFALL: el infierno ha tomado el sector. FPS retro estilo DOOM.">
+  <title>HELLFALL // Brutal Pixel Siege</title>
   <link rel="stylesheet" href="/css/styles.css">
   <script type="module" src="/js/ui/main.js"></script>
 </head>
 <body>
+  <!-- Reproductor global en bucle para doom.mp3 (en portada y dentro del juego) -->
+  <audio id="doom-bgm" src="/doom.mp3" loop preload="auto"></audio>
+
   <div class="scanlines" aria-hidden="true"></div>
   <header class="topbar">
     <a class="brand" href="#home" data-view="home" aria-label="HELLFALL, inicio">
       <span class="brand-mark">HF</span>
-      <span><strong>HELLFALL</strong><small>PIXEL SIEGE // 199X</small></span>
+      <span><strong>HELLFALL</strong><small>INFERNAL SIEGE // 199X</small></span>
     </a>
     <div class="topbar-right">
+      <button class="button button-ghost button-small" id="music-toggle" type="button">🔊 BSO: ON</button>
       <span id="session-badge" class="session-badge">INVITADO</span>
       <button class="button button-ghost button-small hidden" id="nav-profile" type="button">MI CUENTA</button>
       <button class="button button-ghost button-small hidden" id="nav-admin" type="button">ADMIN</button>
@@ -28,36 +32,279 @@
 
     <section id="view-home" class="view hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> SYSTEM ONLINE // SECTOR 09</p>
-        <h1>HELL<span>FALL</span><em>PIXEL SIEGE</em></h1>
-        <p class="hero-lede">La instalación ha caído. Las alarmas siguen activas. Ábrete camino por el complejo y sobrevive a la oscuridad.</p>
+        <p class="eyebrow"><span class="status-dot"></span> ALERTA ROJA // 10 SECTORES INFERNALES</p>
+        <h1>HELL<span>FALL</span><em>INFERNAL LABYRINTH</em></h1>
+        <p class="hero-lede">El infierno ha tomado el sector. Los pasillos se han retorcido en un laberinto en llamas infestado de demonios y la munición escasea. Empuña tu escopeta, la ametralladora o el lanzallamas, desmiembra a las hordas y encuentra la compuerta EXIT para sobrevivir.</p>
         <div class="hero-actions">
-          <button class="button button-primary" id="home-play" type="button">▶ JUGAR</button>
+          <button class="button button-primary" id="home-play" type="button">▶ ENTRAR AL INFIERNO</button>
           <button class="button button-secondary" data-view="login" type="button">INICIAR SESIÓN</button>
           <button class="button button-ghost" data-view="register" type="button">CREAR CUENTA</button>
         </div>
         <div class="spec-row">
-          <div><span class="spec-label">MODO</span><strong>FPS / SINGLE PLAYER</strong></div>
-          <div><span class="spec-label">RENDER</span><strong>320 × 200 PIXELS</strong></div>
-          <div><span class="spec-label">ESTADO</span><strong class="green">PLAYABLE BUILD</strong></div>
+          <div><span class="spec-label">ARSENAL</span><strong>SHOTGUN · CHAINGUN · FLAMER</strong></div>
+          <div><span class="spec-label">MAPAS</span><strong>10 LABERINTOS ALEATORIOS</strong></div>
+          <div><span class="spec-label">ESTADO</span><strong class="green">BRUTAL DOOM BUILD</strong></div>
         </div>
       </div>
-      <div class="hero-art" aria-label="Vista previa estilizada de un pasillo pixelado">
-        <div class="art-topline"><span>CAM 01</span><span>REC ●</span></div>
-        <div class="pixel-scene">
-          <div class="scene-ceiling"></div><div class="scene-floor"></div>
-          <div class="scene-wall wall-left"></div><div class="scene-wall wall-right"></div>
-          <div class="scene-door"></div><div class="scene-light light-left"></div><div class="scene-light light-right"></div>
-          <div class="scene-demon"><i></i><b></b><span></span></div>
-          <div class="scene-crosshair">+</div>
-          <div class="scene-hud"><span>HP <b>100</b></span><span>AMMO <b>12</b></span><span>SECTOR 09</span></div>
+
+      <!-- Vista previa en Pixel-Art 320x200 fiel al motor estilo DOOM -->
+      <div class="hero-art" aria-label="Vista previa en primera persona del laberinto infernal estilo DOOM">
+        <div class="art-topline"><span>CAM 01 // SECTOR 04</span><span>REC ●</span></div>
+        <div class="pixel-scene" style="padding: 0; overflow: hidden; background: #140505;">
+          <svg viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="none" shape-rendering="crispEdges" style="display: block; width: 100%; height: 100%;">
+            <defs>
+              <linearGradient id="hellSky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#280406"/>
+                <stop offset="65%" stop-color="#8a1109"/>
+                <stop offset="100%" stop-color="#ff4d00"/>
+              </linearGradient>
+              <linearGradient id="lavaFloor" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#381010"/>
+                <stop offset="50%" stop-color="#210b0d"/>
+                <stop offset="100%" stop-color="#140708"/>
+              </linearGradient>
+            </defs>
+
+            <!-- 1. CIELO INFERNAL Y HORIZONTE EN LLAMAS -->
+            <rect x="0" y="0" width="320" height="84" fill="url(#hellSky)"/>
+            <g fill="#ff6d00">
+              <rect x="80" y="74" width="6" height="10"/>
+              <rect x="92" y="70" width="8" height="14"/>
+              <rect x="108" y="75" width="6" height="9"/>
+              <rect x="122" y="68" width="10" height="16"/>
+              <rect x="140" y="73" width="8" height="11"/>
+              <rect x="156" y="69" width="8" height="15"/>
+              <rect x="172" y="74" width="6" height="10"/>
+              <rect x="186" y="71" width="10" height="13"/>
+              <rect x="204" y="75" width="8" height="9"/>
+              <animate attributeName="opacity" values="0.85;1;0.75;1" dur="0.45s" repeatCount="indefinite"/>
+            </g>
+            <g fill="#ffbe0b">
+              <rect x="94" y="75" width="4" height="9"/>
+              <rect x="125" y="74" width="4" height="10"/>
+              <rect x="158" y="75" width="4" height="9"/>
+              <rect x="189" y="76" width="4" height="8"/>
+            </g>
+
+            <!-- 2. SUELO DE BASALTO Y RÍOS DE LAVA -->
+            <rect x="0" y="84" width="320" height="84" fill="url(#lavaFloor)"/>
+            <g fill="#ff4d00" opacity="0.75">
+              <rect x="70" y="96" width="180" height="1"/>
+              <rect x="50" y="112" width="220" height="1"/>
+              <rect x="25" y="132" width="270" height="2"/>
+              <rect x="0" y="154" width="320" height="2"/>
+              <polygon points="160,84 158,84 95,168 100,168"/>
+              <polygon points="160,84 162,84 225,168 220,168"/>
+              <polygon points="130,84 128,84 30,168 35,168"/>
+              <polygon points="190,84 192,84 290,168 285,168"/>
+            </g>
+            <g fill="#ffbe0b" opacity="0.6">
+              <rect x="110" y="132" width="35" height="1"/>
+              <rect x="180" y="154" width="48" height="1"/>
+            </g>
+
+            <!-- 3. PAREDES DEL LABERINTO EN PERSPECTIVA -->
+            <polygon points="0,12 88,36 88,136 0,164" fill="#4f1412"/>
+            <g fill="#2b0807">
+              <rect x="0" y="38" width="88" height="2"/>
+              <rect x="0" y="62" width="88" height="2"/>
+              <rect x="0" y="86" width="88" height="2"/>
+              <rect x="0" y="110" width="88" height="2"/>
+              <rect x="0" y="134" width="88" height="2"/>
+            </g>
+            <!-- Horno incandescente en el muro izquierdo -->
+            <rect x="18" y="66" width="34" height="40" fill="#140708"/>
+            <rect x="22" y="70" width="26" height="32" fill="#ff4d00"/>
+            <rect x="26" y="76" width="18" height="22" fill="#ffbe0b"/>
+            <rect x="30" y="82" width="10" height="12" fill="#fff3b0"/>
+            <rect x="26" y="70" width="3" height="32" fill="#1a0909"/>
+            <rect x="34" y="70" width="3" height="32" fill="#1a0909"/>
+            <rect x="42" y="70" width="3" height="32" fill="#1a0909"/>
+
+            <!-- Pared de fondo del laberinto -->
+            <rect x="88" y="42" width="76" height="86" fill="#291212"/>
+            <rect x="88" y="42" width="76" height="86" fill="none" stroke="#140708" stroke-width="2"/>
+            <rect x="102" y="58" width="16" height="3" fill="#ff4d00"/>
+            <rect x="135" y="92" width="18" height="3" fill="#ff4d00"/>
+
+            <!-- Pared derecha con la COMPUERTA EXIT EMPOTRADA -->
+            <polygon points="320,12 214,36 214,136 320,164" fill="#2b1717"/>
+            <rect x="226" y="44" width="54" height="88" fill="#1a0909"/>
+            <rect x="230" y="46" width="46" height="84" fill="#381818"/>
+            <g fill="#ff9e00">
+              <rect x="231" y="50" width="3" height="5"/>
+              <rect x="231" y="60" width="3" height="5"/>
+              <rect x="231" y="70" width="3" height="5"/>
+              <rect x="231" y="80" width="3" height="5"/>
+              <rect x="231" y="90" width="3" height="5"/>
+              <rect x="231" y="100" width="3" height="5"/>
+              <rect x="231" y="110" width="3" height="5"/>
+              <rect x="272" y="50" width="3" height="5"/>
+              <rect x="272" y="60" width="3" height="5"/>
+              <rect x="272" y="70" width="3" height="5"/>
+              <rect x="272" y="80" width="3" height="5"/>
+              <rect x="272" y="90" width="3" height="5"/>
+              <rect x="272" y="100" width="3" height="5"/>
+              <rect x="272" y="110" width="3" height="5"/>
+            </g>
+            <rect x="241" y="48" width="24" height="8" fill="#ff2a00"/>
+            <text x="253" y="55" font-family="monospace" font-size="7" font-weight="bold" fill="#fff3b0" text-anchor="middle">EXIT</text>
+            <rect x="236" y="60" width="34" height="68" fill="#182026"/>
+            <rect x="243" y="72" width="20" height="42" fill="#00f5d4"/>
+            <rect x="248" y="80" width="10" height="26" fill="#caf0f8"/>
+
+            <!-- 4. ELEMENTOS 3D DEL ESCENARIO -->
+            <rect x="68" y="118" width="14" height="14" fill="#2b1b1e"/>
+            <rect x="66" y="130" width="18" height="4" fill="#14090b"/>
+            <g>
+              <rect x="67" y="96" width="16" height="22" fill="#d90429"/>
+              <rect x="69" y="90" width="12" height="26" fill="#ff4d00"/>
+              <rect x="71" y="95" width="8" height="18" fill="#ffbe0b"/>
+              <rect x="73" y="102" width="4" height="10" fill="#fff3b0"/>
+              <animate attributeName="transform" type="translate" values="0,0; 0,-2; 0,1; 0,0" dur="0.3s" repeatCount="indefinite"/>
+            </g>
+
+            <rect x="192" y="134" width="16" height="10" fill="#2d3a27"/>
+            <rect x="194" y="131" width="3" height="4" fill="#d90429"/>
+            <rect x="198" y="131" width="3" height="4" fill="#d90429"/>
+            <rect x="202" y="131" width="3" height="4" fill="#d90429"/>
+            <rect x="194" y="138" width="12" height="2" fill="#ffbe0b"/>
+
+            <rect x="84" y="146" width="38" height="8" fill="#660000"/>
+            <rect x="88" y="143" width="30" height="8" fill="#a30000"/>
+            <rect x="92" y="141" width="22" height="6" fill="#d90429"/>
+            <rect x="94" y="139" width="7" height="6" fill="#e5e5e5"/>
+            <rect x="95" y="141" width="2" height="2" fill="#111"/>
+            <rect x="98" y="141" width="2" height="2" fill="#111"/>
+            <rect x="104" y="141" width="8" height="2" fill="#f8f9fa"/>
+            <rect x="105" y="144" width="6" height="2" fill="#f8f9fa"/>
+
+            <!-- 5. BOSS CYBERDEMON -->
+            <g>
+              <rect x="134" y="42" width="8" height="10" fill="#e5e5e5"/>
+              <rect x="168" y="42" width="8" height="10" fill="#e5e5e5"/>
+              <rect x="138" y="50" width="34" height="18" fill="#590d22"/>
+              <rect x="130" y="64" width="50" height="26" fill="#9e2a2b"/>
+              <rect x="146" y="72" width="18" height="10" fill="#adb5bd"/>
+              <rect x="142" y="56" width="6" height="4" fill="#ff0000"/>
+              <rect x="162" y="56" width="6" height="4" fill="#ff0000"/>
+              <rect x="144" y="63" width="22" height="5" fill="#1a0909"/>
+              <rect x="146" y="64" width="3" height="3" fill="#ffffff"/>
+              <rect x="161" y="64" width="3" height="3" fill="#ffffff"/>
+              <rect x="122" y="66" width="8" height="28" fill="#9e2a2b"/>
+              <rect x="180" y="64" width="12" height="30" fill="#495057"/>
+              <rect x="182" y="88" width="8" height="8" fill="#ff4d00"/>
+              <rect x="136" y="90" width="14" height="28" fill="#590d22"/>
+              <rect x="160" y="88" width="14" height="26" fill="#adb5bd"/>
+              <rect x="134" y="116" width="16" height="8" fill="#1b1113"/>
+              <rect x="160" y="112" width="16" height="8" fill="#2b2d42"/>
+            </g>
+
+            <g fill="#ff002b">
+              <rect x="148" y="76" width="5" height="5"/>
+              <rect x="135" y="70" width="4" height="4"/>
+              <rect x="166" y="72" width="5" height="5"/>
+              <rect x="128" y="82" width="4" height="4"/>
+              <rect x="174" y="84" width="3" height="3"/>
+              <rect x="154" y="68" width="4" height="4" fill="#d90429"/>
+            </g>
+
+            <rect x="154" y="84" width="4" height="1" fill="#ffbe0b"/>
+            <rect x="162" y="84" width="4" height="1" fill="#ffbe0b"/>
+            <rect x="159" y="79" width="2" height="4" fill="#ffbe0b"/>
+            <rect x="159" y="87" width="2" height="4" fill="#ffbe0b"/>
+
+            <!-- 6. MINIRRADAR -->
+            <rect x="268" y="4" width="48" height="48" fill="rgba(14,5,6,0.88)" stroke="#ff4d00" stroke-width="1"/>
+            <g fill="#4a2020">
+              <rect x="272" y="8" width="40" height="3"/>
+              <rect x="272" y="8" width="3" height="40"/>
+              <rect x="282" y="14" width="18" height="3"/>
+              <rect x="282" y="14" width="3" height="22"/>
+              <rect x="292" y="24" width="16" height="3"/>
+              <rect x="276" y="38" width="26" height="3"/>
+            </g>
+            <rect x="307" y="18" width="4" height="4" fill="#00f5d4"/>
+            <rect x="278" y="28" width="2" height="2" fill="#ffbe0b"/>
+            <rect x="298" y="34" width="2" height="2" fill="#ffbe0b"/>
+            <rect x="290" y="20" width="4" height="4" fill="#ff0055"/>
+            <rect x="288" y="30" width="3" height="3" fill="#80ed99"/>
+
+            <!-- 7. SUPER ESCOPETA DOOM -->
+            <g>
+              <rect x="136" y="102" width="48" height="20" fill="#ff4d00"/>
+              <rect x="146" y="94" width="28" height="30" fill="#ff4d00"/>
+              <rect x="144" y="106" width="32" height="14" fill="#ffbe0b"/>
+              <rect x="152" y="110" width="16" height="8" fill="#ffffff"/>
+              <animate attributeName="opacity" values="1;0.25;0.9;0.4;1" dur="0.6s" repeatCount="indefinite"/>
+            </g>
+            <rect x="146" y="118" width="12" height="26" fill="#1b1d21"/>
+            <rect x="162" y="118" width="12" height="26" fill="#1b1d21"/>
+            <rect x="148" y="118" width="4" height="24" fill="#6c757d"/>
+            <rect x="164" y="118" width="4" height="24" fill="#6c757d"/>
+            <rect x="150" y="118" width="2" height="22" fill="#adb5bd"/>
+            <rect x="166" y="118" width="2" height="22" fill="#adb5bd"/>
+            <rect x="159" y="116" width="2" height="3" fill="#d90429"/>
+            <rect x="141" y="140" width="38" height="16" fill="#2b2d33"/>
+            <rect x="145" y="140" width="30" height="12" fill="#495057"/>
+            <rect x="137" y="152" width="46" height="16" fill="#4a2511"/>
+            <rect x="141" y="154" width="38" height="10" fill="#7f4f24"/>
+            <rect x="146" y="156" width="28" height="5" fill="#9c6644"/>
+            <rect x="132" y="159" width="14" height="9" fill="#3d2314"/>
+            <rect x="174" y="159" width="14" height="9" fill="#3d2314"/>
+            <rect x="135" y="158" width="9" height="3" fill="#d4a373"/>
+            <rect x="176" y="158" width="9" height="3" fill="#d4a373"/>
+
+            <!-- 8. BARRA DE ESTADO DOOM (STBAR) -->
+            <g>
+              <rect x="0" y="168" width="68" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="68" y="168" width="76" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="144" y="168" width="32" height="32" fill="#262626" stroke="#141414" stroke-width="1"/>
+              <rect x="176" y="168" width="72" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="248" y="168" width="72" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+
+              <text x="34" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">08/16</text>
+              <text x="106" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">85%</text>
+              <text x="212" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">024</text>
+              <text x="284" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#ffb703" text-anchor="middle">04/10</text>
+
+              <text x="34" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">SHOTGUN [1]</text>
+              <text x="106" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">HEALTH</text>
+              <text x="212" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">KILLS</text>
+              <text x="284" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">SECTOR</text>
+
+              <rect x="150" y="171" width="20" height="6" fill="#4a2c18"/>
+              <rect x="150" y="176" width="20" height="17" fill="#e0ac8b"/>
+              <rect x="152" y="191" width="16" height="4" fill="#c68b67"/>
+              <rect x="152" y="178" width="6" height="2" fill="#3b2010"/>
+              <rect x="162" y="178" width="6" height="2" fill="#3b2010"/>
+              <rect x="153" y="180" width="5" height="3" fill="#ffffff"/>
+              <rect x="162" y="180" width="5" height="3" fill="#ffffff"/>
+              <rect x="155" y="180" width="2" height="3" fill="#ffbe0b"/>
+              <rect x="164" y="180" width="2" height="3" fill="#ffbe0b"/>
+              <rect x="153" y="188" width="14" height="4" fill="#2b0909"/>
+              <rect x="154" y="189" width="12" height="2" fill="#ffffff"/>
+              <rect x="151" y="177" width="3" height="5" fill="#b80c09"/>
+              <rect x="165" y="185" width="3" height="4" fill="#d90429"/>
+            </g>
+          </svg>
         </div>
-        <div class="art-caption"><span>FIG 01. // INFESTED CORRIDOR</span><span>WARNING: HOSTILES DETECTED</span></div>
+        <div class="art-caption"><span>FIG 01. // EL INFIERNO HA TOMADO EL SECTOR</span><span>WARNING: CYBERDEMON DETECTED</span></div>
       </div>
+
       <div class="home-lower panel">
-        <div><p class="eyebrow">OPERATION BRIEFING</p><h2>NO HAY REFUERZOS</h2><p>Explora el sector, elimina enemigos y registra tus mejores partidas. Tu cuenta conserva el acceso y tus puntuaciones.</p></div>
-        <div class="brief-stats"><div><strong>WASD</strong><span>MOVIMIENTO</span></div><div><strong>MOUSE</strong><span>APUNTAR</span></div><div><strong>CLICK</strong><span>DISPARAR</span></div></div>
+        <div>
+          <p class="eyebrow">OPERATION BRIEFING</p>
+          <h2>EL INFIERNO HA TOMADO EL SECTOR</h2>
+          <p>Ábrete paso por 10 laberintos gigantescos generados aleatoriamente. Raciona cada cartucho, quema a las bestias con el lanzallamas y busca la puerta EXIT en los muros. Solo se guarda tu puntuación al morir o al conquistar el Sector 10.</p>
+        </div>
+        <div class="brief-stats">
+          <div><strong>WASD</strong><span>MOVIMIENTO</span></div>
+          <div><strong>1 · 2 · 3</strong><span>ARMAS DOOM</span></div>
+          <div><strong>CLICK / R</strong><span>FUEGO / RECARGAR</span></div>
+        </div>
       </div>
+
       <section class="panel leaderboard-panel">
         <div class="section-heading"><div><p class="eyebrow">HALL OF FAME</p><h2>MEJORES PUNTUACIONES</h2></div><span class="micro-tag">GLOBAL // TOP 10</span></div>
         <div id="home-leaderboard" class="leaderboard-empty">Aún no hay puntuaciones. Sé el primero en entrar.</div>
@@ -65,7 +312,7 @@
     </section>
 
     <section id="view-login" class="view auth-layout hidden">
-      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>SECTOR.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
+      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>INFIERNO.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
       <form id="login-form" class="panel form-panel">
         <p class="eyebrow">AUTENTICACIÓN LOCAL</p><h2>INICIAR SESIÓN</h2>
         <label for="login-email">CORREO ELECTRÓNICO</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
@@ -89,10 +336,10 @@
     </section>
 
     <section id="view-game" class="view game-layout hidden">
-      <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // SECTOR 09</p><h2>INFESTATION PROTOCOL</h2></div><span class="micro-tag" id="game-status">READY</span></div>
+      <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // 10 SECTORS</p><h2>INFERNAL LABYRINTH PROTOCOL</h2></div><span class="micro-tag" id="game-status">READY</span></div>
       <div class="game-frame">
-        <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay"><div class="overlay-box"><p class="eyebrow">MISSION AVAILABLE</p><h2>SECTOR <span>09</span></h2><p>Elimina los hostiles y sobrevive.</p><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><small>WASD moverse · ratón mirar · clic disparar · ESC pausa</small></div></div></div>
-        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>MOUSE <small>MIRAR</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>ESC <small>PAUSA</small></span></div>
+        <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay"><div class="overlay-box"><p class="eyebrow">HELL INVASION ACTIVE</p><h2>SECTOR <span>01 / 10</span></h2><p>El infierno ha tomado el complejo. Busca munición, desmiembra demonios y halla la puerta EXIT.</p><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><small>WASD mover · [1-3] Armas · Clic disparar · ESC pausa · Q salir sin guardar</small></div></div></div>
+        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>1 · 2 · 3 <small>ARMAS</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>ESC / Q <small>PAUSA / SALIR</small></span></div>
       </div>
       <div class="game-bottom"><div class="panel mini-panel"><p class="eyebrow">MISSION STATUS</p><strong id="game-status-text">A la espera del despliegue</strong><p id="game-message">Inicia la misión cuando estés preparado.</p></div><div class="panel mini-panel"><p class="eyebrow">PERSONAL BEST</p><strong id="personal-best">— PTS</strong><p>Las mejores puntuaciones se guardan con tu usuario.</p></div></div>
     </section>
@@ -108,7 +355,47 @@
       <div class="panel admin-panel"><div class="admin-toolbar"><p>Este listado se autoriza en el servidor. Ocultar el botón no sustituye a los permisos de API.</p><button id="refresh-users" class="button button-secondary button-small" type="button">↻ ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>EMAIL</th><th>ROL</th><th>ESTADO</th><th>REGISTRO</th><th>ACCIÓN</th></tr></thead><tbody id="admin-users-body"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></div>
     </section>
 
-    <footer class="footer"><span>HELLFALL // PIXEL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.3.0</span></footer>
+    <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.4.0</span></footer>
   </main>
+
+  <!-- Controlador global para reproducir doom.mp3 en bucle en la portada y dentro del juego -->
+  <script>
+    (function() {
+      const bgm = document.getElementById('doom-bgm');
+      const toggleBtn = document.getElementById('music-toggle');
+      if (!bgm) return;
+
+      bgm.volume = 0.45; // Volumen equilibrado para escuchar también los disparos
+      let musicMuted = false;
+
+      function tryPlayMusic() {
+        if (musicMuted) return;
+        if (bgm.paused) {
+          bgm.play().then(() => {
+            if (toggleBtn) toggleBtn.textContent = '🔊 BSO: ON';
+          }).catch(() => {});
+        }
+      }
+
+      // Intentar reproducir al cargar y asegurar reproducción al primer clic o tecla en la web
+      window.addEventListener('DOMContentLoaded', tryPlayMusic);
+      document.addEventListener('click', tryPlayMusic, { passive: true });
+      document.addEventListener('keydown', tryPlayMusic, { passive: true });
+
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          musicMuted = !musicMuted;
+          bgm.muted = musicMuted;
+          if (!musicMuted) {
+            bgm.play().catch(() => {});
+            toggleBtn.textContent = '🔊 BSO: ON';
+          } else {
+            toggleBtn.textContent = '🔇 BSO: OFF';
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
