@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { authRoutes } from './api/authRoutes.js';
 import { userRoutes } from './api/userRoutes.js';
 import { scoreRoutes } from './api/scoreRoutes.js';
+import { verificarDominioEmail } from './services/userService.js';
 import { AppError } from './utils/AppError.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,17 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
   }));
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'hellfall-pixel-siege' }));
+
+  app.post('/api/prueba/dominio', (req, res) => {
+    try {
+      const { email } = req.body || {};
+      const resultado = verificarDominioEmail(email);
+      return res.status(200).json(resultado);
+    } catch (error) {
+      return res.status(400).json({ error: error.message || 'Petición inválida' });
+    }
+  });
+
   app.use('/api/auth', authRoutes({ userService, logger, cookieName }));
   app.use('/api/users', userRoutes({ userService, logger, cookieName }));
   app.use('/api/scores', scoreRoutes({ userService, scoreService, logger }));
