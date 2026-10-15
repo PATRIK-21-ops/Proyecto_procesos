@@ -7,11 +7,41 @@ function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
+export function verificarDominioEmail(email) {
+  if (typeof email !== 'string' || !email.includes('@')) {
+    const error = new Error('El campo email es obligatorio y debe contener @');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const partes = email.trim().split('@');
+  if (partes.length !== 2 || !partes[0] || !partes[1]) {
+    const error = new Error('Formato de email inválido');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dominioEmail = partes[1].trim().toLowerCase();
+
+  const rawAllowed = process.env.ALLOWED_DOMAINS || '';
+  const dominiosPermitidos = rawAllowed
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+
+  const permitido = dominiosPermitidos.includes(dominioEmail);
+  return { permitido };
+}
+
 export class UserService {
   /** El repositorio se inyecta: la lógica no depende de si los datos están en memoria o PostgreSQL. */
   constructor(userRepository, { bcryptRounds = 12 } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
+  }
+
+  verificarDominioEmail(email) {
+    return verificarDominioEmail(email);
   }
 
   async register({ email, password }) {
