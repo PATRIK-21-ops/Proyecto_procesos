@@ -108,4 +108,14 @@ describe('UserService — reglas de negocio (PBI 1, 8, 9, 10, 12)', () => {
     await expect(service.ensureAdmin('second@test.local', 'short'))
       .rejects.toThrow(/ADMIN_EMAIL debe ser un correo válido y la contraseña debe tener al menos 12 caracteres./);
   });
+
+  it('registra o autentica correctamente a un usuario mediante Google OAuth', async () => {
+    const user1 = await service.loginWithGoogle({ email: 'jugador@gmail.com' });
+    expect(user1.email).toBe('jugador@gmail.com');
+    expect(user1.id).toBeDefined();
+
+    // Si vuelve a entrar con el mismo correo de Google, devuelve el mismo usuario sin duplicarlo
+    const user2 = await service.loginWithGoogle({ email: 'jugador@gmail.com' });
+    expect(user2.id).toBe(user1.id);
+  });
 });

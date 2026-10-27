@@ -117,4 +117,13 @@ describe('API HTTP', () => {
     const again = await agent.get('/api/auth/me');
     expect(again.status).toBe(401);
   });
+  
+  it('GET /api/auth/google redirige a Google cuando está configurado', async () => {
+  process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+  process.env.GOOGLE_CALLBACK_URL = 'http://localhost:8080/api/auth/google/callback';
+
+  const res = await request(app).get('/api/auth/google');
+  expect(res.status).toBe(302);
+  expect(res.headers.location).toContain('accounts.google.com/o/oauth2/v2/auth');
+});
 });
