@@ -115,3 +115,14 @@ en distintos módulos/archivos -> rutas de redes entre clientes (authRoutes,scor
 
 Frontend: Publico (public) -> archivos .js, index.html, etc. Portada para el público, enlaces de las rutas con comandos JavaScript. 
 
+## Hito 4: Servicios externos (Google OAuth 2.0) y manejo de errores
+
+Se ha integrado el inicio de sesión y registro mediante **Google OAuth 2.0**:
+- **Rutas OAuth (`src/api/authRoutes.js`):**
+  - `GET /api/auth/google`: Redirige al usuario a la pantalla de consentimiento de Google.
+  - `GET /api/auth/google/callback`: Intercambia el código de autorización por el token de acceso, obtiene el correo verificado de Google, invoca `userService.loginWithGoogle()` y regenera la sesión segura (`hellfall.sid`) junto con el token CSRF.
+- **Lógica de negocio (`src/services/userService.js`):** El método `loginWithGoogle({ email })` autentica al usuario si ya existe o crea automáticamente la cuenta activa en caso de ser su primer acceso.
+- **Variables de entorno necesarias:**
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `GOOGLE_CALLBACK_URL` (en local `http://localhost:8080/api/auth/google/callback` y en producción la URL de Render).

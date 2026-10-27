@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/AppError.js';
 
@@ -83,6 +84,39 @@ export class UserService {
       throw forbidden('La cuenta todavía no está activa.', 'ACCOUNT_NOT_ACTIVE');
     }
     return user;
+  }
+
+  async loginWithGoogle({ email }) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!EMAIL_RE.test(normalizedEmail) || normalizedEmail.length > 254) {
+      throw badRequest('Google no proporcionó una dirección de correo válida.', 'OAUTH_INVALID_EMAIL');
+    }
+
+    const existing = await this.userRepository.findByEmail(normalizedEmail);
+    if (existing) {
+      if (existing.status === 'deleted' || existing.status !== 'active') {
+        throw forbidden('La cuenta está desactivada o eliminada.', 'ACCOUNT_NOT_ACTIVE');
+      }
+      return existing;
+    }
+
+    // Generamos una contraseña aleatoria de 36 bytes para cumplir con el esquema sin superar los 72 bytes de bcrypt
+    const randomPassword = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(randomPassword, this.bcryptRounds);
+
+    try {
+      return await this.userRepository.create({
+        email: normalizedEmail,
+        passwordHash,
+        role: 'user',
+        status: 'active'
+      });
+    } catch (error) {
+      if (error.code === '23505') {
+        return await this.userRepository.findByEmail(normalizedEmail);
+      }
+      throw error;
+    }
   }
 
   async getCurrentUser(id) {

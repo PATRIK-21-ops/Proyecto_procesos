@@ -312,12 +312,13 @@
     </section>
 
     <section id="view-login" class="view auth-layout hidden">
-      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>INFIERNO.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
+      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>INFIERNO.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line" id="login-terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
       <form id="login-form" class="panel form-panel">
-        <p class="eyebrow">AUTENTICACIÓN LOCAL</p><h2>INICIAR SESIÓN</h2>
+        <p class="eyebrow">AUTENTICACIÓN LOCAL Y OAUTH</p><h2>INICIAR SESIÓN</h2>
         <label for="login-email">CORREO ELECTRÓNICO</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
         <label for="login-password">CONTRASEÑA</label><input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="••••••••">
         <button class="button button-primary button-wide" type="submit">ENTRAR AL SISTEMA</button>
+        <a class="button button-secondary button-wide" href="/api/auth/google" id="google-login-button" style="margin-top: 0.75rem; text-align: center; text-decoration: none; display: inline-block;">CONTINUAR CON GOOGLE</a>
         <p class="form-foot">¿No tienes cuenta? <button type="button" class="text-button" data-view="register">Regístrate</button></p>
       </form>
     </section>
@@ -330,8 +331,9 @@
         <label for="register-password">CONTRASEÑA</label><input id="register-password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Mínimo 8 caracteres">
         <label for="register-password-confirm">REPETIR CONTRASEÑA</label><input id="register-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Repite la contraseña">
         <button class="button button-primary button-wide" type="submit">REGISTRAR RECLUTA</button>
+        <a class="button button-secondary button-wide" href="/api/auth/google" style="margin-top: 0.75rem; text-align: center; text-decoration: none; display: inline-block;">REGISTRARSE CON GOOGLE</a>
         <p class="form-foot">¿Ya tienes cuenta? <button type="button" class="text-button" data-view="login">Inicia sesión</button></p>
-        <p class="small-note">Esta versión activa la cuenta al registrarse. La verificación por correo está prevista para el Hito 4.</p>
+        <p class="small-note">Puedes crear una cuenta local o acceder directamente con tu cuenta de Google mediante OAuth 2.0.</p>
       </form>
     </section>
 
@@ -358,14 +360,50 @@
     <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.4.0</span></footer>
   </main>
 
-  <!-- Controlador global para reproducir doom.mp3 en bucle en la portada y dentro del juego -->
+  <!-- Controlador global para reproducir doom.mp3 y mostrar notificaciones de OAuth (Hito 4) -->
   <script>
     (function() {
+      // 1. Feedback claro al usuario tras redirección OAuth 2.0 (Hito 4)
+      window.addEventListener('DOMContentLoaded', () => {
+        const params = new URLSearchParams(window.location.search);
+        const oauthError = params.get('error');
+        const oauthSuccess = params.get('oauth');
+        const notice = document.getElementById('notice');
+        const terminalLine = document.getElementById('login-terminal-line');
+
+        const errorMessages = {
+          oauth_not_configured: 'El inicio de sesión con Google no está configurado en el servidor.',
+          oauth_cancelled: 'Has cancelado el inicio de sesión con Google.',
+          oauth_token_failed: 'No se pudo verificar la credencial con Google. Inténtalo de nuevo.',
+          oauth_profile_failed: 'No se pudo obtener tu perfil desde Google.',
+          oauth_account_inactive: 'Tu cuenta está desactivada o ha sido eliminada.',
+          oauth_server_error: 'Error interno al autenticar con Google.'
+        };
+
+        if (oauthError && errorMessages[oauthError]) {
+          if (notice) {
+            notice.textContent = errorMessages[oauthError];
+            notice.className = 'notice error';
+          }
+          if (terminalLine) {
+            terminalLine.textContent = '> OAUTH ERROR: ' + oauthError.toUpperCase();
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (oauthSuccess === 'success') {
+          if (notice) {
+            notice.textContent = 'Sesión iniciada correctamente con Google.';
+            notice.className = 'notice success';
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      });
+
+      // 2. Controlador de música BSO
       const bgm = document.getElementById('doom-bgm');
       const toggleBtn = document.getElementById('music-toggle');
       if (!bgm) return;
 
-      bgm.volume = 0.45; // Volumen equilibrado para escuchar también los disparos
+      bgm.volume = 0.45;
       let musicMuted = false;
 
       function tryPlayMusic() {
@@ -377,7 +415,6 @@
         }
       }
 
-      // Intentar reproducir al cargar y asegurar reproducción al primer clic o tecla en la web
       window.addEventListener('DOMContentLoaded', tryPlayMusic);
       document.addEventListener('click', tryPlayMusic, { passive: true });
       document.addEventListener('keydown', tryPlayMusic, { passive: true });
