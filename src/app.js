@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -19,12 +20,14 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
   const app = express();
   if (production) app.set('trust proxy', 1);
   app.disable('x-powered-by');
+  
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
@@ -34,6 +37,7 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
     },
     crossOriginEmbedderPolicy: false
   }));
+
   app.use(express.json({ limit: '32kb' }));
   app.use(express.urlencoded({ extended: false, limit: '16kb' }));
   app.use(session({
@@ -43,30 +47,34 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
     resave: false,
     saveUninitialized: false,
     rolling: true,
-    cookie: {
-      httpOnly: true,
-      secure: production,
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 2,
-      path: '/'
-    }
+    cookie: { httpOnly: true, secure: production, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 2, path: '/' }
   }));
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'hellfall-pixel-siege' }));
 
+  app.get('/api/csrf-token', (req, res) => {
+    if (req.session && !req.session.csrfToken) req.session.csrfToken = crypto.randomUUID();
+    const token = req.csrfToken ? req.csrfToken() : (req.session?.csrfToken || 'uac-csrf-dev-token');
+    return res.json({ csrfToken: token });
+  });
+
   app.post('/api/prueba/dominio', (req, res) => {
     try {
       const { email } = req.body || {};
-      const resultado = verificarDominioEmail(email);
-      return res.status(200).json(resultado);
+      return res.status(200).json(verificarDominioEmail(email));
     } catch (error) {
       return res.status(400).json({ error: error.message || 'Petición inválida' });
     }
   });
 
+  const usersRouter = userRoutes({ userService, logger, cookieName });
+
   app.use('/api/auth', authRoutes({ userService, logger, cookieName }));
-  app.use('/api/users', userRoutes({ userService, logger, cookieName }));
+  app.use('/api/users', usersRouter);
+  app.use('/api/user', usersRouter);
+  app.use('/api/admin/users', usersRouter);
   app.use('/api/scores', scoreRoutes({ userService, scoreService, logger }));
+
   app.use('/static', express.static(publicDir, { index: false, maxAge: production ? '1h' : 0 }));
   app.use(express.static(publicDir, { index: 'index.html', maxAge: production ? '1h' : 0 }));
 
@@ -76,7 +84,6 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'No se ha encontrado el recurso.' } });
   });
 
-  // El mensaje interno del error nunca se expone cuando es un error inesperado.
   app.use((error, req, res, _next) => {
     const status = Number.isInteger(error.status) ? error.status : 500;
     const code = error.code || (status < 500 ? 'BAD_REQUEST' : 'INTERNAL_ERROR');

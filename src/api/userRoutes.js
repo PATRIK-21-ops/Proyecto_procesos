@@ -12,6 +12,18 @@ export function userRoutes({ userService, logger, cookieName = 'hellfall.sid' })
   const router = Router();
   const authenticated = requireAuth(userService);
 
+  // MODIFICADO: No usamos "authenticated" para evitar el error 401 que congela el frontend
+  router.get('/me', asyncHandler(async (req, res) => {
+    // Si no hay cookie de sesión, devolvemos null pacíficamente
+    if (!req.session?.userId) {
+      return res.json(null); 
+    }
+    // Si la hay, devolvemos al usuario
+    const user = await userService.getCurrentUser(req.session.userId);
+    res.json(publicUser(user));
+  }));
+
+  // El resto de rutas siguen protegidas por "authenticated"
   router.get('/', authenticated, asyncHandler(async (req, res) => {
     const users = await userService.listUsers(req.currentUser);
     res.json({ users: users.map(publicUser) });
@@ -26,6 +38,7 @@ export function userRoutes({ userService, logger, cookieName = 'hellfall.sid' })
     const actorId = req.currentUser.id;
     const result = await userService.deleteUser({ id: actorId, role: req.currentUser.role }, req.params.id);
     logger.info({ event: 'user.deleted', targetUserId: result.id, actorId }, 'Cuenta marcada como eliminada');
+    
     const deletedCurrentUser = actorId === result.id;
     if (deletedCurrentUser) {
       await destroySession(req);

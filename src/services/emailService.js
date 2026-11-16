@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 
 export class EmailService {
@@ -7,7 +8,7 @@ export class EmailService {
     this.enabled = Boolean(config.SMTP_HOST && config.SMTP_USER && config.SMTP_PASS);
 
     if (this.enabled) {
-      const port = Number(config.SMTP_PORT || 465);
+      const port = Number(config.SMTP_PORT || 587);
       this.transporter = nodemailer.createTransport({
         host: config.SMTP_HOST,
         port,
@@ -22,8 +23,19 @@ export class EmailService {
     }
   }
 
+  createConfirmationToken(ttlMs = 24 * 60 * 60 * 1000) {
+    const raw = crypto.randomBytes(32).toString('hex');
+    const hash = this.hashToken(raw);
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+    return { raw, hash, expiresAt };
+  }
+
+  hashToken(rawToken) {
+    return crypto.createHash('sha256').update(String(rawToken || '')).digest('hex');
+  }
+
   async sendVerificationEmail(toEmail, rawToken) {
-    const verifyUrl = `${this.appUrl}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;
+    const verifyUrl = `${this.appUrl}/api/auth/confirm?token=${encodeURIComponent(rawToken)}`;
 
     // Modo desarrollo / tests sin SMTP configurado
     if (!this.enabled || !this.transporter) {
@@ -55,6 +67,6 @@ export class EmailService {
       html
     });
 
-    return { simulated: false };
+    return { simulated: false, verifyUrl };
   }
 }

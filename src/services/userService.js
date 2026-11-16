@@ -41,10 +41,11 @@ export function verificarDominioEmail(email) {
 
 export class UserService {
   /** El repositorio se inyecta: la lógica no depende de si los datos están en memoria o PostgreSQL. */
-  constructor(userRepository, { bcryptRounds = 12 } = {}) {
+  constructor(userRepository, { bcryptRounds = 12, config = process.env } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
-    this.emailService = new EmailService();
+    this.config = config;
+    this.emailService = new EmailService(config);
   }
 
   verificarDominioEmail(email) {
@@ -70,79 +71,85 @@ export class UserService {
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing) {
-      // Si la cuenta anterior fue eliminada lógicamente, permitimos el re-registro liberando el correo
-      if (existing.status !== 'deleted') {
-        throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
-      }
+    if (existing && existing.status !== 'deleted') {
+      throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
-    const requireConfirmation = process.env.REQUIRE_EMAIL_CONFIRMATION === 'true';
-    const initialStatus = requireConfirmation ? 'pending' : 'active';
+    const requireEmailConfirmation = String(this.config.REQUIRE_EMAIL_CONFIRMATION ?? 'true').toLowerCase() !== 'false';
 
-    try {
-      const user = await this.userRepository.create({
-        email: normalizedEmail,
-        passwordHash,
-        role: 'user',
-        status: initialStatus
-      });
-
-      if (requireConfirmation) {
-        const token = this.emailService.createConfirmationToken({
-          email: normalizedEmail,
-          passwordHash
-        });
-        const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
-        const confirmUrl = `${baseUrl}/api/auth/confirm?token=${encodeURIComponent(token)}`;
-
-        await this.emailService.sendConfirmationEmail({
-          toEmail: normalizedEmail,
-          confirmUrl
-        });
-
+    if (requireEmailConfirmation) {
+      const { raw, hash, expiresAt } = this.emailService.createConfirmationToken();
+      try {
+        let user;
+        if (existing && existing.status === 'deleted' && typeof this.userRepository.update === 'function') {
+          user = await this.userRepository.update(existing.id, {
+            passwordHash,
+            role: 'user',
+            status: 'pending',
+            confirmationToken: hash,
+            confirmationExpiresAt: expiresAt,
+            confirmedAt: null
+          });
+        } else {
+          user = await this.userRepository.create({
+            email: normalizedEmail,
+            passwordHash,
+            role: 'user',
+            status: 'pending',
+            confirmationToken: hash,
+            confirmationExpiresAt: expiresAt,
+            confirmedAt: null
+          });
+        }
+        await this.emailService.sendVerificationEmail(normalizedEmail, raw);
         return {
           pendingConfirmation: true,
           email: normalizedEmail,
-          message: 'Te hemos enviado un enlace de activación a tu correo electrónico. Revisa tu bandeja de entrada.'
+          message: 'Te hemos enviado un correo de confirmación. Revisa tu bandeja de entrada para activar la cuenta.'
         };
+      } catch (error) {
+        if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+        throw error;
       }
+    }
 
+    try {
+      const user = existing && existing.status === 'deleted' && typeof this.userRepository.update === 'function'
+        ? await this.userRepository.update(existing.id, { passwordHash, role: 'user', status: 'active', confirmationToken: null, confirmationExpiresAt: null, confirmedAt: new Date().toISOString() })
+        : await this.userRepository.create({ email: normalizedEmail, passwordHash, role: 'user', status: 'active' });
       return user;
     } catch (error) {
-      // Cubre la carrera entre dos registros simultáneos con el mismo email en PostgreSQL.
       if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
       throw error;
     }
   }
 
   async confirmEmailToken(token) {
-    const payload = this.emailService.verifyConfirmationToken(token);
-    if (!payload || !payload.email || !payload.passwordHash) {
+    const rawToken = typeof token === 'string' ? token.trim() : '';
+    if (!rawToken) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+    const tokenHash = this.emailService.hashToken(rawToken);
+    const user = await this.userRepository.findByConfirmationTokenHash(tokenHash);
+    if (!user) {
       throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
     }
 
-    let user = await this.userRepository.findByEmail(payload.email);
-    if (!user) {
-      // Si no existe, lo creamos directamente ya verificado
-      user = await this.userRepository.create({
-        email: payload.email,
-        passwordHash: payload.passwordHash,
-        role: 'user',
-        status: 'active'
-      });
+    const expiresAt = user.confirmationExpiresAt ? new Date(user.confirmationExpiresAt).getTime() : 0;
+    if (!expiresAt || expiresAt < Date.now()) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+
+    if (user.status === 'active' && !user.confirmationToken) {
       return user;
     }
 
-    if (user.status === 'active') {
-      return user;
-    }
-
-    // Activamos la cuenta pendiente
     const updated = await this.userRepository.update(user.id, {
       status: 'active',
-      passwordHash: payload.passwordHash
+      confirmationToken: null,
+      confirmationExpiresAt: null,
+      confirmedAt: new Date().toISOString()
     });
     return updated;
   }
