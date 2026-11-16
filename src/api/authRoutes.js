@@ -33,8 +33,7 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
 
   router.post('/register', csrfProtection, asyncHandler(async (req, res) => {
     const result = await userService.register(req.body || {});
-    
-    // Si requiere confirmación, cortamos aquí y avisamos al frontend
+
     if (result && result.pendingConfirmation) {
       logger.info({ event: 'auth.register.pending', email: result.email }, 'Registro pendiente de confirmación por correo');
       return res.status(202).json({
@@ -48,11 +47,17 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
     res.status(201).json({ user: publicUser(result), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
   }));
 
-  // NUEVA RUTA: Recibe el clic del correo electrónico
+  // Activa la cuenta al pulsar el enlace del correo e inicia sesión automáticamente
   router.get('/confirm', asyncHandler(async (req, res) => {
     try {
       const token = String(req.query.token || '');
       const user = await userService.confirmEmailToken(token);
+
+      await regenerateSession(req);
+      req.session.userId = user.id;
+      req.session.csrfToken = randomBytes(32).toString('hex');
+      await saveSession(req);
+
       logger.info({ event: 'auth.confirm.success', userId: user.id }, 'Cuenta activada correctamente');
       return res.redirect('/?confirmed=success');
     } catch (err) {
@@ -72,11 +77,11 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.csrfToken = randomBytes(32).toString('hex');
+    await saveSession(req);
     logger.info({ event: 'auth.login.success', userId: user.id }, 'Inicio de sesión correcto');
     res.json({ user: publicUser(user), csrfToken: req.session.csrfToken });
   }));
 
-  // --- OAUTH 2.0 CON GOOGLE (HITO 4) ---
   router.get('/google', (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = process.env.GOOGLE_CALLBACK_URL;

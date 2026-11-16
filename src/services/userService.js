@@ -9,6 +9,13 @@ function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
+function cleanBaseUrl(rawUrl) {
+  const str = String(rawUrl || 'https://hellfall-game.onrender.com').trim();
+  const withoutMarkdown = str.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const match = withoutMarkdown.match(/https?:\/\/[^\s)\]]+/);
+  return (match ? match[0] : 'https://hellfall-game.onrender.com').replace(/\/$/, '');
+}
+
 export function verificarDominioEmail(email) {
   if (typeof email !== 'string' || !email.includes('@')) {
     const error = new Error('El campo email es obligatorio y debe contener @');
@@ -31,7 +38,6 @@ export function verificarDominioEmail(email) {
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
 
-  // Si no hay dominios permitidos configurados, se permite cualquiera. Si los hay, se valida.
   if (dominiosPermitidos.length === 0) {
     return { permitido: true };
   }
@@ -41,7 +47,6 @@ export function verificarDominioEmail(email) {
 }
 
 export class UserService {
-  /** El repositorio se inyecta: la lógica no depende de si los datos están en memoria o PostgreSQL. */
   constructor(userRepository, { bcryptRounds = 12 } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
@@ -52,7 +57,7 @@ export class UserService {
     return verificarDominioEmail(email);
   }
 
-async register({ email, password }) {
+  async register({ email, password }) {
     const normalizedEmail = normalizeEmail(email);
     if (!EMAIL_RE.test(normalizedEmail) || normalizedEmail.length > 254) {
       throw badRequest('Introduce una dirección de correo válida.', 'INVALID_EMAIL');
@@ -70,19 +75,17 @@ async register({ email, password }) {
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    // Solo bloqueamos si la cuenta ya está ACTIVA
     if (existing && existing.status === 'active') {
       throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
 
-    // 1. Generamos el token y enviamos el correo PRIMERO
     const token = this.emailService.createConfirmationToken({
       email: normalizedEmail,
       passwordHash
     });
-    const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const baseUrl = cleanBaseUrl(process.env.APP_BASE_URL);
     const confirmUrl = `${baseUrl}/api/auth/confirm?token=${encodeURIComponent(token)}`;
 
     try {
@@ -95,7 +98,6 @@ async register({ email, password }) {
       throw badRequest(`Fallo al enviar el correo (${emailError.code || emailError.message}).`, 'BREVO_FAILED');
     }
 
-    // 2. Solo si el correo salió correctamente, guardamos o actualizamos en la BD
     try {
       if (existing) {
         await this.userRepository.update(existing.id, { status: 'pending', passwordHash });
@@ -115,7 +117,7 @@ async register({ email, password }) {
     return {
       pendingConfirmation: true,
       email: normalizedEmail,
-      message: 'Te hemos enviado un enlace de activación a tu correo electrónico. Revisa tu bandeja de entrada.'
+      message: `Se ha enviado un correo de verificación a ${normalizedEmail}. Revisa tu bandeja de entrada (y Spam) para activar tu cuenta.`
     };
   }
 
@@ -140,7 +142,6 @@ async register({ email, password }) {
       return user;
     }
 
-    // Activamos la cuenta pendiente
     const updated = await this.userRepository.update(user.id, {
       status: 'active',
       passwordHash: payload.passwordHash
@@ -154,8 +155,7 @@ async register({ email, password }) {
       throw unauthorized('Correo o contraseña incorrectos.', 'INVALID_CREDENTIALS');
     }
     const user = await this.userRepository.findByEmail(normalizedEmail);
-    
-    // Respuesta genérica para evitar revelar si un email está registrado.
+
     if (!user || user.status === 'deleted' || !(await bcrypt.compare(password, user.passwordHash))) {
       throw unauthorized('Correo o contraseña incorrectos.', 'INVALID_CREDENTIALS');
     }
@@ -185,7 +185,6 @@ async register({ email, password }) {
         });
       }
       if (existing.status !== 'active') {
-        // Google OAuth valida y activa automáticamente la cuenta
         return await this.userRepository.update(existing.id, { status: 'active' });
       }
       return existing;
