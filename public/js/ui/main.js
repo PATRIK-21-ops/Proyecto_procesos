@@ -216,8 +216,12 @@ $('#register-form').addEventListener('submit', async (event) => {
   }
   
   try {
-    await api.register({ email, password });
+    const result = await api.register({ email, password });
     formElement.reset();
+    if (result?.pendingConfirmation) {
+      showNotice(result.message || 'Revisa tu correo para confirmar la cuenta.', 'success', 9000);
+      return;
+    }
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
   } catch (error) { 
@@ -246,7 +250,9 @@ $('#login-form').addEventListener('submit', async (event) => {
     showView('home'); 
     
   } catch (error) { 
-    if (error.code === 'INVALID_CREDENTIALS') {
+    if (error.code === 'ACCOUNT_PENDING_CONFIRMATION') {
+      showNotice('Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.', 'error', 8000);
+    } else if (error.code === 'INVALID_CREDENTIALS') {
       showNotice('Correo o contraseña incorrectos (o la cuenta ha sido eliminada).', 'error');
     } else {
       showApiError(error); 
@@ -280,8 +286,22 @@ $('#admin-users-body').addEventListener('click', async (event) => {
   } catch (error) { showApiError(error); }
 });
 
+// Mensajes de retorno tras pulsar el enlace del correo de confirmación.
+function handleReturnMessages() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('confirmed') === 'success') {
+    showNotice('Correo confirmado. Ya puedes iniciar sesión.', 'success', 8000);
+    showView('login');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (params.get('error') === 'invalid_confirmation_token') {
+    showNotice('El enlace de activación no es válido o ha caducado.', 'error', 8000);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
 // Al iniciar, se pregunta al backend si existe una sesión anterior (PBI 6).
 async function boot() {
+  handleReturnMessages();
   try {
     const { user } = await api.me();
     setCurrentUser(user);

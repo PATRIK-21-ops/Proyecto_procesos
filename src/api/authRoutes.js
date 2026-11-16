@@ -32,9 +32,29 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
   });
 
   router.post('/register', csrfProtection, asyncHandler(async (req, res) => {
-    const user = await userService.register(req.body || {});
-    logger.info({ event: 'user.registered', userId: user.id }, 'Nuevo usuario registrado');
-    res.status(201).json({ user: publicUser(user), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+    const result = await userService.register(req.body || {});
+    if (result.pendingConfirmation) {
+      logger.info({ event: 'user.registered.pending', email: result.email }, 'Registro pendiente de confirmar el correo');
+      return res.status(202).json({
+        user: null,
+        pendingConfirmation: true,
+        message: result.message
+      });
+    }
+    logger.info({ event: 'user.registered', userId: result.id }, 'Nuevo usuario registrado');
+    res.status(201).json({ user: publicUser(result), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+  }));
+
+  // Enlace que llega desde el correo de confirmación.
+  router.get('/confirm', asyncHandler(async (req, res) => {
+    try {
+      await userService.confirmEmailToken(req.query.token);
+      logger.info({ event: 'auth.confirm.success' }, 'Correo confirmado');
+      return res.redirect('/?confirmed=success');
+    } catch (error) {
+      logger.warn({ event: 'auth.confirm.failure', code: error.code || 'CONFIRMATION_FAILED' }, 'Confirmación de correo fallida');
+      return res.redirect('/?error=invalid_confirmation_token');
+    }
   }));
 
   router.post('/login', csrfProtection, asyncHandler(async (req, res) => {

@@ -83,7 +83,8 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 |---|---|---|---|
 | `GET` | `/api/health` | Público | Health check |
 | `GET` | `/api/auth/csrf` | Público | Obtener token CSRF |
-| `POST` | `/api/auth/register` | CSRF | Crear cuenta |
+| `POST` | `/api/auth/register` | CSRF | Crear cuenta (pendiente si la confirmación está activa) |
+| `GET` | `/api/auth/confirm?token=...` | Público | Activar la cuenta desde el enlace del correo |
 | `POST` | `/api/auth/login` | CSRF | Iniciar sesión |
 | `GET` | `/api/auth/me` | Sesión | Usuario actual y CSRF |
 | `POST` | `/api/auth/logout` | Sesión + CSRF | Invalidar la sesión |
@@ -95,6 +96,25 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 | `POST` | `/api/scores` | Sesión + CSRF | Registrar el resultado de una partida |
 
 Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticamente. Las contraseñas no se devuelven en la API. La eliminación de usuarios es lógica (`status = deleted`) para conservar trazabilidad y evitar que una cuenta borrada vuelva a iniciar sesión.
+
+## Confirmación de correo
+
+Al registrarse, la cuenta puede quedar en estado `pending` hasta que el usuario pulse el enlace enviado por correo:
+
+1. `POST /api/auth/register` crea la cuenta y responde `202` con `pendingConfirmation: true`.
+2. Se genera un token aleatorio, se guarda **solo su hash SHA-256** en `users.confirmation_token` y se envía el token original por correo.
+3. El enlace apunta a `{APP_URL}/api/auth/confirm?token=...` y caduca a las 24 horas.
+4. Al confirmar, la cuenta pasa a `active`, se borra el token y se guarda `confirmed_at`.
+5. Mientras esté pendiente, el login responde `403 ACCOUNT_PENDING_CONFIRMATION`.
+6. Volver a registrarse con una cuenta pendiente renueva la contraseña y el token.
+
+Variables de entorno:
+
+- `REQUIRE_EMAIL_CONFIRMATION=true` activa el flujo. Si no se define, el registro crea cuentas activas (comportamiento anterior).
+- `APP_URL` debe ser la URL pública de la aplicación (en Render, la URL del servicio; en local, `http://localhost:8080`).
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` y `SMTP_FROM` configuran el envío por SMTP. Sin credenciales, el enlace se imprime en la consola del servidor.
+
+La tabla `users` incluye `confirmation_token`, `confirmation_expires_at` y `confirmed_at`; `sql/schema.sql` añade las columnas con `ALTER TABLE ... IF NOT EXISTS` para bases de datos ya existentes.
 
 ## Roles y administrador inicial
 

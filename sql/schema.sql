@@ -5,10 +5,18 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role VARCHAR(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'deleted')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  confirmation_token TEXT,
+  confirmation_expires_at TIMESTAMPTZ,
+  confirmed_at TIMESTAMPTZ
 );
+-- Migración para instalaciones anteriores que ya tenían la tabla users.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS confirmation_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS confirmation_expires_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (LOWER(email));
 CREATE INDEX IF NOT EXISTS users_status_idx ON users (status);
+CREATE INDEX IF NOT EXISTS users_confirmation_token_idx ON users (confirmation_token);
 
 CREATE TABLE IF NOT EXISTS scores (
   id TEXT PRIMARY KEY,

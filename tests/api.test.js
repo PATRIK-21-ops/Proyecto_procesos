@@ -127,3 +127,73 @@ describe('API HTTP', () => {
   expect(res.headers.location).toContain('accounts.google.com/o/oauth2/v2/auth');
 });
 });
+
+describe('API HTTP — confirmación de correo', () => {
+  let confirmApp;
+  let confirmRepo;
+  let confirmService;
+  let sentEmails;
+
+  beforeEach(() => {
+    confirmRepo = new UserRepositoryMemory();
+    sentEmails = [];
+    confirmService = new UserService(confirmRepo, {
+      bcryptRounds: 4,
+      config: { REQUIRE_EMAIL_CONFIRMATION: 'true', APP_URL: 'http://localhost:8080' }
+    });
+    confirmService.emailService.sendVerificationEmail = async (toEmail, rawToken) => {
+      sentEmails.push({ toEmail, rawToken });
+      return { simulated: true };
+    };
+    const scoreRepo = new ScoreRepositoryMemory(confirmRepo);
+    confirmApp = createApp({
+      userService: confirmService,
+      scoreService: new ScoreService(scoreRepo),
+      sessionSecret: 'unit-test-session-secret-long-enough',
+      production: false,
+      logger
+    });
+  });
+
+  it('registra en estado pendiente, bloquea el login y activa tras confirmar', async () => {
+    const agent = request.agent(confirmApp);
+    const token = await csrf(agent);
+
+    const registerResponse = await agent
+      .post('/api/auth/register')
+      .set('X-CSRF-Token', token)
+      .send({ email: 'nuevo@hellfall.test', password: USER_PASSWORD });
+
+    expect(registerResponse.status).toBe(202);
+    expect(registerResponse.body.pendingConfirmation).toBe(true);
+    expect(registerResponse.body.user).toBeNull();
+    expect(sentEmails).toHaveLength(1);
+
+    const pendingLogin = await login(agent, 'nuevo@hellfall.test', USER_PASSWORD);
+    expect(pendingLogin.status).toBe(403);
+    expect(pendingLogin.body.error.code).toBe('ACCOUNT_PENDING_CONFIRMATION');
+
+    const stored = await confirmRepo.findByEmail('nuevo@hellfall.test');
+    expect(stored.status).toBe('pending');
+    expect(stored.confirmationToken).toBe(confirmService.emailService.hashToken(sentEmails[0].rawToken));
+
+    const confirmResponse = await request(confirmApp)
+      .get('/api/auth/confirm')
+      .query({ token: sentEmails[0].rawToken });
+    expect(confirmResponse.status).toBe(302);
+    expect(confirmResponse.headers.location).toBe('/?confirmed=success');
+
+    const activeLogin = await login(agent, 'nuevo@hellfall.test', USER_PASSWORD);
+    expect(activeLogin.status).toBe(200);
+    expect(activeLogin.body.user.email).toBe('nuevo@hellfall.test');
+  });
+
+  it('redirige con error cuando el token no es válido o ha caducado', async () => {
+    const response = await request(confirmApp)
+      .get('/api/auth/confirm')
+      .query({ token: 'token-inexistente' });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe('/?error=invalid_confirmation_token');
+  });
+});

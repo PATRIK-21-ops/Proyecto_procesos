@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/AppError.js';
+import { EmailService } from './emailService.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,9 +37,11 @@ export function verificarDominioEmail(email) {
 
 export class UserService {
   /** El repositorio se inyecta: la lógica no depende de si los datos están en memoria o PostgreSQL. */
-  constructor(userRepository, { bcryptRounds = 12 } = {}) {
+  constructor(userRepository, { bcryptRounds = 12, config = process.env } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
+    this.config = config;
+    this.emailService = new EmailService(config);
   }
 
   verificarDominioEmail(email) {
@@ -57,17 +60,96 @@ export class UserService {
       throw badRequest('La contraseña no puede superar 72 bytes.', 'PASSWORD_TOO_LONG');
     }
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing) throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+    // Solo se permite volver a registrarse si la cuenta anterior quedó pendiente de confirmar.
+    if (existing && existing.status !== 'pending') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
+    const requireEmailConfirmation = String(this.config.REQUIRE_EMAIL_CONFIRMATION ?? 'false').toLowerCase() !== 'false';
+
+    if (requireEmailConfirmation) {
+      const { raw, hash, expiresAt } = this.emailService.createConfirmationToken();
+      try {
+        if (existing) {
+          // Re-registro de una cuenta pendiente: se renueva el token y la contraseña.
+          await this.userRepository.update(existing.id, {
+            passwordHash,
+            role: 'user',
+            status: 'pending',
+            confirmationToken: hash,
+            confirmationExpiresAt: expiresAt,
+            confirmedAt: null
+          });
+        } else {
+          await this.userRepository.create({
+            email: normalizedEmail,
+            passwordHash,
+            role: 'user',
+            status: 'pending',
+            confirmationToken: hash,
+            confirmationExpiresAt: expiresAt,
+            confirmedAt: null
+          });
+        }
+
+        await this.emailService.sendVerificationEmail(normalizedEmail, raw);
+        return {
+          pendingConfirmation: true,
+          email: normalizedEmail,
+          message: 'Te hemos enviado un correo de confirmación. Revisa tu bandeja de entrada para activar la cuenta.'
+        };
+      } catch (error) {
+        // Cubre la carrera entre dos registros simultáneos con el mismo email en PostgreSQL.
+        if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+        throw error;
+      }
+    }
+
     try {
-      // En Hito 2 se permite activación inmediata; la confirmación por correo queda para el Hito 4.
+      if (existing) {
+        return await this.userRepository.update(existing.id, {
+          passwordHash,
+          role: 'user',
+          status: 'active',
+          confirmationToken: null,
+          confirmationExpiresAt: null,
+          confirmedAt: null
+        });
+      }
       return await this.userRepository.create({ email: normalizedEmail, passwordHash, role: 'user', status: 'active' });
     } catch (error) {
       // Cubre la carrera entre dos registros simultáneos con el mismo email en PostgreSQL.
       if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
       throw error;
     }
+  }
+
+  async confirmEmailToken(token) {
+    const rawToken = typeof token === 'string' ? token.trim() : '';
+    if (!rawToken) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+
+    const tokenHash = this.emailService.hashToken(rawToken);
+    const user = await this.userRepository.findByConfirmationTokenHash(tokenHash);
+    if (!user) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+
+    const expiresAt = user.confirmationExpiresAt ? new Date(user.confirmationExpiresAt).getTime() : 0;
+    if (!expiresAt || expiresAt < Date.now()) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+
+    if (user.status === 'active' && !user.confirmationToken) {
+      return user;
+    }
+
+    return this.userRepository.update(user.id, {
+      status: 'active',
+      confirmationToken: null,
+      confirmationExpiresAt: null,
+      confirmedAt: new Date().toISOString()
+    });
   }
 
   async authenticate({ email, password }) {
@@ -79,6 +161,9 @@ export class UserService {
     // Respuesta genérica para evitar revelar si un email está registrado.
     if (!user || user.status === 'deleted' || !(await bcrypt.compare(password, user.passwordHash))) {
       throw unauthorized('Correo o contraseña incorrectos.', 'INVALID_CREDENTIALS');
+    }
+    if (user.status === 'pending') {
+      throw forbidden('La cuenta todavía no está activa. Revisa tu correo.', 'ACCOUNT_PENDING_CONFIRMATION');
     }
     if (user.status !== 'active') {
       throw forbidden('La cuenta todavía no está activa.', 'ACCOUNT_NOT_ACTIVE');

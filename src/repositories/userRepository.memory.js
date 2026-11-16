@@ -6,13 +6,13 @@ export class UserRepositoryMemory {
     this.users = seed.map((user) => ({ ...user }));
   }
 
-  async create({ id = randomUUID(), email, passwordHash, role = 'user', status = 'active', createdAt = new Date().toISOString() }) {
+  async create({ id = randomUUID(), email, passwordHash, role = 'user', status = 'active', createdAt = new Date().toISOString(), confirmationToken = null, confirmationExpiresAt = null, confirmedAt = null }) {
     if (this.users.some((user) => user.email === email)) {
       const error = new Error('El correo ya está registrado.');
       error.code = '23505';
       throw error;
     }
-    const user = { id, email, passwordHash, role, status, createdAt };
+    const user = { id, email, passwordHash, role, status, createdAt, confirmationToken, confirmationExpiresAt, confirmedAt };
     this.users.push(user);
     return { ...user };
   }
@@ -39,5 +39,10 @@ export class UserRepositoryMemory {
     if (index === -1) return null;
     this.users[index] = { ...this.users[index], ...patch };
     return { ...this.users[index] };
+  }
+
+  async findByConfirmationTokenHash(tokenHash) {
+    const user = this.users.find((item) => item.confirmationToken === tokenHash);
+    return user ? { ...user } : null;
   }
 }
