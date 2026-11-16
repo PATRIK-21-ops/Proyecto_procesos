@@ -11,6 +11,7 @@ Aplicación FPS retro en primera persona, con motor JavaScript, backend Node.js/
 - **PostgreSQL + `pg`:** persistencia real; alternativa en memoria para pruebas y primer hito. (Docker)
 - **`express-session` + `connect-pg-simple`:** sesiones de servidor y sesiones persistentes en PostgreSQL.
 - **`bcryptjs`:** hash de contraseñas.
+- **`nodemailer`:** envío de correos SMTP para la confirmación de cuentas.
 - **Vitest + Supertest:** pruebas automáticas de lógica y API.
 - **Pino:** logs estructurados.
 - **GitHub Actions:** CI en pull requests y en `main`.
@@ -37,6 +38,43 @@ Aplicación FPS retro en primera persona, con motor JavaScript, backend Node.js/
 
 Compose crea PostgreSQL y la aplicación. Los datos de PostgreSQL permanecen en el volumen `hellfall_pg_data` al reiniciar los contenedores. Para detenerlos: `docker compose down`. Para borrar también todos los datos de desarrollo: `docker compose down -v`.
 
+## Confirmación de correo electrónico
+
+El registro exige que el usuario confirme su correo antes de poder iniciar sesión. El flujo es:
+
+1. `POST /api/auth/register` valida el correo (formato y dominio permitido) y crea la cuenta con `status = 'pending'`.
+2. El servidor genera un token aleatorio de 32 bytes (64 caracteres hexadecimales). **En la base de datos solo se guarda su hash SHA-256** en `confirmation_token`; el token en claro únicamente viaja dentro del enlace del correo.
+3. El token caduca a las **24 horas** (`confirmation_expires_at`). Se envía un correo SMTP con un enlace con el formato:
+
+   ```text
+   {APP_URL}/api/auth/confirm?token=<token>
+   ```
+
+4. Al abrir el enlace, `GET /api/auth/confirm` valida el token, activa la cuenta (`status = 'active'`), limpia el token y redirige a `/?confirmed=success`. Si el token no existe o ha caducado, redirige a `/?error=invalid_confirmation_token`.
+5. Mientras la cuenta siga pendiente, `POST /api/auth/login` responde `403` con el código `ACCOUNT_PENDING_CONFIRMATION`.
+6. Si se vuelve a registrar un correo pendiente, se renueva el token, se actualiza la contraseña y se reenvía el correo. Un correo ya activo sigue devolviendo `EMAIL_EXISTS`.
+
+La funcionalidad se controla con `REQUIRE_EMAIL_CONFIRMATION`:
+
+- `true`: registro con confirmación obligatoria (comportamiento recomendado y activo en `.env`).
+- `false` o ausente: el registro crea la cuenta directamente como activa (útil para pruebas y compatibilidad).
+
+Si no hay SMTP configurado (`SMTP_HOST`, `SMTP_USER` o `SMTP_PASS` vacíos), `EmailService` funciona en **modo simulado**: no envía el correo y escribe el enlace de activación por consola para poder probar el flujo en desarrollo.
+
+### Variables de entorno para el correo
+
+| Variable | Descripción |
+|---|---|
+| `APP_URL` | URL pública de la aplicación; se usa para construir el enlace de confirmación. En local `http://localhost:8080`; en Render, la URL pública del servicio. |
+| `REQUIRE_EMAIL_CONFIRMATION` | `true` para exigir confirmación por correo; `false` o ausente para desactivarla. |
+| `SMTP_HOST` | Servidor SMTP (por ejemplo `smtp.gmail.com`). |
+| `SMTP_PORT` | Puerto SMTP; `465` usa TLS directo y otros puertos usan STARTTLS. |
+| `SMTP_USER` | Usuario/cuenta SMTP. |
+| `SMTP_PASS` | Contraseña o contraseña de aplicación del proveedor. No debe subirse al repositorio. |
+| `SMTP_FROM` | Remitente visible, por ejemplo `HELLFALL UAC Command <correo@gmail.com>`. |
+| `ALLOWED_DOMAINS` | Dominios de correo admitidos en el registro, separados por comas. |
+
+> Con Gmail hay que generar una **contraseña de aplicación** y usarla en `SMTP_PASS`. Si `APP_URL` apunta a Render pero el servidor se ejecuta en local, los enlaces abrirán la versión desplegada (que debe tener la ruta `/api/auth/confirm`); para probar en local, ajusta `APP_URL=http://localhost:8080`.
 
 ## Pruebas automatizadas
 
@@ -49,6 +87,13 @@ Para vigilar archivos y repetir las pruebas durante el desarrollo:
 ```bash
 npm run test:watch
 ```
+
+Las pruebas cubren, entre otros casos:
+
+- **`tests/emailService.test.js`**: generación del token, hash SHA-256, caducidad, enlace `/api/auth/confirm` y configuración del transporte SMTP.
+- **`tests/confirmation.test.js`**: cuenta pendiente, envío del token, bloqueo de login, activación con token válido, token caducado o inexistente, re-registro de una cuenta pendiente y dominios no permitidos.
+- **`tests/api.test.js`**: flujo HTTP completo de registro, confirmación por enlace, login, CSRF, sesiones, roles, puntuaciones y logout.
+- **`tests/userService.test.js`** y **`tests/variante3.test.js`**: reglas de negocio, contraseñas, roles y validación de dominios.
 
 El CI de GitHub ejecuta `npm install` y `npm test` en cada pull request y en cada push a `main`. Después de tener `package-lock.json` comprometido, puedes cambiar el workflow a `npm ci` para instalaciones deterministas.
 
@@ -82,11 +127,15 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
 | `GET` | `/api/health` | Público | Health check |
-| `GET` | `/api/auth/csrf` | Público | Obtener token CSRF |
-| `POST` | `/api/auth/register` | CSRF | Crear cuenta |
-| `POST` | `/api/auth/login` | CSRF | Iniciar sesión |
-| `GET` | `/api/auth/me` | Sesión | Usuario actual y CSRF |
+| `GET` | `/api/csrf-token` | Público | Obtener/renovar token CSRF |
+| `POST` | `/api/prueba/dominio` | Público | Comprobar si un dominio de correo está permitido |
+| `POST` | `/api/auth/register` | CSRF | Crear cuenta; devuelve `202` si queda pendiente de confirmación |
+| `GET` | `/api/auth/confirm?token=...` | Público | Confirmar el correo y activar la cuenta |
+| `POST` | `/api/auth/login` | CSRF | Iniciar sesión (bloqueado si la cuenta está pendiente) |
+| `GET` | `/api/auth/google` | Público | Iniciar OAuth con Google (si está configurado) |
+| `GET` | `/api/auth/google/callback` | Público | Callback de Google OAuth |
 | `POST` | `/api/auth/logout` | Sesión + CSRF | Invalidar la sesión |
+| `GET` | `/api/user/me` | Público | Usuario actual (`null` si no hay sesión) |
 | `GET` | `/api/users` | Administrador | Listar email/rol/estado |
 | `GET` | `/api/users/:id/active` | Administrador | Consultar estado activo |
 | `DELETE` | `/api/users/:id` | Sesión + CSRF | Admin elimina cualquiera; usuario normal solo a sí mismo |
@@ -94,7 +143,7 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 | `GET` | `/api/scores/mine` | Sesión | Historial personal |
 | `POST` | `/api/scores` | Sesión + CSRF | Registrar el resultado de una partida |
 
-Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticamente. Las contraseñas no se devuelven en la API. La eliminación de usuarios es lógica (`status = deleted`) para conservar trazabilidad y evitar que una cuenta borrada vuelva a iniciar sesión.
+Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticamente y lo renueva tras login/logout. Las contraseñas y los tokens de confirmación no se devuelven en la API. La eliminación de usuarios es lógica (`status = deleted`) para conservar trazabilidad y evitar que una cuenta borrada vuelva a iniciar sesión.
 
 ## Roles y administrador inicial
 
@@ -126,3 +175,15 @@ Se ha integrado el inicio de sesión y registro mediante **Google OAuth 2.0**:
   - `GOOGLE_CLIENT_ID`
   - `GOOGLE_CLIENT_SECRET`
   - `GOOGLE_CALLBACK_URL` (en local `http://localhost:8080/api/auth/google/callback` y en producción la URL de Render).
+
+## Despliegue en Render
+
+1. Configura el servicio para desplegar la rama que contiene la confirmación por correo (`confirmacionCorreo`) y lanza un *Manual Deploy → Deploy latest commit*.
+2. En **Environment**, define al menos:
+   - `APP_URL=https://<tu-servicio>.onrender.com` (sin barra final).
+   - `SESSION_SECRET` con un valor largo y aleatorio.
+   - `DATABASE_URL` y `PGSSL=require` para PostgreSQL gestionado.
+   - `REQUIRE_EMAIL_CONFIRMATION=true` y las credenciales `SMTP_*`.
+   - `ALLOWED_DOMAINS` con los dominios que quieras admitir.
+3. La cookie de sesión usa `secure: 'auto'`: funciona tanto en HTTP local como detrás del proxy HTTPS de Render.
+4. Si los enlaces del correo abren una versión antigua (`API_NOT_FOUND` en `/api/auth/confirm`), revisa que `APP_URL` apunte al servicio correcto y que el despliegue incluya la rama con la ruta de confirmación. Los enlaces ya enviados no se pueden reutilizar; solicita uno nuevo registrándote otra vez.

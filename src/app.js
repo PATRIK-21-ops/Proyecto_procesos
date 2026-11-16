@@ -47,7 +47,7 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
     resave: false,
     saveUninitialized: false,
     rolling: true,
-    cookie: { httpOnly: true, secure: production, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 2, path: '/' }
+    cookie: { httpOnly: true, secure: production ? 'auto' : false, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 2, path: '/' }
   }));
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'hellfall-pixel-siege' }));

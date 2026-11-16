@@ -71,18 +71,19 @@ export class UserService {
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing && existing.status !== 'deleted') {
+    if (existing && existing.status === 'active') {
       throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
-    const requireEmailConfirmation = String(this.config.REQUIRE_EMAIL_CONFIRMATION ?? 'true').toLowerCase() !== 'false';
+    const requireEmailConfirmation = String(this.config.REQUIRE_EMAIL_CONFIRMATION ?? 'false').toLowerCase() !== 'false';
 
     if (requireEmailConfirmation) {
       const { raw, hash, expiresAt } = this.emailService.createConfirmationToken();
       try {
         let user;
-        if (existing && existing.status === 'deleted' && typeof this.userRepository.update === 'function') {
+        if (existing && typeof this.userRepository.update === 'function') {
+          // Re-registro de una cuenta eliminada o pendiente: renovamos token y contraseña.
           user = await this.userRepository.update(existing.id, {
             passwordHash,
             role: 'user',
@@ -115,7 +116,7 @@ export class UserService {
     }
 
     try {
-      const user = existing && existing.status === 'deleted' && typeof this.userRepository.update === 'function'
+      const user = existing && typeof this.userRepository.update === 'function'
         ? await this.userRepository.update(existing.id, { passwordHash, role: 'user', status: 'active', confirmationToken: null, confirmationExpiresAt: null, confirmedAt: new Date().toISOString() })
         : await this.userRepository.create({ email: normalizedEmail, passwordHash, role: 'user', status: 'active' });
       return user;

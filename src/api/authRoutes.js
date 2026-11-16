@@ -86,7 +86,7 @@ export function authRoutes({ userService, logger = null, googleAuthService = nul
     }
   });
 
-  router.post('/logout', requireAuth, csrfProtection, async (req, res, next) => {
+  router.post('/logout', requireAuth(userService), csrfProtection, async (req, res, next) => {
     try {
       await new Promise((resolve, reject) => req.session.destroy((err) => (err ? reject(err) : resolve())));
       res.clearCookie(cookieName);

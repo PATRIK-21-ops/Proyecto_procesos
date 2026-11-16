@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (homePlayBtn) homePlayBtn.addEventListener('click', () => switchView('game'));
 
   // Obtener Token CSRF y Sesión
-  async function fetchSession() {
+  async function refreshCsrfToken() {
     try {
       const csrfRes = await fetch('/api/csrf-token', { credentials: 'same-origin' });
       if (csrfRes.ok) {
@@ -64,6 +64,16 @@ document.addEventListener('DOMContentLoaded', () => {
         csrfToken = csrfData.csrfToken || '';
       }
     } catch {}
+    return csrfToken;
+  }
+
+  async function ensureCsrfToken() {
+    if (!csrfToken) await refreshCsrfToken();
+    return csrfToken;
+  }
+
+  async function fetchSession() {
+    await refreshCsrfToken();
 
     try {
       const res = await fetch('/api/user/me', { credentials: 'same-origin' });
@@ -102,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
+        await ensureCsrfToken();
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: {
@@ -117,6 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!res.ok) throw new Error(data.error?.message || data.message || 'Credenciales incorrectas.');
 
         currentUser = data;
+        // El login regenera la sesión en el servidor: obtenemos un CSRF nuevo.
+        await refreshCsrfToken();
         renderAuthUI();
         showNotice('🔓 ¡Inicio de sesión correcto!');
         loginForm.reset();
@@ -133,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
+        await ensureCsrfToken();
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: {
@@ -165,12 +179,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
+        await ensureCsrfToken();
         await fetch('/api/auth/logout', {
           method: 'POST',
           headers: { 'x-csrf-token': csrfToken, 'csrf-token': csrfToken, 'CSRF-Token': csrfToken },
           credentials: 'same-origin'
         });
         currentUser = null;
+        csrfToken = '';
+        await refreshCsrfToken();
         renderAuthUI();
         showNotice('🔒 Sesión cerrada.');
         switchView('home');
@@ -185,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteAccountBtn.addEventListener('click', async () => {
       if (!currentUser || !confirm('¿Eliminar cuenta permanentemente?')) return;
       try {
+        await ensureCsrfToken();
         const res = await fetch(`/api/user/${currentUser.id}`, {
           method: 'DELETE',
           headers: { 'x-csrf-token': csrfToken, 'csrf-token': csrfToken, 'CSRF-Token': csrfToken },
@@ -192,6 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (!res.ok) throw new Error('No se pudo eliminar.');
         currentUser = null;
+        csrfToken = '';
+        await refreshCsrfToken();
         renderAuthUI();
         showNotice('🗑️ Cuenta eliminada.');
         switchView('home');
@@ -247,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', async () => {
           const targetId = btn.getAttribute('data-id');
           if (!confirm(`¿Dar de baja al usuario?`)) return;
+          await ensureCsrfToken();
           await fetch(`/api/user/${targetId}`, {
             method: 'DELETE',
             headers: { 'x-csrf-token': csrfToken, 'csrf-token': csrfToken, 'CSRF-Token': csrfToken },
