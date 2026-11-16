@@ -1,12 +1,13 @@
 import nodemailer from 'nodemailer';
-import crypto from 'node:crypto';
 
 export class EmailService {
   constructor() {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false, // true para 465, false para 587
+      // Forzamos el uso del puerto 465 (SSL/TLS nativo)
+      port: Number(process.env.SMTP_PORT) || 465, 
+      // secure: true es OBLIGATORIO cuando se usa el puerto 465
+      secure: true, 
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
