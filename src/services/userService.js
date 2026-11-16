@@ -71,46 +71,54 @@ export class UserService {
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing) {
-      if (existing.status !== 'deleted') {
-        throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
-      }
+    if (existing && existing.status !== 'deleted') {
+      throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
+    let user;
 
     try {
-      // Creamos el usuario en estado pendiente de confirmación
-      const user = await this.userRepository.create({
-        email: normalizedEmail,
-        passwordHash,
-        role: 'user',
-        status: 'pending'
-      });
+      // Si el correo existía pero falló antes (deleted), lo reciclamos
+      if (existing && existing.status === 'deleted') {
+        user = await this.userRepository.update(existing.id, { status: 'pending', passwordHash });
+      } else {
+        user = await this.userRepository.create({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          status: 'pending'
+        });
+      }
+    } catch (error) {
+      if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+      throw error;
+    }
 
-      // Generación y envío del correo de confirmación
-      const token = this.emailService.createConfirmationToken({
-        email: normalizedEmail,
-        passwordHash
-      });
-      const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
-      const confirmUrl = `${baseUrl}/api/auth/confirm?token=${encodeURIComponent(token)}`;
+    // Generación y envío del correo de confirmación
+    const token = this.emailService.createConfirmationToken({
+      email: normalizedEmail,
+      passwordHash
+    });
+    const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const confirmUrl = `${baseUrl}/api/auth/confirm?token=${encodeURIComponent(token)}`;
 
+    try {
       await this.emailService.sendConfirmationEmail({
         toEmail: normalizedEmail,
         confirmUrl
       });
-
-      return {
-        pendingConfirmation: true,
-        email: normalizedEmail,
-        message: 'Te hemos enviado un enlace de activación a tu correo electrónico. Revisa tu bandeja de entrada.'
-      };
-    } catch (error) {
-      // Cubre la carrera entre dos registros simultáneos con el mismo email en PostgreSQL.
-      if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
-      throw error;
+    } catch (emailError) {
+      // 🔥 Si Brevo falla, devolvemos la cuenta a estado eliminado para que no quede atascada
+      await this.userRepository.update(user.id, { status: 'deleted' });
+      throw badRequest('Error de Brevo: No se pudo enviar el correo de activación. Revisa los Logs.', 'BREVO_FAILED');
     }
+
+    return {
+      pendingConfirmation: true,
+      email: normalizedEmail,
+      message: 'Te hemos enviado un enlace de activación a tu correo electrónico. Revisa tu bandeja de entrada.'
+    };
   }
 
   async confirmEmailToken(token) {

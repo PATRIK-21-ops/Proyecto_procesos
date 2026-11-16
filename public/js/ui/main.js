@@ -38,15 +38,12 @@ function showView(name) {
 function setCurrentUser(user) {
   currentUser = user || null;
   
-  // Actualiza el texto de la esquina superior
   $('#session-badge').textContent = currentUser ? currentUser.email : 'INVITADO';
   
-  // Elementos que SÓLO ven los usuarios logueados:
   $('#nav-profile').classList.toggle('hidden', !currentUser);
   $('#nav-admin').classList.toggle('hidden', currentUser?.role !== 'admin');
   $('#home-play').textContent = currentUser ? '▶ CONTINUAR' : '▶ JUGAR';
 
-  // Elementos que SÓLO ven los invitados:
   document.querySelectorAll('[data-view="login"]').forEach(el => {
     el.classList.toggle('hidden', currentUser !== null);
   });
@@ -104,7 +101,7 @@ async function loadTopScores() {
   try {
     const { scores } = await api.topScores(10);
     renderLeaderboard($('#home-leaderboard'), scores);
-  } catch { /* La portada sigue visible aunque no haya API disponible temporalmente. */ }
+  } catch { /* Portada visible aunque no haya API */ }
 }
 async function renderProfile() {
   if (!currentUser) return showView('login');
@@ -200,13 +197,10 @@ $('#home-play').addEventListener('click', () => currentUser ? showView('game') :
 $('#start-game').addEventListener('click', startGame);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
-// 🟢 MODIFICACIÓN DEL REGISTRO PARA LA CONFIRMACIÓN POR CORREO
+// 🔥 GESTIÓN DE REGISTRO
 $('#register-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
   hideNotice();
-  
-  const alertBox = $('#register-alert');
-  if (alertBox) alertBox.style.display = 'none';
   
   const formElement = event.target;
   const form = new FormData(formElement);
@@ -216,48 +210,31 @@ $('#register-form').addEventListener('submit', async (event) => {
   const passwordConfirm = String(form.get('passwordConfirm') || '');
   
   if (password !== passwordConfirm) {
-    if (alertBox) {
-      alertBox.textContent = "Las contraseñas no coinciden.";
-      alertBox.style.borderColor = "#ff4d4d";
-      alertBox.style.color = "#ff4d4d";
-      alertBox.style.display = 'block';
-    } else {
-      showNotice('Las contraseñas no coinciden.', 'error');
-    }
-    return;
+    return showNotice('Las contraseñas no coinciden.', 'error');
   }
   
   try {
     const result = await api.register({ email, password });
     
-    // Si el backend avisa de que se ha mandado el correo
+    // Si la API devuelve el código 202 con pendiente de confirmación
     if (result && result.pendingConfirmation) {
-      if (alertBox) {
-        alertBox.innerHTML = `<strong>ALERTA DE SISTEMA:</strong><br>Registro en pausa. Revisa tu bandeja de entrada (y Spam) de <em>${email}</em> para activar la cuenta.`;
-        alertBox.style.borderColor = "#4ade80";
-        alertBox.style.color = "#4ade80";
-        alertBox.style.display = 'block';
-      }
       formElement.reset();
-      return; // Cortamos para no intentar hacer login
+      showView('home'); 
+      // Muestra el aviso de que vaya al correo (durante 15 segundos)
+      showNotice(`REGISTRO EN PAUSA: Revisa tu bandeja de entrada (y Spam) de ${email} para activar la cuenta.`, 'success', 15000);
+      return; 
     }
     
-    // Fallback: Si el registro es directo (configuración local)
+    // Si no requiere correo (fallback)
     formElement.reset();
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
   } catch (error) { 
-    if (alertBox && (error instanceof ApiError || error.name === 'ApiError')) {
-      alertBox.textContent = error.message || 'Error al registrar la cuenta.';
-      alertBox.style.borderColor = "#ff4d4d";
-      alertBox.style.color = "#ff4d4d";
-      alertBox.style.display = 'block';
-    } else {
-      showApiError(error); 
-    }
+    showApiError(error); 
   }
 });
 
+// GESTIÓN DE LOGIN
 $('#login-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
   hideNotice();
@@ -292,6 +269,7 @@ $('#logout-button').addEventListener('click', async () => {
     await api.logout(); setCurrentUser(null); showView('home'); showNotice('Has cerrado sesión.', 'success');
   } catch (error) { showApiError(error); }
 });
+
 $('#delete-account-button').addEventListener('click', async () => {
   if (!currentUser || !window.confirm('¿Seguro que quieres eliminar tu cuenta? No podrás volver a iniciar sesión con ella.')) return;
   try {
@@ -313,7 +291,6 @@ $('#admin-users-body').addEventListener('click', async (event) => {
   } catch (error) { showApiError(error); }
 });
 
-// Al iniciar, se pregunta al backend si existe una sesión anterior (PBI 6).
 async function boot() {
   try {
     const { user } = await api.me();
