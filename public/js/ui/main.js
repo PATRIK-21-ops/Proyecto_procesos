@@ -200,9 +200,13 @@ $('#home-play').addEventListener('click', () => currentUser ? showView('game') :
 $('#start-game').addEventListener('click', startGame);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
+// 🟢 MODIFICACIÓN DEL REGISTRO PARA LA CONFIRMACIÓN POR CORREO
 $('#register-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
   hideNotice();
+  
+  const alertBox = $('#register-alert');
+  if (alertBox) alertBox.style.display = 'none';
   
   const formElement = event.target;
   const form = new FormData(formElement);
@@ -212,16 +216,45 @@ $('#register-form').addEventListener('submit', async (event) => {
   const passwordConfirm = String(form.get('passwordConfirm') || '');
   
   if (password !== passwordConfirm) {
-    return showNotice('Las contraseñas no coinciden.', 'error');
+    if (alertBox) {
+      alertBox.textContent = "Las contraseñas no coinciden.";
+      alertBox.style.borderColor = "#ff4d4d";
+      alertBox.style.color = "#ff4d4d";
+      alertBox.style.display = 'block';
+    } else {
+      showNotice('Las contraseñas no coinciden.', 'error');
+    }
+    return;
   }
   
   try {
-    await api.register({ email, password });
+    const result = await api.register({ email, password });
+    
+    // Si el backend avisa de que se ha mandado el correo
+    if (result && result.pendingConfirmation) {
+      if (alertBox) {
+        alertBox.innerHTML = `<strong>ALERTA DE SISTEMA:</strong><br>Registro en pausa. Revisa tu bandeja de entrada (y Spam) de <em>${email}</em> para activar la cuenta.`;
+        alertBox.style.borderColor = "#4ade80";
+        alertBox.style.color = "#4ade80";
+        alertBox.style.display = 'block';
+      }
+      formElement.reset();
+      return; // Cortamos para no intentar hacer login
+    }
+    
+    // Fallback: Si el registro es directo (configuración local)
     formElement.reset();
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
   } catch (error) { 
-    showApiError(error); 
+    if (alertBox && (error instanceof ApiError || error.name === 'ApiError')) {
+      alertBox.textContent = error.message || 'Error al registrar la cuenta.';
+      alertBox.style.borderColor = "#ff4d4d";
+      alertBox.style.color = "#ff4d4d";
+      alertBox.style.display = 'block';
+    } else {
+      showApiError(error); 
+    }
   }
 });
 

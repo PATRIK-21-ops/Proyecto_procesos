@@ -330,7 +330,12 @@
         <label for="register-email">CORREO ELECTRÓNICO</label><input id="register-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
         <label for="register-password">CONTRASEÑA</label><input id="register-password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Mínimo 8 caracteres">
         <label for="register-password-confirm">REPETIR CONTRASEÑA</label><input id="register-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="72" placeholder="Repite la contraseña">
+        
         <button class="button button-primary button-wide" type="submit">REGISTRAR RECLUTA</button>
+        
+        <!-- AVISO DE CORREO PENDIENTE -->
+        <div id="register-alert" style="display: none; margin-top: 15px; padding: 10px; background-color: #121f12; border: 1px solid #4ade80; color: #4ade80; font-family: monospace; text-align: center; font-size: 0.85rem;"></div>
+
         <a class="button button-secondary button-wide" href="/api/auth/google" style="margin-top: 0.75rem; text-align: center; text-decoration: none; display: inline-block;">REGISTRARSE CON GOOGLE</a>
         <p class="form-foot">¿Ya tienes cuenta? <button type="button" class="text-button" data-view="login">Inicia sesión</button></p>
         <p class="small-note">Puedes crear una cuenta local o acceder directamente con tu cuenta de Google mediante OAuth 2.0.</p>
@@ -360,14 +365,15 @@
     <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.4.0</span></footer>
   </main>
 
-  <!-- Controlador global para reproducir doom.mp3 y mostrar notificaciones de OAuth (Hito 4) -->
+  <!-- Controlador global para reproducir doom.mp3 y mostrar notificaciones de OAuth y Confirmación -->
   <script>
     (function() {
-      // 1. Feedback claro al usuario tras redirección OAuth 2.0 (Hito 4)
+      // 1. Feedback claro al usuario tras redirección OAuth 2.0 y Verificación de Correo
       window.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(window.location.search);
         const oauthError = params.get('error');
         const oauthSuccess = params.get('oauth');
+        const confirmedSuccess = params.get('confirmed'); // <-- NUEVO: Captura el éxito del correo
         const notice = document.getElementById('notice');
         const terminalLine = document.getElementById('login-terminal-line');
 
@@ -377,22 +383,33 @@
           oauth_token_failed: 'No se pudo verificar la credencial con Google. Inténtalo de nuevo.',
           oauth_profile_failed: 'No se pudo obtener tu perfil desde Google.',
           oauth_account_inactive: 'Tu cuenta está desactivada o ha sido eliminada.',
-          oauth_server_error: 'Error interno al autenticar con Google.'
+          oauth_server_error: 'Error interno al autenticar con Google.',
+          invalid_confirmation_token: 'El enlace de confirmación de correo no es válido o ha caducado.'
         };
 
         if (oauthError && errorMessages[oauthError]) {
           if (notice) {
             notice.textContent = errorMessages[oauthError];
             notice.className = 'notice error';
+            notice.classList.remove('hidden');
           }
           if (terminalLine) {
-            terminalLine.textContent = '> OAUTH ERROR: ' + oauthError.toUpperCase();
+            terminalLine.textContent = '> ERROR: ' + oauthError.toUpperCase();
           }
           window.history.replaceState({}, document.title, window.location.pathname);
         } else if (oauthSuccess === 'success') {
           if (notice) {
             notice.textContent = 'Sesión iniciada correctamente con Google.';
             notice.className = 'notice success';
+            notice.classList.remove('hidden');
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (confirmedSuccess === 'success') {
+          // <-- NUEVO BLOQUE: Activa el aviso verde tras verificar el correo
+          if (notice) {
+            notice.textContent = 'Cuenta confirmada y activada con éxito. Ya puedes iniciar sesión.';
+            notice.className = 'notice success';
+            notice.classList.remove('hidden');
           }
           window.history.replaceState({}, document.title, window.location.pathname);
         }
