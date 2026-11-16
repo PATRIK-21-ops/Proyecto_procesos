@@ -2,14 +2,19 @@ import nodemailer from 'nodemailer';
 
 export class EmailService {
  constructor() {
+    const smtpPort = Number(process.env.SMTP_PORT) || 2525;
+
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: 587, 
-      secure: false, // <-- ESTO ES LO QUE HACE QUE BREVO FUNCIONE EN EL PUERTO 587
+      port: smtpPort,
+      secure: smtpPort === 465, // false para 2525 y 587
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        pass: process.env.SMTP_PASS
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
     });
   }
 

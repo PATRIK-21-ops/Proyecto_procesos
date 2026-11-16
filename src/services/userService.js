@@ -52,7 +52,7 @@ export class UserService {
     return verificarDominioEmail(email);
   }
 
-  async register({ email, password }) {
+async register({ email, password }) {
     const normalizedEmail = normalizeEmail(email);
     if (!EMAIL_RE.test(normalizedEmail) || normalizedEmail.length > 254) {
       throw badRequest('Introduce una dirección de correo válida.', 'INVALID_EMAIL');
@@ -64,38 +64,20 @@ export class UserService {
       throw badRequest('La contraseña no puede superar 72 bytes.', 'PASSWORD_TOO_LONG');
     }
 
-    // Comprobación de dominio permitido
     const dominioVerif = this.verificarDominioEmail(normalizedEmail);
     if (!dominioVerif.permitido) {
       throw forbidden('El dominio de correo no está permitido.', 'DOMAIN_NOT_ALLOWED');
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing && existing.status !== 'deleted') {
+    // Solo bloqueamos si la cuenta ya está ACTIVA
+    if (existing && existing.status === 'active') {
       throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
-    let user;
 
-    try {
-      // Si el correo existía pero falló antes (deleted), lo reciclamos
-      if (existing && existing.status === 'deleted') {
-        user = await this.userRepository.update(existing.id, { status: 'pending', passwordHash });
-      } else {
-        user = await this.userRepository.create({
-          email: normalizedEmail,
-          passwordHash,
-          role: 'user',
-          status: 'pending'
-        });
-      }
-    } catch (error) {
-      if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
-      throw error;
-    }
-
-    // Generación y envío del correo de confirmación
+    // 1. Generamos el token y enviamos el correo PRIMERO
     const token = this.emailService.createConfirmationToken({
       email: normalizedEmail,
       passwordHash
@@ -109,9 +91,25 @@ export class UserService {
         confirmUrl
       });
     } catch (emailError) {
-      // 🔥 Si Brevo falla, devolvemos la cuenta a estado eliminado para que no quede atascada
-      await this.userRepository.update(user.id, { status: 'deleted' });
-      throw badRequest('Error de Brevo: No se pudo enviar el correo de activación. Revisa los Logs.', 'BREVO_FAILED');
+      console.error('Error real de Brevo:', emailError);
+      throw badRequest(`Fallo al enviar el correo (${emailError.code || emailError.message}).`, 'BREVO_FAILED');
+    }
+
+    // 2. Solo si el correo salió correctamente, guardamos o actualizamos en la BD
+    try {
+      if (existing) {
+        await this.userRepository.update(existing.id, { status: 'pending', passwordHash });
+      } else {
+        await this.userRepository.create({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          status: 'pending'
+        });
+      }
+    } catch (error) {
+      if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+      throw error;
     }
 
     return {
