@@ -36,6 +36,14 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
   }));
   app.use(express.json({ limit: '32kb' }));
   app.use(express.urlencoded({ extended: false, limit: '16kb' }));
+  // HTML y JS deben revalidarse siempre: evita que tras un despliegue el navegador
+  // siga ejecutando una versión antigua del frontend durante una hora.
+  const staticOptions = {
+    maxAge: production ? '1h' : 0,
+    setHeaders: (res, filePath) => {
+      if (/\.(html|js)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    }
+  };
   app.use(session({
     name: cookieName,
     secret: sessionSecret,
@@ -67,8 +75,8 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
   app.use('/api/auth', authRoutes({ userService, logger, cookieName }));
   app.use('/api/users', userRoutes({ userService, logger, cookieName }));
   app.use('/api/scores', scoreRoutes({ userService, scoreService, logger }));
-  app.use('/static', express.static(publicDir, { index: false, maxAge: production ? '1h' : 0 }));
-  app.use(express.static(publicDir, { index: 'index.html', maxAge: production ? '1h' : 0 }));
+  app.use('/static', express.static(publicDir, { ...staticOptions, index: false }));
+  app.use(express.static(publicDir, { ...staticOptions, index: 'index.html' }));
 
   app.use('/api', (_req, _res, next) => next(new AppError(404, 'API_NOT_FOUND', 'La ruta de API no existe.')));
   app.use((req, res) => {

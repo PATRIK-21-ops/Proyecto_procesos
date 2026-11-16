@@ -1,4 +1,4 @@
-import { api, ApiError } from '../api/apiClient.js';
+import { api, ApiError } from '../api/apiClient.js?v=4';
 import { HellfallGame } from '../game/game.js';
 
 const $ = (selector) => document.querySelector(selector);
