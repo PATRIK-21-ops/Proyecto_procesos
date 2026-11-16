@@ -204,33 +204,50 @@ $('#register-form').addEventListener('submit', async (event) => {
   
   const formElement = event.target;
   const form = new FormData(formElement);
-  
   const email = String(form.get('email') || '');
   const password = String(form.get('password') || '');
   const passwordConfirm = String(form.get('passwordConfirm') || '');
   
+  const alertBox = $('#register-alert');
+  if (alertBox) alertBox.style.display = 'none';
+
   if (password !== passwordConfirm) {
-    return showNotice('Las contraseñas no coinciden.', 'error');
+    if (alertBox) {
+      alertBox.textContent = "Las contraseñas no coinciden.";
+      alertBox.style.borderColor = "#ff4d4d";
+      alertBox.style.color = "#ff4d4d";
+      alertBox.style.display = 'block';
+    }
+    return;
   }
   
   try {
     const result = await api.register({ email, password });
     
-    // Si la API devuelve el código 202 con pendiente de confirmación
+    // 🟢 EL AVISO SE MUESTRA AQUÍ SIN SACARTE DE LA PANTALLA
     if (result && result.pendingConfirmation) {
       formElement.reset();
-      showView('home'); 
-      // Muestra el aviso de que vaya al correo (durante 15 segundos)
-      showNotice(`REGISTRO EN PAUSA: Revisa tu bandeja de entrada (y Spam) de ${email} para activar la cuenta.`, 'success', 15000);
+      if (alertBox) {
+        alertBox.innerHTML = `<strong>ALERTA DE SISTEMA:</strong><br>Registro en pausa. Revisa tu bandeja de entrada (y la carpeta de Spam) de <em>${email}</em> para activar la cuenta.`;
+        alertBox.style.borderColor = "#4ade80";
+        alertBox.style.color = "#4ade80";
+        alertBox.style.display = 'block';
+      }
       return; 
     }
     
-    // Si no requiere correo (fallback)
     formElement.reset();
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
   } catch (error) { 
-    showApiError(error); 
+    if (alertBox && error) {
+      alertBox.textContent = error.message || 'Error al registrar la cuenta.';
+      alertBox.style.borderColor = "#ff4d4d";
+      alertBox.style.color = "#ff4d4d";
+      alertBox.style.display = 'block';
+    } else {
+      showApiError(error); 
+    }
   }
 });
 
