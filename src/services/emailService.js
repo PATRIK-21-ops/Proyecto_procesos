@@ -2,15 +2,10 @@ import nodemailer from 'nodemailer';
 
 export class EmailService {
  constructor() {
-    // Si no pones nada, usará el 587 por defecto (el de Brevo)
-    const smtpPort = Number(process.env.SMTP_PORT) || 587;
-    
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: smtpPort,
-      // ESTA ES LA CLAVE: secure solo será true si el puerto es 465.
-      // Si usas el 587 de Brevo, esto será false y Nodemailer usará STARTTLS automáticamente.
-      secure: smtpPort === 465, 
+      port: 587, 
+      secure: false, // <-- ESTO ES LO QUE HACE QUE BREVO FUNCIONE EN EL PUERTO 587
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
