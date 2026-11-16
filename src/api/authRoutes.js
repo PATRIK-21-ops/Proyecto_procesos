@@ -32,9 +32,33 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
   });
 
   router.post('/register', csrfProtection, asyncHandler(async (req, res) => {
-    const user = await userService.register(req.body || {});
-    logger.info({ event: 'user.registered', userId: user.id }, 'Nuevo usuario registrado');
-    res.status(201).json({ user: publicUser(user), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+    const result = await userService.register(req.body || {});
+    
+    // Si requiere confirmación, cortamos aquí y avisamos al frontend
+    if (result && result.pendingConfirmation) {
+      logger.info({ event: 'auth.register.pending', email: result.email }, 'Registro pendiente de confirmación por correo');
+      return res.status(202).json({
+        pendingConfirmation: true,
+        email: result.email,
+        message: result.message
+      });
+    }
+
+    logger.info({ event: 'user.registered', userId: result.id }, 'Nuevo usuario registrado');
+    res.status(201).json({ user: publicUser(result), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+  }));
+
+  // NUEVA RUTA: Recibe el clic del correo electrónico
+  router.get('/confirm', asyncHandler(async (req, res) => {
+    try {
+      const token = String(req.query.token || '');
+      const user = await userService.confirmEmailToken(token);
+      logger.info({ event: 'auth.confirm.success', userId: user.id }, 'Cuenta activada correctamente');
+      return res.redirect('/?confirmed=success');
+    } catch (err) {
+      logger.warn({ event: 'auth.confirm.failed', reason: err.message }, 'Fallo al procesar token de confirmación');
+      return res.redirect('/?error=invalid_confirmation_token');
+    }
   }));
 
   router.post('/login', csrfProtection, asyncHandler(async (req, res) => {

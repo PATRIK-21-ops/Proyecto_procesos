@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import crypto from 'node:crypto';
 
 export class EmailService {
   constructor() {
@@ -37,10 +38,8 @@ export class EmailService {
     }
   }
 
-  // Métodos auxiliares para generar y verificar tokens de confirmación
   createConfirmationToken(payload) {
-    // Implementación de tu token (por ejemplo, con crypto o jsonwebtoken)
-    const crypto = require('node:crypto');
+    // Generamos el token usando Buffer directamente
     const tokenData = Buffer.from(JSON.stringify(payload)).toString('base64url');
     return tokenData;
   }
