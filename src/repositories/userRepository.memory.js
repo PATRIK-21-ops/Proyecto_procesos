@@ -40,4 +40,22 @@ export class UserRepositoryMemory {
     this.users[index] = { ...this.users[index], ...patch };
     return { ...this.users[index] };
   }
+  async findByVerificationTokenHash(tokenHash) {
+    for (const user of this.users.values()) {
+      if (user.verificationTokenHash === tokenHash) {
+        return { ...user };
+      }
+    }
+    return null;
+  }
+
+  async activateUser(id) {
+    const user = this.users.get(id);
+    if (!user) return null;
+    user.status = 'active';
+    user.verificationTokenHash = null;
+    user.verificationExpiresAt = null;
+    this.users.set(id, user);
+    return { ...user };
+  }
 }

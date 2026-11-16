@@ -26,32 +26,51 @@ const CONFIG = {
   CHAINGUN_DAMAGE: 1.08,
   FLAMER_COOLDOWN_MS: 58,
   FLAMER_DAMAGE: 0.42,
+  CHAINSAW_COOLDOWN_MS: 65,
+  CHAINSAW_DAMAGE: 1.65,
+  CHAINSAW_RANGE: 1.85,
+
+  // Drops dinámicos de demonios (35% base; sube al 78% cuando estás escaso de munición)
+  ENEMY_AMMO_DROP_BASE: 0.35,
+  ENEMY_AMMO_DROP_LOW: 0.78,
+  LOW_AMMO_THRESHOLD: 8,
+  ENEMY_DROP_AMMO_RANGE: [4, 7],
+  ENEMY_DROP_FUEL_RANGE: [10, 18],
+
+  // Precios de la Tienda del Demonio Mercader
+  SHOP_PRICES: {
+    AMMO: 25,
+    HEALTH: 30,
+    ARMOR: 35,
+    CHAINSAW: 120
+  },
 
   // Escasez en Cofres y aparición aleatoria en suelo
-  CHEST_COUNT: 3, // Solo 3 cofres por sector (1 de las cámaras puede estar vacía)
+  CHEST_COUNT: 3,
   CHEST_AMMO_RANGE: [6, 10],
   CHEST_FUEL_RANGE: [14, 22],
-  CHEST_HEALTH_CHANCE: 0.55, // Solo el 55% de los cofres contiene curación
+  CHEST_COINS_RANGE: [22, 36],
+  CHEST_HEALTH_CHANCE: 0.55,
   CHEST_HEALTH_AMOUNT: 16,
-  CHEST_ARMOR_CHANCE: 0.45, // Solo el 45% de los cofres contiene blindaje
+  CHEST_ARMOR_CHANCE: 0.45,
   CHEST_ARMOR_AMOUNT: 15,
-  FLOOR_AMMO_CHANCE: 0.5, // 50% de probabilidad de que haya 1 caja suelta en todo el sector
+  FLOOR_AMMO_CHANCE: 0.5,
   FLOOR_AMMO_AMOUNT: 5,
   FLOOR_FUEL_AMOUNT: 12,
-  FLOOR_MEDKIT_CHANCE: 0.4, // 40% de probabilidad de que haya 1 botiquín suelto en todo el sector
+  FLOOR_MEDKIT_CHANCE: 0.4,
   FLOOR_MEDKIT_HEAL: 20,
   SOULSPHERE_HEALTH: 35,
   MAX_SOUL_HEALTH: 135,
   BERSERK_DURATION: 12.0,
 
-  // Densidad de enemigos ajustada
+  // Escalado más agresivo para que los demonios normales se vuelvan mucho más poderosos por sector
   BASE_ENEMIES: 8,
-  ENEMIES_PER_LEVEL: 0.85,
-  MAX_REGULAR_ENEMIES: 14,
+  ENEMIES_PER_LEVEL: 0.9,
+  MAX_REGULAR_ENEMIES: 15,
   MIN_ENEMY_SPACING: 5.0,
-  LEVEL_HP_SCALE: 0.16,
-  LEVEL_DMG_SCALE: 0.11,
-  LEVEL_SPEED_SCALE: 0.05,
+  LEVEL_HP_SCALE: 0.24,
+  LEVEL_DMG_SCALE: 0.16,
+  LEVEL_SPEED_SCALE: 0.08,
 
   // Estadísticas por especie (CERO drops de munición/vida en enemigos; Bosses mucho más duros y ágiles)
   ENEMIES: {
@@ -307,6 +326,17 @@ class HellAudioEngine {
   playFlamethrower() {
     this.playNoise('bandpass', 420, 0.22, 0.36);
     this.playTone('sawtooth', 95, 48, 0.16, 0.14);
+  }
+
+  playChainsaw(hitFlesh = false) {
+    this.playTone('sawtooth', hitFlesh ? 135 : 92, hitFlesh ? 210 : 68, 0.09, 0.42);
+    this.playTone('square', hitFlesh ? 270 : 184, hitFlesh ? 95 : 130, 0.08, 0.28);
+    this.playNoise('bandpass', hitFlesh ? 1800 : 950, 0.08, hitFlesh ? 0.45 : 0.25);
+  }
+
+  playCoinPickup() {
+    this.playTone('sine', 880, 1320, 0.09, 0.22, 0);
+    this.playTone('triangle', 1320, 1760, 0.12, 0.24, 0.05);
   }
 
   playExplosion() {
@@ -1075,12 +1105,101 @@ function makeGoreDeathFrames(bodyColor) {
   });
 }
 
+// Animación exclusiva de muerte por Motosierra: el demonio es partido en dos mitades con surtidor de sangre
+function makeChainsawDeathFrames(bodyColor) {
+  return [0, 1, 2, 3].map((stage) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 64;
+    const c = canvas.getContext('2d');
+    const px = (x, y, w, h, col) => {
+      c.fillStyle = col;
+      c.fillRect(x, y, w, h);
+    };
+    const split = stage * 5;
+    if (stage === 0) {
+      // Corte diagonal incandescente atravesando el torso
+      px(10, 6, 28, 48, bodyColor);
+      px(6, 26, 36, 5, '#ffbe0b');
+      px(8, 27, 32, 3, '#ffffff');
+      px(12, 22, 24, 12, '#d90429');
+    } else if (stage === 1) {
+      // Mitad superior e inferior separándose lateralmente con chorros arteriales
+      px(8 - split, 8, 26, 20, bodyColor);
+      px(10 - split, 24, 22, 6, '#d90429');
+      px(12 + split, 32, 26, 24, bodyColor);
+      px(14 + split, 28, 20, 8, '#ff002b');
+      px(18, 16, 12, 24, '#d90429');
+      px(21, 20, 4, 14, '#fff3b0');
+    } else if (stage === 2) {
+      // Torso cayendo a un lado y piernas desplomándose al otro
+      px(2, 28, 22, 18, bodyColor);
+      px(5, 32, 16, 12, '#d90429');
+      px(26, 38, 20, 20, bodyColor);
+      px(12, 42, 24, 14, '#9e0000');
+      px(16, 36, 6, 6, '#fff3b0');
+    } else {
+      // Restos partidos en dos charcos viscerales humeantes
+      px(1, 50, 46, 10, '#660000');
+      px(4, 47, 18, 9, bodyColor);
+      px(27, 48, 17, 9, bodyColor);
+      px(10, 49, 28, 8, '#d90429');
+      px(15, 47, 5, 5, '#fff3b0');
+      px(28, 46, 5, 5, '#fff3b0');
+    }
+    return canvas;
+  });
+}
+
+// Sprite del Demonio Bueno (Mercader Abisal con túnica arcana, ojos cian y alforja de armas)
+function makeMerchantSprite(frame = 0) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 48;
+  canvas.height = 64;
+  const c = canvas.getContext('2d');
+  const px = (x, y, w, h, col) => {
+    c.fillStyle = col;
+    c.fillRect(x, y, w, h);
+  };
+  const bob = frame % 2 === 0 ? 0 : -2;
+  // Aura pacífica dorada/cian
+  px(4, 4 + bob, 40, 56, 'rgba(0, 245, 212, 0.18)');
+  // Cuernos curvados ornamentados con anillos de oro
+  px(8, 3 + bob, 7, 9, '#140708');
+  px(33, 3 + bob, 7, 9, '#140708');
+  px(9, 4 + bob, 5, 7, '#ffbe0b');
+  px(34, 4 + bob, 5, 7, '#ffbe0b');
+  // Capucha y túnica de mercader abisal
+  px(12, 6 + bob, 24, 16, '#140708');
+  px(13, 7 + bob, 22, 14, '#240046');
+  px(16, 11 + bob, 5, 4, '#00f5d4');
+  px(27, 11 + bob, 5, 4, '#00f5d4');
+  px(18, 12 + bob, 2, 2, '#ffffff');
+  px(29, 12 + bob, 2, 2, '#ffffff');
+  // Sonrisa amistosa dorada
+  px(18, 17 + bob, 12, 2, '#ffbe0b');
+  // Manto con bordes dorados y alforja de suministros
+  px(7, 21 + bob, 34, 38, '#140708');
+  px(9, 22 + bob, 30, 35, '#3c096c');
+  px(12, 22 + bob, 24, 34, '#5a189a');
+  px(21, 22 + bob, 6, 34, '#ffbe0b');
+  // Mano mostrando moneda/reliquia flotante
+  px(4, 26 + bob, 8, 12, '#7b2cbf');
+  px(4, 20 - bob, 8, 6, '#ffd700');
+  px(6, 21 - bob, 4, 4, '#fff3b0');
+  // Motosierra colgada en el hombro derecho
+  px(35, 22 + bob, 10, 16, '#d90429');
+  px(37, 14 + bob, 6, 10, '#adb5bd');
+  return canvas;
+}
+
 function makeEnemyAnimationSet(kind, bodyColor) {
   return {
     walk: [0, 1, 2, 3].map((i) => makeWalkFrame(kind, i, false, false)),
     charge: [makeWalkFrame(kind, 1, true, false), makeWalkFrame(kind, 3, true, false)],
     pain: makeWalkFrame(kind, 0, false, true),
-    death: makeGoreDeathFrames(bodyColor)
+    death: makeGoreDeathFrames(bodyColor),
+    deathChainsaw: makeChainsawDeathFrames(bodyColor)
   };
 }
 
@@ -1158,6 +1277,7 @@ export class HellfallGame {
     this.medkitSprites = [makeMedkitSprite(0), makeMedkitSprite(1)];
     this.armorSprites = [makeArmorSprite(0), makeArmorSprite(1)];
     this.soulsphereSprites = [makeSoulsphereSprite(0), makeSoulsphereSprite(1)];
+    this.merchantSprites = [makeMerchantSprite(0), makeMerchantSprite(1)];
     this.orbSprites = {
       IMP: makeDemonOrbSprite('#ff4d00', '#ffbe0b'),
       CACODEMON: makeDemonOrbSprite('#00b4d8', '#caf0f8'),
@@ -1174,6 +1294,8 @@ export class HellfallGame {
     this.barrels = [];
     this.armorPickups = [];
     this.powerups = [];
+    this.merchant = null;
+    this.specialZones = [];
     this.keyItem = null;
     this.fireProps = [];
     this.ammoPacks = [];
@@ -1252,7 +1374,8 @@ export class HellfallGame {
     this.onWheel = (e) => {
       if (!this.running || this.paused || this.finished || this.intermission) return;
       const dir = Math.sign(e.deltaY);
-      if (dir !== 0) this.selectWeapon(((this.player.weapon - 1 + dir + 3) % 3) + 1);
+      const maxW = this.player?.hasChainsaw ? 4 : 3;
+      if (dir !== 0) this.selectWeapon(((this.player.weapon - 1 + dir + maxW) % maxW) + 1);
     };
 
     this.canvas.addEventListener('mousedown', this.onMouseDown);
@@ -1346,11 +1469,16 @@ export class HellfallGame {
 
   selectWeapon(num) {
     if (!this.player) return;
+    if (num === 4 && !this.player.hasChainsaw) {
+      this.onStatus('🔒 MOTOSIERRA [4] BLOQUEADA: Cómprala al Demonio Mercader con Monedas 🪙');
+      return;
+    }
     this.player.weapon = num;
     const names = {
       1: 'Arma [1]: SUPER ESCOPETA DOOM (Perdigones en abanico)',
       2: 'Arma [2]: AMETRALLADORA CHAINGUN (Alta cadencia)',
-      3: 'Arma [3]: LANZALLAMAS INFERNAL (Chorro ígneo con ignición)'
+      3: 'Arma [3]: LANZALLAMAS INFERNAL (Chorro ígneo con ignición)',
+      4: 'Arma [4]: MOTOSIERRA CARNICERA (Usa Gasolina · Desmembra enemigos)'
     };
     this.onStatus(names[num] || names[1]);
   }
@@ -1503,12 +1631,22 @@ export class HellfallGame {
 
       if (v.secret) {
         this.powerups.push({ x: cx, y: cy, active: true });
+      } else if (v.orient === 'V' && v.roomX === 2) {
+        // La Cámara Oeste tras su compuerta es el Santuario Seguro del Demonio Mercader
+        this.merchant = { x: cx, y: cy, doorKey: `${v.doorX},${v.doorY}` };
+        const mDoor = this.doors.get(`${v.doorX},${v.doorY}`);
+        if (mDoor) mDoor.isMerchantGate = true;
       } else {
         regularVaultCenters.push({ x: cx, y: cy });
       }
     }
 
-    // Seleccionamos aleatoriamente solo CONFIG.CHEST_COUNT cámaras para tener cofre (1 cámara puede estar vacía)
+    // Zonas especiales en salas del mapa: Fuente de Sangre (curación lenta) y Altar de Monedas
+    this.specialZones = [
+      { x: nodes[4].cx + 0.5, y: nodes[4].cy + 0.5, radius: 2.2, type: 'BLOOD_SHRINE', used: false },
+      { x: nodes[1].cx + 0.5, y: nodes[1].cy + 0.5, radius: 2.2, type: 'AMMO_FORGE', used: false }
+    ];
+
     regularVaultCenters.sort(() => Math.random() - 0.5);
     const activeChests = regularVaultCenters.slice(0, CONFIG.CHEST_COUNT);
     for (const vc of activeChests) {
@@ -1659,6 +1797,8 @@ const verifyAndConnect = (targetGX, targetGY) => {
       fuel: CONFIG.START_FUEL,
       weapon: 1,
       kills: 0,
+      coins: 30,
+      hasChainsaw: false,
       hasKey: false,
       berserkUntil: 0
     };
@@ -1961,10 +2101,78 @@ const verifyAndConnect = (targetGX, targetGY) => {
       if (e.code === 'Digit1') this.selectWeapon(1);
       if (e.code === 'Digit2') this.selectWeapon(2);
       if (e.code === 'Digit3') this.selectWeapon(3);
+      if (e.code === 'Digit4') this.selectWeapon(4);
       if (e.code === 'KeyE' && !e.repeat) this.interact();
+
+      // Teclas de compra rápida cuando estás frente al Demonio Mercader
+      if (this.isNearMerchant() && !e.repeat) {
+        if (e.code === 'KeyZ') this.buyFromMerchant('AMMO');
+        if (e.code === 'KeyX') this.buyFromMerchant('HEALTH');
+        if (e.code === 'KeyC') this.buyFromMerchant('ARMOR');
+        if (e.code === 'KeyV') this.buyFromMerchant('CHAINSAW');
+      }
     }
     if (e.code === 'Space' && !e.repeat && !this.intermission) this.shoot();
     if (e.code === 'KeyR' && !e.repeat && !this.intermission) this.reload();
+  }
+
+  isNearMerchant() {
+    return Boolean(
+      this.merchant &&
+      this.player &&
+      distance(this.player.x, this.player.y, this.merchant.x, this.merchant.y) < 2.5
+    );
+  }
+
+  buyFromMerchant(itemType) {
+    const prices = CONFIG.SHOP_PRICES;
+    const p = this.player;
+    if (itemType === 'AMMO') {
+      if (p.coins < prices.AMMO) {
+        this.onStatus(`❌ Necesitas ${prices.AMMO} Monedas 🪙 (Tienes ${p.coins})`);
+        return;
+      }
+      p.coins -= prices.AMMO;
+      p.reserve = Math.min(MAX_RESERVE, p.reserve + 12);
+      p.fuel = Math.min(MAX_FUEL, p.fuel + 30);
+      this.audio.playCoinPickup();
+      this.pushLootNotification('👹 COMPRA AL MERCADER', ['+12 CARTUCHOS · +30% GASOLINA'], '#ffbe0b');
+    } else if (itemType === 'HEALTH') {
+      if (p.coins < prices.HEALTH || p.health >= 100) {
+        this.onStatus(p.health >= 100 ? 'Salud al máximo' : `❌ Necesitas ${prices.HEALTH} Monedas 🪙`);
+        return;
+      }
+      p.coins -= prices.HEALTH;
+      p.health = Math.min(100, p.health + 35);
+      this.audio.playCoinPickup();
+      this.pushLootNotification('👹 ELIXIR DEMONÍACO COMPRADO', ['+35% SALUD RESTAURADA'], '#d90429');
+    } else if (itemType === 'ARMOR') {
+      if (p.coins < prices.ARMOR || p.armor >= 100) {
+        this.onStatus(p.armor >= 100 ? 'Blindaje al máximo' : `❌ Necesitas ${prices.ARMOR} Monedas 🪙`);
+        return;
+      }
+      p.coins -= prices.ARMOR;
+      p.armor = Math.min(100, (p.armor || 0) + 40);
+      this.audio.playCoinPickup();
+      this.pushLootNotification('👹 CORAZA ABISAL COMPRADA', ['+40% BLINDAJE DE COMBATE'], '#70e000');
+    } else if (itemType === 'CHAINSAW') {
+      if (p.hasChainsaw) {
+        this.selectWeapon(4);
+        return;
+      }
+      if (p.coins < prices.CHAINSAW) {
+        this.onStatus(`❌ La MOTOSIERRA cuesta ${prices.CHAINSAW} Monedas 🪙 (Tienes ${p.coins})`);
+        return;
+      }
+      p.coins -= prices.CHAINSAW;
+      p.hasChainsaw = true;
+      p.fuel = Math.min(MAX_FUEL, p.fuel + 45);
+      p.weapon = 4;
+      this.evilGrinUntil = performance.now() + 2500;
+      this.audio.playChainsaw(true);
+      this.pushLootNotification('🪚 ¡MOTOSIERRA ADQUIRIDA [ARMA 4]!', ['DESMEMBRA DEMONIOS · USA GASOLINA'], '#00f5d4');
+      this.onStatus('🪚 ¡MOTOSIERRA EQUIPADA [4]! Acércate a los demonios y manten clic para aserrarlos');
+    }
   }
 
   handleKeyUp(e) {
@@ -2038,10 +2246,13 @@ const verifyAndConnect = (targetGX, targetGY) => {
     const gainedItems = [];
     const ammoAdd = randInt(CONFIG.CHEST_AMMO_RANGE[0], CONFIG.CHEST_AMMO_RANGE[1]);
     const fuelAdd = randInt(CONFIG.CHEST_FUEL_RANGE[0], CONFIG.CHEST_FUEL_RANGE[1]);
+    const coinsAdd = randInt(CONFIG.CHEST_COINS_RANGE[0], CONFIG.CHEST_COINS_RANGE[1]);
 
     this.player.reserve = Math.min(MAX_RESERVE, this.player.reserve + ammoAdd);
     this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + fuelAdd);
-    gainedItems.push(`+${ammoAdd} CARTUCHOS · +${fuelAdd}% GASOLINA`);
+    this.player.coins = (this.player.coins || 0) + coinsAdd;
+    gainedItems.push(`+${ammoAdd} CARTUCHOS · +${fuelAdd}% GAS`);
+    gainedItems.push(`🪙 +${coinsAdd} MONEDAS DE SANGRE`);
 
     if (Math.random() < CONFIG.CHEST_HEALTH_CHANCE) {
       this.player.health = Math.min(100, this.player.health + CONFIG.CHEST_HEALTH_AMOUNT);
@@ -2135,25 +2346,86 @@ const verifyAndConnect = (targetGX, targetGY) => {
   }
 
   // CERO drops de munición o vida al matar enemigos; los Bosses solo entregan su objetivo clave
-  killEnemy(enemy) {
+  // Sistema de navegación con sensores de pared para que los demonios rodeen esquinas y no se atasquen
+  moveEnemySmart(enemy, desiredDirX, desiredDirY, stepDist) {
+    const r = 0.28;
+    const canFit = (nx, ny) =>
+      !this.isWall(nx - r, ny - r) &&
+      !this.isWall(nx + r, ny - r) &&
+      !this.isWall(nx - r, ny + r) &&
+      !this.isWall(nx + r, ny + r);
+
+    const baseAngle = Math.atan2(desiredDirY, desiredDirX);
+    const sDir = enemy.strafeDir || 1;
+    // Probamos el ángulo directo y sensores oblicuos de rodeo (-35°, +35°, -70°, +70°, -105°, +105°)
+    const probeOffsets = [0, 0.55 * sDir, -0.55 * sDir, 1.15 * sDir, -1.15 * sDir, 1.65 * sDir, -1.65 * sDir];
+
+    for (const offset of probeOffsets) {
+      const ang = baseAngle + offset;
+      const nx = enemy.x + Math.cos(ang) * stepDist;
+      const ny = enemy.y + Math.sin(ang) * stepDist;
+      if (canFit(nx, ny)) {
+        enemy.x = nx;
+        enemy.y = ny;
+        return true;
+      }
+    }
+    enemy.strafeDir = sDir * -1;
+    return false;
+  }
+
+  // Drops dinámicos de munición (35% base / 78% si estás escaso), Monedas según rango y Muerte por Motosierra
+  killEnemy(enemy, weaponUsed = this.player?.weapon) {
     if (!enemy.alive) return;
     enemy.alive = false;
     enemy.state = 'DYING';
+    enemy.killedByChainsaw = weaponUsed === 4;
     enemy.deathTimer = 0;
     this.player.kills += enemy.isBoss ? 5 : 1;
     this.sectorStats.kills++;
     this.audio.playMonsterDeath(enemy.isBoss);
-    this.spawnBlood(enemy.x, enemy.y, enemy.isBoss ? 32 : 18);
+    this.spawnBlood(enemy.x, enemy.y, enemy.killedByChainsaw ? 38 : (enemy.isBoss ? 32 : 18));
+
+    // Recompensa de Monedas según la fortaleza del enemigo
+    let coinReward = 10;
+    if (enemy.holdsKey) coinReward = 95 + this.level * 10;
+    else if (enemy.holdsArsenal) coinReward = 60 + this.level * 6;
+    else if (enemy.kind === 'BRUTE') coinReward = randInt(26, 36) + this.level * 3;
+    else if (enemy.kind === 'CACODEMON') coinReward = randInt(16, 23) + this.level * 2;
+    else coinReward = randInt(9, 14) + this.level;
+
+    this.player.coins = (this.player.coins || 0) + coinReward;
+
+    // Cálculo de probabilidad de drop de munición (sube automáticamente si estás escaso o usas Motosierra)
+    const totalAmmo = this.player.ammo + this.player.reserve;
+    const isLowAmmo = totalAmmo <= CONFIG.LOW_AMMO_THRESHOLD || this.player.fuel <= 16;
+    const dropChance = enemy.killedByChainsaw
+      ? 0.85
+      : (isLowAmmo ? CONFIG.ENEMY_AMMO_DROP_LOW : CONFIG.ENEMY_AMMO_DROP_BASE);
+
+    if (Math.random() < dropChance) {
+      const dropBullets = randInt(CONFIG.ENEMY_DROP_AMMO_RANGE[0], CONFIG.ENEMY_DROP_AMMO_RANGE[1]);
+      const dropGas = randInt(CONFIG.ENEMY_DROP_FUEL_RANGE[0], CONFIG.ENEMY_DROP_FUEL_RANGE[1]);
+      this.ammoPacks.push({
+        x: enemy.x,
+        y: enemy.y,
+        amount: dropBullets,
+        fuelAmount: dropGas,
+        active: true
+      });
+    }
 
     if (enemy.holdsKey) {
       this.keyItem = { x: enemy.x, y: enemy.y, active: true };
       this.audio.playKeyPickup();
-      this.pushLootNotification('💀 ¡BOSS GUARDIÁN DERROTADO!', ['🔑 HA SOLTADO LA LLAVE CALAVERA DORADA'], '#ffbe0b');
-      this.onStatus('🔑 ¡BOSS ABATIDO! Recoge la LLAVE CALAVERA Dorada que ha dejado caer');
+      this.pushLootNotification('💀 ¡BOSS GUARDIÁN DERROTADO!', [`🔑 LLAVE CALAVERA · 🪙 +${coinReward} MONEDAS`], '#ffbe0b');
+      this.onStatus(`🔑 ¡BOSS ABATIDO! +${coinReward} Monedas · Recoge la LLAVE CALAVERA`);
     } else if (enemy.holdsArsenal) {
       this.armorPickups.push({ x: enemy.x, y: enemy.y, active: true });
-      this.pushLootNotification('⚔️ ¡CAMPEÓN ABISAL ABATIDO!', ['🛡️ HA SOLTADO INSIGNIA DE BLINDAJE'], '#70e000');
-      this.onStatus('⚔️ ¡CAMPEÓN ABATIDO! Recoge el Blindaje que ha soltado');
+      this.pushLootNotification('⚔️ ¡CAMPEÓN ABISAL ABATIDO!', [`🛡️ BLINDAJE · 🪙 +${coinReward} MONEDAS`], '#70e000');
+      this.onStatus(`⚔️ ¡CAMPEÓN ABATIDO! +${coinReward} Monedas y Blindaje`);
+    } else {
+      this.onStatus(`${enemy.kind} abatido (🪙 +${coinReward} Monedas)`);
     }
   }
 
@@ -2305,6 +2577,24 @@ const verifyAndConnect = (targetGX, targetGY) => {
     }
     for (const chest of this.chests) {
       if (!chest.opened && distance(player.x, player.y, chest.x, chest.y) < 1.05) this.openChest(chest);
+    }
+
+    // Zonas especiales del sector (Altar de Sangre y Forja de Munición)
+    for (const zone of this.specialZones) {
+      if (!zone.used && distance(player.x, player.y, zone.x, zone.y) < zone.radius) {
+        zone.used = true;
+        this.pickupFlashTime = now;
+        this.audio.playSecretFound();
+        if (zone.type === 'BLOOD_SHRINE') {
+          player.health = Math.min(100, player.health + 25);
+          player.coins = (player.coins || 0) + 20;
+          this.pushLootNotification('🩸 ¡SANTUARIO DE SANGRE ACTIVADO!', ['+25% SALUD · 🪙 +20 MONEDAS'], '#d90429');
+        } else {
+          player.reserve = Math.min(MAX_RESERVE, player.reserve + 8);
+          player.fuel = Math.min(MAX_FUEL, player.fuel + 25);
+          this.pushLootNotification('⚙️ ¡FORJA UAC ACTIVADA!', ['+8 CARTUCHOS · +25% GASOLINA'], '#00f5d4');
+        }
+      }
     }
 
     for (const arm of this.armorPickups) {
@@ -2585,9 +2875,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
           const my = (toY + toX * weave) * bSpeed;
 
           if (dist > 1.2) {
-            if (!this.isWall(enemy.x + mx, enemy.y)) enemy.x += mx;
-            else enemy.strafeDir *= -1;
-            if (!this.isWall(enemy.x, enemy.y + my)) enemy.y += my;
+            this.moveEnemySmart(enemy, toX + -toY * weave, toY + toX * weave, bSpeed);
           }
           enemy.walkCycle += dt * 7.5;
 
@@ -2707,20 +2995,18 @@ const verifyAndConnect = (targetGX, targetGY) => {
         }
 
         if (dist > 1.0) {
-          const step = 0.75 * enemy.speedMultiplier * dt;
-          let mx = toX * step, my = toY * step;
+          const step = 0.82 * enemy.speedMultiplier * dt;
+          let dirX = toX, dirY = toY;
           if (enemy.movePattern === 'STRAFE') {
             const w = Math.sin(now * 0.005 + enemy.walkCycle) * enemy.strafeDir;
-            mx += -toY * step * 0.88 * w;
-            my += toX * step * 0.88 * w;
+            dirX += -toY * 0.85 * w;
+            dirY += toX * 0.85 * w;
           } else if (enemy.movePattern === 'HOVER') {
-            mx += -toY * step * 0.48 * enemy.strafeDir;
-            my += toX * step * 0.48 * enemy.strafeDir;
+            dirX += -toY * 0.48 * enemy.strafeDir;
+            dirY += toX * 0.48 * enemy.strafeDir;
           }
-          if (!this.isWall(enemy.x + mx, enemy.y)) enemy.x += mx;
-          else enemy.strafeDir *= -1;
-          if (!this.isWall(enemy.x, enemy.y + my)) enemy.y += my;
-          enemy.walkCycle += dt * 5.2;
+          this.moveEnemySmart(enemy, dirX, dirY, step);
+          enemy.walkCycle += dt * 5.5;
         }
       }
 
@@ -2756,6 +3042,51 @@ const verifyAndConnect = (targetGX, targetGY) => {
     if (now < this.shotUntil) return;
     const w = this.player.weapon;
     const dmgMult = now < this.player.berserkUntil ? 2.0 : 1.0;
+
+    // ARMA 4: MOTOSIERRA CARNICERA (Usa gasolina de forma muy eficiente y parte enemigos en dos)
+    if (w === 4) {
+      if (this.player.fuel <= 0) {
+        this.audio.playEmptyClip();
+        this.shotUntil = now + 250;
+        this.onStatus('¡SIN GASOLINA PARA LA MOTOSIERRA! Abre cofres o compra en la tienda');
+        return;
+      }
+      this.shotUntil = now + CONFIG.CHAINSAW_COOLDOWN_MS;
+      this.shotStartTime = now;
+      if (Math.random() < 0.35) {
+        this.player.fuel = Math.max(0, this.player.fuel - 1);
+      }
+      this.recoil = 0.32;
+      this.muzzleFlash = 0.6;
+      this.screenShake = Math.max(this.screenShake, 0.14);
+
+      let hitTarget = null;
+      let bestDist = Infinity;
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const d = distance(this.player.x, this.player.y, enemy.x, enemy.y);
+        if (d > CONFIG.CHAINSAW_RANGE) continue;
+        const angle = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
+        const delta = Math.atan2(Math.sin(angle - this.player.angle), Math.cos(angle - this.player.angle));
+        if (Math.abs(delta) < 0.55 && d < bestDist) {
+          hitTarget = enemy;
+          bestDist = d;
+        }
+      }
+
+      this.audio.playChainsaw(Boolean(hitTarget));
+      if (hitTarget) {
+        hitTarget.health -= CONFIG.CHAINSAW_DAMAGE * dmgMult;
+        hitTarget.hitFlash = 0.15;
+        hitTarget.painTimer = 0.2; // Aturde al demonio mientras lo asierras
+        this.spawnBlood(hitTarget.x, hitTarget.y, 10);
+        this.spawnWallSparks(hitTarget.x, hitTarget.y, 4, '#ffbe0b');
+        if (hitTarget.health <= 0) {
+          this.killEnemy(hitTarget, 4);
+        }
+      }
+      return;
+    }
 
     if (w === 3) {
       if (this.player.fuel <= 0) {
@@ -3114,6 +3445,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.drawObjectiveBanner(now);
     this.drawInteractionPrompt();
     this.drawLootNotifications();
+    this.drawMerchantShop();
     this.drawCrosshair();
     this.drawWeapon(now);
 
@@ -3197,6 +3529,50 @@ const verifyAndConnect = (targetGX, targetGY) => {
     }
   }
 
+  drawMerchantShop() {
+    if (!this.isNearMerchant()) return;
+    const c = this.ctx;
+    const pr = CONFIG.SHOP_PRICES;
+    const boxX = 36, boxY = 22, boxW = 248, boxH = 74;
+
+    c.save();
+    c.fillStyle = 'rgba(18, 6, 28, 0.92)';
+    c.fillRect(boxX, boxY, boxW, boxH);
+    c.strokeStyle = '#00f5d4';
+    c.lineWidth = 1.5;
+    c.strokeRect(boxX, boxY, boxW, boxH);
+
+    c.font = 'bold 8px monospace';
+    c.textAlign = 'center';
+    c.fillStyle = '#00f5d4';
+    c.fillText(`👹 MERCADER DEMONÍACO · TUS MONEDAS: 🪙 ${this.player.coins || 0}`, WIDTH / 2, boxY + 12);
+
+    c.font = 'bold 7px monospace';
+    c.textAlign = 'left';
+    const items = [
+      { key: '[Z]', name: 'PACK MUNICIÓN (+12 Balas / +30% Gas)', cost: pr.AMMO, col: '#ffbe0b' },
+      { key: '[X]', name: 'ELIXIR DE SANGRE (+35% Salud)', cost: pr.HEALTH, col: '#ff4d00' },
+      { key: '[C]', name: 'CORAZA ABISAL (+40% Blindaje)', cost: pr.ARMOR, col: '#70e000' },
+      {
+        key: '[V]',
+        name: this.player.hasChainsaw ? 'MOTOSIERRA (YA COMPRADA - PULSA [4])' : 'MOTOSIERRA CARNICERA [ARMA 4]',
+        cost: this.player.hasChainsaw ? 0 : pr.CHAINSAW,
+        col: '#00f5d4'
+      }
+    ];
+
+    items.forEach((it, idx) => {
+      const iy = boxY + 25 + idx * 12;
+      c.fillStyle = it.col;
+      c.fillText(`${it.key} ${it.name}`, boxX + 8, iy);
+      c.textAlign = 'right';
+      c.fillStyle = (this.player.coins || 0) >= it.cost ? '#fff3b0' : '#d90429';
+      c.fillText(it.cost > 0 ? `🪙 ${it.cost}` : 'LISTO', boxX + boxW - 8, iy);
+      c.textAlign = 'left';
+    });
+    c.restore();
+  }
+
   renderBillboards(dirX, dirY, planeX, planeY, horizon, now) {
     const c = this.ctx;
     const animFrame = Math.floor(now / 110) % 3;
@@ -3217,7 +3593,8 @@ const verifyAndConnect = (targetGX, targetGY) => {
           stepBounce = e.movePattern === 'HOVER' ? Math.sin(now * 0.006 + e.walkCycle) * 5 : ((walkIdx % 2 === 1) ? -2 : 0);
         }
       } else {
-        sprite = e.anims.death[clamp(Math.floor(e.deathTimer), 0, 3)];
+        const dSet = (e.killedByChainsaw && e.anims.deathChainsaw) ? e.anims.deathChainsaw : e.anims.death;
+        sprite = dSet[clamp(Math.floor(e.deathTimer), 0, 3)];
       }
       return { ...e, type: 'enemy', sprite, stepBounce };
     });
@@ -3273,8 +3650,13 @@ const verifyAndConnect = (targetGX, targetGY) => {
       };
     });
 
+    const merchantObj = this.merchant
+      ? [{ x: this.merchant.x, y: this.merchant.y, type: 'merchant', sprite: this.merchantSprites[pulseFrame], scale: 1.15 }]
+      : [];
+
     const objects = [
       ...enemyObjs,
+      ...merchantObj,
       ...barrelObjs,
       ...chestObjs,
       ...keyObjs,
@@ -3377,7 +3759,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
     } else {
       statusText = '⚔️ DERROTA AL BOSS PARA LA LLAVE';
     }
-    const extraTxt = now < this.player.berserkUntil ? ' · 🔥BERSERK' : ' · [F] FULL';
+    const extraTxt = ` · 🪙${this.player.coins || 0}`;
     c.fillText(`${statusText}${extraTxt}`, 8, 14);
   }
 
@@ -3398,6 +3780,48 @@ const verifyAndConnect = (targetGX, targetGY) => {
     const cx = Math.floor(WIDTH / 2 + bobX);
     const baseY = VIEW_HEIGHT + bobY + recoilY;
     const w = this.player.weapon;
+
+    // ARMA 4: MOTOSIERRA INFERNAL EN PRIMERA PERSONA CON DIENTES ANIMADOS Y SANGRE
+    if (w === 4) {
+      const isCutting = this.muzzleFlash > 0.1;
+      const vibX = isCutting ? Math.round((Math.random() - 0.5) * 6) : Math.round(Math.sin(now * 0.04) * 1);
+      const vibY = isCutting ? Math.round((Math.random() - 0.5) * 5) : 0;
+      const sx = cx + vibX;
+      const sy = baseY + vibY;
+      const toothPhase = Math.floor(now / 25) % 4;
+
+      // Hoja metálica alargada con cadena dentada en movimiento y manchas de sangre
+      c.fillStyle = '#140708';
+      c.fillRect(sx - 11, sy - 68, 22, 44);
+      c.fillStyle = '#adb5bd';
+      c.fillRect(sx - 8, sy - 65, 16, 40);
+      c.fillStyle = '#495057';
+      c.fillRect(sx - 4, sy - 61, 8, 34);
+      // Dientes de sierra girando alrededor de la espada
+      for (let ty = sy - 64 + toothPhase; ty < sy - 26; ty += 5) {
+        c.fillStyle = '#fff3b0';
+        c.fillRect(sx - 13, ty, 3, 3);
+        c.fillRect(sx + 10, ty, 3, 3);
+      }
+      // Manchas de sangre en la hoja
+      c.fillStyle = '#d90429';
+      c.fillRect(sx - 7, sy - 58, 5, 14);
+      c.fillRect(sx + 2, sy - 48, 6, 16);
+
+      // Carcasa del motor rojo carmesí con escape humeante
+      c.fillStyle = '#140708';
+      c.fillRect(sx - 24, sy - 26, 48, 26);
+      c.fillStyle = '#a31621';
+      c.fillRect(sx - 22, sy - 24, 44, 22);
+      c.fillStyle = '#d90429';
+      c.fillRect(sx - 18, sy - 22, 36, 10);
+      c.fillStyle = '#ffbe0b';
+      c.fillRect(sx - 14, sy - 10, 28, 4);
+      // Manillar negro transversal
+      c.fillStyle = '#25282e';
+      c.fillRect(sx - 28, sy - 30, 56, 5);
+      return;
+    }
 
     if (w === 2) {
       if (this.muzzleFlash > 0.12) {
@@ -3731,7 +4155,8 @@ const verifyAndConnect = (targetGX, targetGY) => {
       c.fillText(text, cx, cy);
     };
 
-    if (this.player.weapon === 3) {
+    // 1. AMMO
+    if (this.player.weapon === 3 || this.player.weapon === 4) {
       drawDoomNum(`${this.player.fuel}%`, 28, VIEW_HEIGHT + 17, '#ff4d00');
     } else {
       const totalAmmo = this.player.ammo + this.player.reserve;

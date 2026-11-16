@@ -69,4 +69,30 @@ export class UserRepositoryPg {
     );
     return mapUser(rows[0]);
   }
+  async findByVerificationTokenHash(tokenHash) {
+    const { rows } = await this.pool.query(
+      `SELECT id, email, password_hash AS "passwordHash", role, status,
+              created_at AS "createdAt",
+              verification_token_hash AS "verificationTokenHash",
+              verification_expires_at AS "verificationExpiresAt"
+       FROM users
+       WHERE verification_token_hash = $1
+       LIMIT 1`,
+      [tokenHash]
+    );
+    return rows[0] || null;
+  }
+
+  async activateUser(id) {
+    const { rows } = await this.pool.query(
+      `UPDATE users
+       SET status = 'active',
+           verification_token_hash = NULL,
+           verification_expires_at = NULL
+       WHERE id = $1 AND status = 'pending'
+       RETURNING id, email, role, status, created_at AS "createdAt"`,
+      [id]
+    );
+    return rows[0] || null;
+  }
 }

@@ -1,294 +1,376 @@
-import { api, ApiError } from '../api/apiClient.js';
 import { HellfallGame } from '../game/game.js';
 
-const $ = (selector) => document.querySelector(selector);
-const views = ['home', 'login', 'register', 'game', 'profile', 'admin'];
-let currentUser = null;
-let game = null;
-let noticeTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('game-canvas');
+  const noticeEl = document.getElementById('notice');
+  const overlayEl = document.getElementById('game-overlay');
+  const startBtn = document.getElementById('start-game');
+  const statusEl = document.getElementById('game-status');
 
-function escapeText(value) { return String(value ?? ''); }
-function showNotice(message, type = '', timeout = 5000) {
-  const notice = $('#notice');
-  notice.textContent = message;
-  notice.className = `notice${type ? ` ${type}` : ''}`;
-  notice.classList.remove('hidden');
-  clearTimeout(noticeTimer);
-  if (timeout > 0) noticeTimer = setTimeout(() => notice.classList.add('hidden'), timeout);
-}
-function hideNotice() { $('#notice').classList.add('hidden'); }
-function showView(name) {
-  if (!views.includes(name)) name = 'home';
-  if (name !== 'game' && game?.running && !game.paused && !game.finished) game.pause();
-  if (name === 'game' && !currentUser) {
-    showNotice('Inicia sesión o crea una cuenta para acceder al juego.', 'error');
-    name = 'login';
-  }
-  if (name === 'admin' && currentUser?.role !== 'admin') {
-    showNotice('Esta sección está reservada al administrador.', 'error');
-    name = 'home';
-  }
-  views.forEach((view) => $(`#view-${view}`).classList.toggle('hidden', view !== name));
-  if (name === 'profile') renderProfile();
-  if (name === 'admin') loadAdminUsers();
-  if (name === 'home') loadTopScores();
-  if (name === 'game') prepareGameView();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-function setCurrentUser(user) {
-  currentUser = user || null;
-  
-  // Actualiza el texto de la esquina superior
-  $('#session-badge').textContent = currentUser ? currentUser.email : 'INVITADO';
-  
-  // Elementos que SÓLO ven los usuarios logueados:
-  $('#nav-profile').classList.toggle('hidden', !currentUser);
-  $('#nav-admin').classList.toggle('hidden', currentUser?.role !== 'admin');
-  $('#home-play').textContent = currentUser ? '▶ CONTINUAR' : '▶ JUGAR';
+  const authSection = document.getElementById('auth-section');
+  const userSection = document.getElementById('user-section');
+  const adminSection = document.getElementById('admin-section');
+  const userEmailSpan = document.getElementById('user-email');
+  const userRoleSpan = document.getElementById('user-role');
 
-  // Elementos que SÓLO ven los invitados:
-  document.querySelectorAll('[data-view="login"]').forEach(el => {
-    el.classList.toggle('hidden', currentUser !== null);
-  });
-  
-  document.querySelectorAll('[data-view="register"]').forEach(el => {
-    el.classList.toggle('hidden', currentUser !== null);
-  });
-}
-function showApiError(error) {
-  const isApiError = error.name === 'ApiError' || error instanceof ApiError;
-  const message = isApiError ? error.message : 'No se ha podido completar la operación. Revisa la conexión e inténtalo de nuevo.';
-  if (!isApiError) console.error("Error nativo interceptado:", error);
-  showNotice(message, 'error');
-}
-function createCell(text, className = '') {
-  const td = document.createElement('td');
-  td.textContent = escapeText(text);
-  if (className) td.className = className;
-  return td;
-}
-function formatDate(dateString) {
-  if (!dateString) return '—';
-  const date = new Date(dateString);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-ES');
-}
-function renderLeaderboard(container, scores, { personal = false } = {}) {
-  container.replaceChildren();
-  if (!scores?.length) {
-    const empty = document.createElement('div');
-    empty.className = 'leaderboard-empty';
-    empty.textContent = personal ? 'Aún no has registrado partidas. Entra en el sector y establece tu primera marca.' : 'Aún no hay puntuaciones. Sé el primero en entrar.';
-    container.append(empty);
-    return;
+  const loginForm = document.getElementById('login-form');
+  const registerForm = document.getElementById('register-form');
+  const logoutBtn = document.getElementById('logout-btn');
+  const deleteAccountBtn = document.getElementById('delete-account-btn');
+  const sessionBadge = document.getElementById('session-badge');
+
+  const scoresBody = document.getElementById('scores-body');
+  const refreshScoresBtn = document.getElementById('refresh-scores');
+  const usersBody = document.getElementById('users-body');
+  const refreshUsersBtn = document.getElementById('refresh-users');
+  const checkActiveForm = document.getElementById('check-active-form');
+  const activeStatusResult = document.getElementById('active-status-result');
+
+  let gameInstance = null;
+  let currentUser = null;
+  let csrfToken = '';
+
+  function showNotice(msg, isError = false) {
+    if (!noticeEl) return;
+    noticeEl.textContent = msg;
+    noticeEl.style.borderColor = isError ? '#d90429' : '#ffbe0b';
+    noticeEl.classList.remove('hidden');
+    setTimeout(() => {
+      noticeEl.classList.add('hidden');
+    }, 6000);
   }
-  const table = document.createElement('table');
-  table.className = 'leaderboard-table';
-  const thead = document.createElement('thead');
-  const headerRow = document.createElement('tr');
-  ['#', 'JUGADOR', 'PUNTOS', 'BAJAS', 'FECHA'].forEach((label) => { const th = document.createElement('th'); th.textContent = label; headerRow.append(th); });
-  thead.append(headerRow);
-  const tbody = document.createElement('tbody');
-  scores.forEach((score, index) => {
-    const row = document.createElement('tr');
-    row.append(createCell(String(index + 1)));
-    row.append(createCell(score.email || currentUser?.email || 'Marine'));
-    row.append(createCell(String(score.points ?? 0), 'score'));
-    row.append(createCell(String(score.kills ?? 0)));
-    row.append(createCell(formatDate(score.createdAt)));
-    tbody.append(row);
-  });
-  table.append(thead, tbody);
-  container.append(table);
-}
-async function loadTopScores() {
-  try {
-    const { scores } = await api.topScores(10);
-    renderLeaderboard($('#home-leaderboard'), scores);
-  } catch { /* La portada sigue visible aunque no haya API disponible temporalmente. */ }
-}
-async function renderProfile() {
-  if (!currentUser) return showView('login');
-  $('#profile-email').textContent = currentUser.email;
-  $('#profile-role').textContent = currentUser.role.toUpperCase();
-  $('#profile-role-text').textContent = currentUser.role.toUpperCase();
-  $('#profile-status').textContent = currentUser.status.toUpperCase();
-  $('#profile-created').textContent = formatDate(currentUser.createdAt);
-  try {
-    const { scores } = await api.myScores();
-    renderLeaderboard($('#profile-leaderboard'), scores, { personal: true });
-    const best = scores.reduce((max, score) => Math.max(max, score.points || 0), 0);
-    $('#personal-best').textContent = `${best} PTS`;
-  } catch (error) { showApiError(error); }
-}
-async function loadAdminUsers() {
-  const body = $('#admin-users-body');
-  body.replaceChildren();
-  const loading = document.createElement('tr');
-  loading.append(createCell('Cargando usuarios…'));
-  body.append(loading);
-  try {
-    const { users } = await api.users();
-    body.replaceChildren();
-    if (users.length === 0) {
-      const row = document.createElement('tr'); row.append(createCell('No hay usuarios.', '',)); body.append(row); return;
+
+  // Comprobar parámetros de la URL (éxito de confirmación por correo, oauth o errores)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('confirmed') === 'success') {
+    showNotice('✅ ¡Cuenta confirmada y activada con éxito! Ya puedes iniciar sesión.');
+    window.history.replaceState({}, document.title, '/');
+  } else if (urlParams.get('error') === 'invalid_confirmation_token') {
+    showNotice('❌ El enlace de activación ha caducado o no es válido.', true);
+    window.history.replaceState({}, document.title, '/');
+  } else if (urlParams.get('oauth') === 'success') {
+    showNotice('🌐 ¡Autenticación con Google completada con éxito!');
+    window.history.replaceState({}, document.title, '/');
+  } else if (urlParams.get('error')) {
+    showNotice(`❌ Error de acceso: ${urlParams.get('error')}`, true);
+    window.history.replaceState({}, document.title, '/');
+  }
+
+  // Obtener token CSRF y estado de la sesión actual
+  async function fetchSession() {
+    try {
+      const res = await fetch('/api/user/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const data = await res.json();
+        currentUser = data.user || data;
+        renderAuthUI();
+        if (currentUser.role === 'admin') {
+          loadAdminUsers();
+        }
+      } else {
+        currentUser = null;
+        renderAuthUI();
+      }
+    } catch {
+      currentUser = null;
+      renderAuthUI();
     }
-    users.forEach((user) => {
-      const row = document.createElement('tr');
-      row.append(createCell(user.email));
-      row.append(createCell(user.role.toUpperCase(), user.role === 'admin' ? 'role-admin' : ''));
-      row.append(createCell(user.status.toUpperCase(), user.status === 'active' ? 'status-active' : user.status === 'deleted' ? 'status-deleted' : ''));
-      row.append(createCell(formatDate(user.createdAt)));
-      const actionCell = document.createElement('td');
-      if (user.status !== 'deleted' && user.id !== currentUser.id) {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'button button-danger button-small'; button.textContent = 'ELIMINAR';
-        button.dataset.deleteUser = user.id;
-        button.dataset.userEmail = user.email;
-        actionCell.append(button);
-      } else actionCell.textContent = '—';
-      row.append(actionCell);
-      body.append(row);
-    });
-  } catch (error) {
-    body.replaceChildren();
-    const row = document.createElement('tr'); row.append(createCell('No se ha podido cargar el listado.')); body.append(row);
-    showApiError(error);
+
+    try {
+      const csrfRes = await fetch('/api/csrf-token', { credentials: 'same-origin' });
+      if (csrfRes.ok) {
+        const csrfData = await csrfRes.json();
+        csrfToken = csrfData.csrfToken || '';
+      }
+    } catch {}
   }
-}
-function prepareGameView() {
-  $('#game-status').textContent = 'READY';
-  $('#game-status-text').textContent = 'A la espera del despliegue';
-  $('#game-message').textContent = 'Inicia la misión cuando estés preparado.';
-  $('#game-overlay').classList.remove('hidden');
-  $('#start-game').textContent = 'INICIAR MISIÓN';
-}
-function startGame() {
-  if (!currentUser) return showView('login');
-  $('#game-overlay').classList.add('hidden');
-  $('#game-status').textContent = 'IN PROGRESS';
-  $('#game-status-text').textContent = 'Agente desplegado';
-  $('#game-message').textContent = 'Elimina a los hostiles. Haz clic en el juego para capturar el ratón.';
-  if (!game) {
-    game = new HellfallGame($('#game-canvas'), {
-      onStatus: (status) => {
-        $('#game-status').textContent = status.toUpperCase();
-        $('#game-status-text').textContent = status;
-      },
-      onFinish: async (result) => {
-        $('#game-overlay').classList.remove('hidden');
-        $('#start-game').textContent = 'VOLVER A JUGAR';
-        $('#game-status-text').textContent = result.won ? 'Sector despejado' : 'Agente caído';
-        $('#game-message').textContent = `Bajas: ${result.kills} · Puntuación: ${result.kills * 100}.`;
-        $('#game-status').textContent = result.won ? 'CLEAR' : 'KIA';
-        try {
-          const saved = await api.submitScore({ kills: result.kills, durationMs: result.durationMs });
-          showNotice(`Partida guardada. Puntuación: ${saved.score.points}.`, 'success');
-        } catch (error) { showApiError(error); }
+
+  function renderAuthUI() {
+    if (currentUser) {
+      if (authSection) authSection.classList.add('hidden');
+      if (userSection) userSection.classList.remove('hidden');
+      if (userEmailSpan) userEmailSpan.textContent = currentUser.email;
+      if (userRoleSpan) userRoleSpan.textContent = currentUser.role;
+      if (sessionBadge) sessionBadge.textContent = `AGENTE: ${currentUser.email.toUpperCase()}`;
+
+      if (currentUser.role === 'admin' && adminSection) {
+        adminSection.classList.remove('hidden');
+      } else if (adminSection) {
+        adminSection.classList.add('hidden');
+      }
+    } else {
+      if (authSection) authSection.classList.remove('hidden');
+      if (userSection) userSection.classList.add('hidden');
+      if (adminSection) adminSection.classList.add('hidden');
+      if (sessionBadge) sessionBadge.textContent = 'AGENTE: INVITADO';
+    }
+  }
+
+  // Inicio de sesión local
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = loginForm.email.value.trim();
+      const password = loginForm.password.value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': csrfToken
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || data.message || 'Credenciales incorrectas o cuenta pendiente de activar.');
+        }
+
+        currentUser = data;
+        renderAuthUI();
+        showNotice('🔓 ¡Inicio de sesión correcto! Bienvenido al frente.');
+        loginForm.reset();
+        loadLeaderboard();
+      } catch (err) {
+        showNotice(`❌ ${err.message}`, true);
       }
     });
   }
-  game.start();
-}
 
-// Navegación de pantallas
-for (const button of document.querySelectorAll('[data-view]')) {
-  button.addEventListener('click', () => showView(button.dataset.view));
-}
-$('#nav-profile').addEventListener('click', () => showView('profile'));
-$('#nav-admin').addEventListener('click', () => showView('admin'));
-$('#home-play').addEventListener('click', () => currentUser ? showView('game') : showView('login'));
-$('#start-game').addEventListener('click', startGame);
-$('#refresh-users').addEventListener('click', loadAdminUsers);
+  // Registro de nuevo usuario (maneja cuenta pendiente de activación por email)
+  if (registerForm) {
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = registerForm.email.value.trim();
+      const password = registerForm.password.value;
 
-$('#register-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); 
-  hideNotice();
-  
-  const formElement = event.target;
-  const form = new FormData(formElement);
-  
-  const email = String(form.get('email') || '');
-  const password = String(form.get('password') || '');
-  const passwordConfirm = String(form.get('passwordConfirm') || '');
-  
-  if (password !== passwordConfirm) {
-    return showNotice('Las contraseñas no coinciden.', 'error');
-  }
-  
-  try {
-    await api.register({ email, password });
-    formElement.reset();
-    showView('login');
-    showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
-  } catch (error) { 
-    showApiError(error); 
-  }
-});
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': csrfToken
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ email, password })
+        });
 
-$('#login-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); 
-  hideNotice();
-  
-  const formElement = event.target;
-  const form = new FormData(formElement);
-  
-  try {
-    await api.login({ 
-      email: String(form.get('email') || ''), 
-      password: String(form.get('password') || '') 
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || data.message || 'Error al registrar la cuenta.');
+        }
+
+        if (data.pendingConfirmation) {
+          showNotice(`📩 ${data.message || 'Se ha enviado un enlace de activación a tu correo. Revisa tu bandeja.'}`);
+          registerForm.reset();
+          return;
+        }
+
+        currentUser = data;
+        renderAuthUI();
+        showNotice('✅ ¡Cuenta creada y activada con éxito!');
+        registerForm.reset();
+      } catch (err) {
+        showNotice(`❌ ${err.message}`, true);
+      }
     });
-    
-    const { user } = await api.me();
-    setCurrentUser(user);
-    
-    formElement.reset();
-    showNotice('Logueado correctamente', 'success');
-    showView('home'); 
-    
-  } catch (error) { 
-    if (error.code === 'INVALID_CREDENTIALS') {
-      showNotice('Correo o contraseña incorrectos (o la cuenta ha sido eliminada).', 'error');
-    } else {
-      showApiError(error); 
+  }
+
+  // Cierre de sesión
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'CSRF-Token': csrfToken },
+          credentials: 'same-origin'
+        });
+        currentUser = null;
+        renderAuthUI();
+        showNotice('🔒 Sesión cerrada correctamente.');
+      } catch (err) {
+        showNotice('❌ Error al cerrar sesión.', true);
+      }
+    });
+  }
+
+  // Eliminación de cuenta
+  if (deleteAccountBtn) {
+    deleteAccountBtn.addEventListener('click', async () => {
+      if (!currentUser) return;
+      if (!confirm('¿Estás seguro de que deseas eliminar tu expediente y dar de baja tu cuenta UAC?')) return;
+
+      try {
+        const res = await fetch(`/api/user/${currentUser.id}`, {
+          method: 'DELETE',
+          headers: { 'CSRF-Token': csrfToken },
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('No se pudo eliminar la cuenta.');
+
+        currentUser = null;
+        renderAuthUI();
+        showNotice('🗑️ Cuenta eliminada correctamente.');
+      } catch (err) {
+        showNotice(`❌ ${err.message}`, true);
+      }
+    });
+  }
+
+  // Cargar tabla de clasificación (Hall of Fame)
+  async function loadLeaderboard() {
+    if (!scoresBody) return;
+    try {
+      const res = await fetch('/api/scores', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('No se pudo cargar el ranking.');
+      const scores = await res.json();
+
+      if (!Array.isArray(scores) || scores.length === 0) {
+        scoresBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">No hay registros de combate todavía.</td></tr>';
+        return;
+      }
+
+      scoresBody.innerHTML = scores.map((s, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td style="color: var(--cream);">${s.email || s.userEmail || 'Marine UAC'}</td>
+          <td style="color: var(--amber); font-weight: bold;">${s.kills}</td>
+          <td>${s.won ? '🏆 Conquistado' : '💀 Caído'}</td>
+          <td>${Math.round((s.durationMs || s.duration_ms || 1000) / 1000)}s</td>
+        </tr>
+      `).join('');
+    } catch {
+      scoresBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--accent-red);">Error al sincronizar el Hall of Fame.</td></tr>';
     }
   }
-});
 
-$('#logout-button').addEventListener('click', async () => {
-  try {
-    await api.logout(); setCurrentUser(null); showView('home'); showNotice('Has cerrado sesión.', 'success');
-  } catch (error) { showApiError(error); }
-});
-$('#delete-account-button').addEventListener('click', async () => {
-  if (!currentUser || !window.confirm('¿Seguro que quieres eliminar tu cuenta? No podrás volver a iniciar sesión con ella.')) return;
-  try {
-    const result = await api.deleteUser(currentUser.id);
-    if (result.deletedCurrentUser) {
-      setCurrentUser(null); showView('home'); showNotice('Tu cuenta ha sido eliminada.', 'success');
-    }
-  } catch (error) { showApiError(error); }
-});
-
-$('#admin-users-body').addEventListener('click', async (event) => {
-  const button = event.target.closest('[data-delete-user]');
-  if (!button) return;
-  if (!window.confirm(`¿Eliminar la cuenta ${button.dataset.userEmail}?`)) return;
-  try {
-    await api.deleteUser(button.dataset.deleteUser);
-    showNotice('Cuenta eliminada.', 'success');
-    await loadAdminUsers();
-  } catch (error) { showApiError(error); }
-});
-
-// Al iniciar, se pregunta al backend si existe una sesión anterior (PBI 6).
-async function boot() {
-  try {
-    const { user } = await api.me();
-    setCurrentUser(user);
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 401) showApiError(error);
-    setCurrentUser(null);
+  if (refreshScoresBtn) {
+    refreshScoresBtn.addEventListener('click', loadLeaderboard);
   }
-  await loadTopScores();
-}
-boot();
+
+  // Cargar lista de usuarios (Panel Admin)
+  async function loadAdminUsers() {
+    if (!usersBody) return;
+    try {
+      const res = await fetch('/api/admin/users', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Acceso no autorizado.');
+      const users = await res.json();
+
+      if (!Array.isArray(users)) return;
+
+      usersBody.innerHTML = users.map((u) => `
+        <tr>
+          <td style="font-size: 0.7rem; color: var(--text-dim);">${u.id.substring(0, 8)}...</td>
+          <td>${u.email}</td>
+          <td style="color: var(--amber);">${u.role}</td>
+          <td>${u.status}</td>
+          <td>
+            <button class="btn btn-danger btn-sm delete-target-user" data-id="${u.id}" style="padding: 2px 6px; font-size: 0.68rem;">Baja</button>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('.delete-target-user').forEach((btn) => {
+        btn.addEventListener('click', async (evt) => {
+          const targetId = evt.target.getAttribute('data-id');
+          if (!confirm(`¿Dar de baja al usuario con ID ${targetId}?`)) return;
+          try {
+            const delRes = await fetch(`/api/user/${targetId}`, {
+              method: 'DELETE',
+              headers: { 'CSRF-Token': csrfToken },
+              credentials: 'same-origin'
+            });
+            if (!delRes.ok) throw new Error('Fallo al eliminar usuario.');
+            showNotice('🛡️ Usuario dado de baja correctamente.');
+            loadAdminUsers();
+          } catch (err) {
+            showNotice(`❌ ${err.message}`, true);
+          }
+        });
+      });
+    } catch {}
+  }
+
+  if (refreshUsersBtn) {
+    refreshUsersBtn.addEventListener('click', loadAdminUsers);
+  }
+
+  if (checkActiveForm) {
+    checkActiveForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const targetId = checkActiveForm.userId.value.trim();
+      if (!targetId || !activeStatusResult) return;
+
+      try {
+        const res = await fetch(`/api/admin/users/${targetId}/active`, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('Usuario no encontrado o sin permisos.');
+        const data = await res.json();
+        activeStatusResult.textContent = `Estado ID ${targetId.substring(0, 8)}: ${data.active ? '🟢 Activo' : '🔴 Inactivo / Eliminado'}`;
+      } catch (err) {
+        activeStatusResult.textContent = `❌ ${err.message}`;
+      }
+    });
+  }
+
+  // Guardar puntuación al finalizar partida en el servidor
+  async function saveGameScore({ won, kills, durationMs }) {
+    if (!currentUser) {
+      showNotice('⚠️ Partida completada en modo invitado (Inicia sesión para guardar récords en el Hall of Fame).');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/scores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CSRF-Token': csrfToken
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          kills,
+          points: kills * 150 + (won ? 2500 : 0),
+          durationMs,
+          won
+        })
+      });
+
+      if (!res.ok) throw new Error('No se pudo guardar la puntuación.');
+      showNotice('🏆 ¡Puntuación registrada en el Hall of Fame de la UAC!');
+      loadLeaderboard();
+    } catch (err) {
+      showNotice(`❌ ${err.message}`, true);
+    }
+  }
+
+  // Arranque del juego HELLFALL
+  if (startBtn && canvas) {
+    startBtn.addEventListener('click', () => {
+      if (overlayEl) overlayEl.classList.add('hidden');
+
+      if (gameInstance) {
+        gameInstance.destroy();
+      }
+
+      gameInstance = new HellfallGame(canvas, {
+        onStatus: (msg) => {
+          if (statusEl) statusEl.textContent = msg;
+        },
+        onFinish: ({ won, kills, durationMs }) => {
+          if (overlayEl) overlayEl.classList.remove('hidden');
+          if (startBtn) startBtn.textContent = '▶ VOLVER A DESPLEGAR';
+          saveGameScore({ won, kills, durationMs });
+        }
+      });
+
+      gameInstance.start();
+    });
+  }
+
+  // Inicialización general al cargar la página
+  fetchSession();
+  loadLeaderboard();
+});

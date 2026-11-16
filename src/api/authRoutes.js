@@ -1,151 +1,159 @@
 import { Router } from 'express';
-import { csrfProtection, issueCsrfToken } from '../middleware/csrf.js';
 import { requireAuth } from '../middleware/auth.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { publicUser } from '../utils/publicUser.js';
-import { AppError } from '../utils/AppError.js';
-import { randomBytes } from 'node:crypto';
+import { csrfProtection } from '../middleware/csrf.js';
 
-function regenerateSession(req) {
-  return new Promise((resolve, reject) => req.session.regenerate((error) => error ? reject(error) : resolve()));
-}
-function saveSession(req) {
-  return new Promise((resolve, reject) => {
-    if (!req.session || typeof req.session.save !== 'function') return resolve();
-    req.session.save((error) => error ? reject(error) : resolve());
-  });
-}
-function destroySession(req) {
-  return new Promise((resolve, reject) => {
-    if (!req.session) return resolve();
-    req.session.destroy((error) => error ? reject(error) : resolve());
-  });
-}
-
-export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' }) {
+export function createAuthRouter(userService, { logger = null, googleAuthService = null } = {}) {
   const router = Router();
-  const authenticated = requireAuth(userService);
 
-  router.get('/csrf', (req, res) => {
-    const token = issueCsrfToken(req.session);
-    res.json({ csrfToken: token });
-  });
-
-  router.post('/register', csrfProtection, asyncHandler(async (req, res) => {
-    const user = await userService.register(req.body || {});
-    logger.info({ event: 'user.registered', userId: user.id }, 'Nuevo usuario registrado');
-    res.status(201).json({ user: publicUser(user), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
-  }));
-
-  router.post('/login', csrfProtection, asyncHandler(async (req, res) => {
-    let user;
+  // POST /api/auth/register - Registro de nuevo usuario (soporta confirmación pendiente por correo)
+  router.post('/register', csrfProtection, async (req, res, next) => {
     try {
-      user = await userService.authenticate(req.body || {});
-    } catch (error) {
-      logger.warn({ event: 'auth.login.failure', email: typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : undefined, code: error.code || 'LOGIN_FAILED' }, 'Intento de inicio de sesión fallido');
-      throw error;
-    }
-    await regenerateSession(req);
-    req.session.userId = user.id;
-    req.session.csrfToken = randomBytes(32).toString('hex');
-    logger.info({ event: 'auth.login.success', userId: user.id }, 'Inicio de sesión correcto');
-    res.json({ user: publicUser(user), csrfToken: req.session.csrfToken });
-  }));
-
-  // --- OAUTH 2.0 CON GOOGLE (HITO 4) ---
-  router.get('/google', (req, res) => {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_CALLBACK_URL;
-
-    if (!clientId || !redirectUri) {
-      logger.warn({ event: 'auth.oauth.misconfigured' }, 'OAuth de Google no configurado');
-      return res.redirect('/?error=oauth_not_configured');
-    }
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: 'openid email profile',
-      prompt: 'select_account'
-    });
-
-    return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
-  });
-
-  router.get('/google/callback', asyncHandler(async (req, res) => {
-    const { code, error } = req.query;
-
-    if (error || !code) {
-      logger.warn({ event: 'auth.oauth.cancelled', error }, 'Inicio de sesión con Google cancelado');
-      return res.redirect('/?error=oauth_cancelled');
-    }
-
-    try {
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          code: String(code),
-          client_id: process.env.GOOGLE_CLIENT_ID || '',
-          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-          redirect_uri: process.env.GOOGLE_CALLBACK_URL || '',
-          grant_type: 'authorization_code'
-        })
+      const result = await userService.register({
+        email: req.body?.email,
+        password: req.body?.password
       });
 
-      if (!tokenResponse.ok) {
-        logger.warn({ event: 'auth.oauth.token_failed', status: tokenResponse.status }, 'Fallo al obtener token de Google');
-        return res.redirect('/?error=oauth_token_failed');
+      // Si requiere confirmación por correo, no creamos sesión todavía y devolvemos estado 202
+      if (result && result.pendingConfirmation) {
+        logger?.info?.({ event: 'auth.register.pending', email: result.email }, 'Registro pendiente de confirmación por correo');
+        return res.status(202).json({
+          pendingConfirmation: true,
+          email: result.email,
+          message: result.message
+        });
       }
 
-      const tokenData = await tokenResponse.json();
+      logger?.info?.({ event: 'auth.register.success', userId: result.id, email: result.email }, 'Usuario registrado y activado con éxito');
+      return res.status(201).json({
+        id: result.id,
+        email: result.email,
+        role: result.role,
+        status: result.status
+      });
+    } catch (err) {
+      logger?.warn?.({ event: 'auth.register.failed', reason: err.message }, 'Fallo en el registro de usuario');
+      return next(err);
+    }
+  });
 
-      const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+  // GET /api/auth/confirm - Validación del token de activación recibido por correo electrónico
+  router.get('/confirm', async (req, res) => {
+    try {
+      const token = String(req.query.token || '');
+      const user = await userService.confirmEmailToken(token);
+      logger?.info?.({ event: 'auth.confirm.success', userId: user.id, email: user.email }, 'Cuenta activada correctamente mediante enlace de correo');
+      return res.redirect('/?confirmed=success');
+    } catch (err) {
+      logger?.warn?.({ event: 'auth.confirm.failed', reason: err.message }, 'Fallo al procesar el token de confirmación de correo');
+      return res.redirect('/?error=invalid_confirmation_token');
+    }
+  });
+
+  // POST /api/auth/login - Inicio de sesión local con correo y contraseña
+  router.post('/login', csrfProtection, async (req, res, next) => {
+    try {
+      const user = await userService.authenticate({
+        email: req.body?.email,
+        password: req.body?.password
       });
 
-      if (!profileResponse.ok) {
-        logger.warn({ event: 'auth.oauth.profile_failed', status: profileResponse.status }, 'Fallo al obtener perfil de Google');
-        return res.redirect('/?error=oauth_profile_failed');
-      }
+      // Regeneración de sesión para prevenir ataques de fijación de sesión
+      await new Promise((resolve, reject) => {
+        req.session.regenerate((err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
 
-      const profile = await profileResponse.json();
-      const user = await userService.loginWithGoogle({ email: profile.email });
-
-      await regenerateSession(req);
       req.session.userId = user.id;
-      req.session.csrfToken = randomBytes(32).toString('hex');
-      await saveSession(req);
 
-      logger.info({ event: 'auth.oauth.success', userId: user.id }, 'Inicio de sesión con Google correcto');
+      // Persistencia explícita de la sesión antes de responder
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+
+      logger?.info?.({ event: 'auth.login.success', userId: user.id, email: user.email }, 'Inicio de sesión local correcto');
+      return res.json({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        status: user.status
+      });
+    } catch (err) {
+      logger?.warn?.({ event: 'auth.login.failed', email: req.body?.email, reason: err.message }, 'Intento fallido de inicio de sesión');
+      return next(err);
+    }
+  });
+
+  // GET /api/auth/google - Redirección hacia la pasarela de consentimiento de Google OAuth 2.0
+  router.get('/google', (req, res, next) => {
+    try {
+      if (!googleAuthService) {
+        return res.status(501).json({ error: 'Google OAuth no está configurado en el servidor.' });
+      }
+      const authUrl = googleAuthService.getAuthUrl();
+      return res.redirect(authUrl);
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // GET /api/auth/google/callback - Retorno desde Google OAuth tras la autorización del usuario
+  router.get('/google/callback', async (req, res, next) => {
+    try {
+      const code = req.query.code;
+      if (!code || typeof code !== 'string') {
+        logger?.warn?.({ event: 'auth.oauth.missing_code' }, 'Callback de Google recibido sin código de autorización');
+        return res.redirect('/?error=oauth_missing_code');
+      }
+
+      if (!googleAuthService || !userService) {
+        return res.redirect('/?error=oauth_not_configured');
+      }
+
+      // Canje del código temporal por perfil verificado
+      const googleProfile = await googleAuthService.exchangeCodeForProfile(code);
+      const user = await userService.loginWithGoogle({ email: googleProfile.email });
+
+      // Regeneración y guardado de sesión
+      await new Promise((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+      });
+
+      req.session.userId = user.id;
+
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => (err ? reject(err) : resolve()));
+      });
+
+      logger?.info?.({ event: 'auth.oauth.success', userId: user.id, email: user.email }, 'Autenticación con Google OAuth completada');
       return res.redirect('/?oauth=success');
     } catch (err) {
-      logger.error({ event: 'auth.oauth.error', err }, 'Error en autenticación con Google');
-      if (err instanceof AppError && err.code === 'ACCOUNT_NOT_ACTIVE') {
-        return res.redirect('/?error=oauth_account_inactive');
-      }
-      return res.redirect('/?error=oauth_server_error');
+      logger?.error?.({ event: 'auth.oauth.failed', reason: err.message }, 'Error crítico en el callback de Google OAuth');
+      return res.redirect('/?error=oauth_failed');
     }
-  }));
-
-  router.get('/me', authenticated, (req, res) => {
-    const token = req.session.csrfToken || issueCsrfToken(req.session);
-    res.json({ user: publicUser(req.currentUser), csrfToken: token });
   });
 
-  router.post('/logout', csrfProtection, asyncHandler(async (req, res) => {
-    const userId = req.session?.userId;
-    await destroySession(req);
-    res.clearCookie(cookieName, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
-    if (userId) logger.info({ event: 'auth.logout', userId }, 'Sesión cerrada');
-    res.status(200).json({ loggedOut: true });
-  }));
+  // POST /api/auth/logout - Cierre de sesión e invalidación de credenciales
+  router.post('/logout', requireAuth, csrfProtection, async (req, res, next) => {
+    try {
+      const userId = req.session.userId;
+      await new Promise((resolve, reject) => {
+        req.session.destroy((err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
 
-  router.use((error, req, res, next) => {
-    if (error instanceof AppError) return next(error);
-    logger.error({ event: 'auth.failure', err: error }, 'Error en autenticación');
-    return next(error);
+      res.clearCookie('hellfall.sid');
+      logger?.info?.({ event: 'auth.logout.success', userId }, 'Sesión cerrada correctamente');
+      return res.json({ ok: true });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   return router;
