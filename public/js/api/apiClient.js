@@ -22,7 +22,7 @@ async function readResponse(response) {
 
 async function ensureCsrf() {
   if (csrfToken) return csrfToken;
-  const response = await fetch('/api/auth/csrf', { credentials: 'include', headers: { Accept: 'application/json' } });
+  const response = await fetch('/api/csrf-token', { credentials: 'include', headers: { Accept: 'application/json' } });
   const body = await readResponse(response);
   csrfToken = body.csrfToken;
   return csrfToken;
@@ -47,11 +47,24 @@ export const api = {
   health: () => request('/health'),
   csrf: async () => { csrfToken = null; return ensureCsrf(); },
   register: (data) => request('/auth/register', { method: 'POST', body: data }),
-  login: (data) => request('/auth/login', { method: 'POST', body: data }),
-  me: () => request('/auth/me'),
-  logout: async () => { const result = await request('/auth/logout', { method: 'POST', body: {} }); csrfToken = null; return result; },
+  // El login regenera la sesión en el servidor, así que invalidamos el token CSRF cacheado.
+  login: async (data) => {
+    const user = await request('/auth/login', { method: 'POST', body: data });
+    csrfToken = null;
+    return user;
+  },
+  me: () => request('/user/me'),
+  logout: async () => {
+    const result = await request('/auth/logout', { method: 'POST', body: {} });
+    csrfToken = null;
+    return result;
+  },
   users: () => request('/users'),
-  deleteUser: async (id) => { const result = await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }); csrfToken = null; return result; },
+  deleteUser: async (id) => {
+    const result = await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} });
+    csrfToken = null;
+    return result;
+  },
   topScores: (limit = 10) => request(`/scores/top?limit=${encodeURIComponent(limit)}`),
   myScores: () => request('/scores/mine'),
   submitScore: (data) => request('/scores', { method: 'POST', body: data })
