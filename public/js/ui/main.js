@@ -198,17 +198,18 @@ $('#start-game').addEventListener('click', startGame);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
 // 🔥 GESTIÓN DE REGISTRO
+// 🔥 REGISTRO BLINDADO
 $('#register-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
-  hideNotice();
+  hideNotice(); // Oculta alertas superiores anteriores
   
   const formElement = event.target;
-  const form = new FormData(formElement);
-  const email = String(form.get('email') || '');
-  const password = String(form.get('password') || '');
-  const passwordConfirm = String(form.get('passwordConfirm') || '');
+  // Recogemos los valores directamente de los inputs para evitar fallos de FormData
+  const email = String(document.getElementById('register-email').value || '');
+  const password = String(document.getElementById('register-password').value || '');
+  const passwordConfirm = String(document.getElementById('register-password-confirm').value || '');
   
-  const alertBox = $('#register-alert');
+  const alertBox = document.getElementById('register-alert');
   if (alertBox) alertBox.style.display = 'none';
 
   if (password !== passwordConfirm) {
@@ -222,25 +223,37 @@ $('#register-form').addEventListener('submit', async (event) => {
   }
   
   try {
-    const result = await api.register({ email, password });
+    console.log("Enviando registro al backend para:", email); // Chivato en consola
     
-    // 🟢 EL AVISO SE MUESTRA AQUÍ SIN SACARTE DE LA PANTALLA
+    // Llamada a la API
+    const result = await api.register({ email, password });
+    console.log("Respuesta del backend recibida:", result); // Chivato en consola
+    
+    // 🟢 Si el servidor devuelve pendingConfirmation: true
     if (result && result.pendingConfirmation) {
       formElement.reset();
+      
+      // 1. Mostrar en la caja verde debajo del botón
       if (alertBox) {
-        alertBox.innerHTML = `<strong>ALERTA DE SISTEMA:</strong><br>Registro en pausa. Revisa tu bandeja de entrada (y la carpeta de Spam) de <em>${email}</em> para activar la cuenta.`;
+        alertBox.innerHTML = `<strong>ALERTA DE SISTEMA:</strong><br>Revisa tu bandeja de entrada (y Spam) de <em>${email}</em> para activar la cuenta.`;
         alertBox.style.borderColor = "#4ade80";
         alertBox.style.color = "#4ade80";
         alertBox.style.display = 'block';
       }
+      
+      // 2. Mostrar TAMBIÉN en la notificación superior por si la caja verde falla
+      showNotice(`Registro en pausa: Revisa el correo ${email} para activar la cuenta.`, 'success', 10000);
       return; 
     }
     
+    // Fallback (si se registra directo)
     formElement.reset();
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
+    
   } catch (error) { 
-    if (alertBox && error) {
+    console.error("Fallo detectado en el frontend:", error);
+    if (alertBox) {
       alertBox.textContent = error.message || 'Error al registrar la cuenta.';
       alertBox.style.borderColor = "#ff4d4d";
       alertBox.style.color = "#ff4d4d";
@@ -250,7 +263,6 @@ $('#register-form').addEventListener('submit', async (event) => {
     }
   }
 });
-
 // GESTIÓN DE LOGIN
 $('#login-form').addEventListener('submit', async (event) => {
   event.preventDefault(); 
