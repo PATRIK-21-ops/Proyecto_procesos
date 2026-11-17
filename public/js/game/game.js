@@ -11,14 +11,14 @@ const CONFIG = {
   MAX_LEVELS: 10,
   MAP_SIZE: 48,
 
-  // Armas y economía de escasez estricta
+  // Armas y economía: más munición disponible, pero sin regalar balas
   CLIP_SIZE: 12,
-  MAX_RESERVE: 64,
+  MAX_RESERVE: 96,
   MAX_FUEL: 100,
-  START_AMMO: 12,
-  START_RESERVE: 12,
-  START_FUEL: 30,
-  START_ARMOR: 15,
+  START_AMMO: 16,
+  START_RESERVE: 24,
+  START_FUEL: 35,
+  START_ARMOR: 20,
   SHOTGUN_COOLDOWN_MS: 420,
   SHOTGUN_DAMAGE: 2.15,
   SHOTGUN_PELLET_COUNT: 7,
@@ -27,31 +27,47 @@ const CONFIG = {
   FLAMER_COOLDOWN_MS: 58,
   FLAMER_DAMAGE: 0.42,
 
-  // Escasez en Cofres y aparición aleatoria en suelo
-  CHEST_COUNT: 3, // Solo 3 cofres por sector (1 de las cámaras puede estar vacía)
-  CHEST_AMMO_RANGE: [6, 10],
-  CHEST_FUEL_RANGE: [14, 22],
-  CHEST_HEALTH_CHANCE: 0.55, // Solo el 55% de los cofres contiene curación
-  CHEST_HEALTH_AMOUNT: 16,
-  CHEST_ARMOR_CHANCE: 0.45, // Solo el 45% de los cofres contiene blindaje
-  CHEST_ARMOR_AMOUNT: 15,
-  FLOOR_AMMO_CHANCE: 0.5, // 50% de probabilidad de que haya 1 caja suelta en todo el sector
-  FLOOR_AMMO_AMOUNT: 5,
-  FLOOR_FUEL_AMOUNT: 12,
-  FLOOR_MEDKIT_CHANCE: 0.4, // 40% de probabilidad de que haya 1 botiquín suelto en todo el sector
-  FLOOR_MEDKIT_HEAL: 20,
+  // Botín de cofres, suelo y monedas
+  CHEST_COUNT: 4,
+  CHEST_AMMO_RANGE: [10, 16],
+  CHEST_FUEL_RANGE: [16, 26],
+  CHEST_HEALTH_CHANCE: 0.7,
+  CHEST_HEALTH_AMOUNT: 20,
+  CHEST_ARMOR_CHANCE: 0.5,
+  CHEST_ARMOR_AMOUNT: 20,
+  CHEST_COIN_RANGE: [6, 10],
+  FLOOR_AMMO_CHANCE: 1.0, // Siempre hay al menos una caja de munición por sector
+  FLOOR_AMMO_AMOUNT: 8,
+  FLOOR_FUEL_AMOUNT: 18,
+  FLOOR_MEDKIT_CHANCE: 0.75,
+  FLOOR_MEDKIT_HEAL: 25,
   SOULSPHERE_HEALTH: 35,
   MAX_SOUL_HEALTH: 135,
   BERSERK_DURATION: 12.0,
 
-  // Densidad de enemigos ajustada
-  BASE_ENEMIES: 8,
-  ENEMIES_PER_LEVEL: 0.85,
-  MAX_REGULAR_ENEMIES: 14,
-  MIN_ENEMY_SPACING: 5.0,
-  LEVEL_HP_SCALE: 0.16,
-  LEVEL_DMG_SCALE: 0.11,
-  LEVEL_SPEED_SCALE: 0.05,
+  // Monedas: salen de los cofres y, a veces, de los demonios
+  ENEMY_COIN_CHANCE: 0.35,
+  ENEMY_COIN_RANGE: [1, 3],
+  BOSS_COIN_RANGE: [12, 18],
+
+  // Mercader de almas: sala cerrada con compuerta propia
+  MERCHANT: {
+    AMMO: { price: 8, amount: 14, label: 'CAJA DE CARTUCHOS', detail: '+14 balas de reserva' },
+    HEALTH: { price: 10, amount: 35, label: 'BOTIQUÍN DE CAMPO', detail: '+35% de salud' },
+    ARMOR: { price: 12, amount: 30, label: 'PLACA DE BLINDAJE', detail: '+30% de armadura' },
+    FUEL: { price: 6, amount: 30, label: 'BIDÓN DE GASOLINA', detail: '+30% de combustible' }
+  },
+
+  // Densidad y escalado de dificultad
+  BASE_ENEMIES: 11,
+  ENEMIES_PER_LEVEL: 1.55,
+  MAX_REGULAR_ENEMIES: 26,
+  MIN_ENEMY_SPACING: 3.4,
+  LEVEL_HP_SCALE: 0.14,
+  LEVEL_DMG_SCALE: 0.10,
+  LEVEL_SPEED_SCALE: 0.04,
+  ELITE_START_LEVEL: 4,
+  ELITE_CHANCE: 0.22,
 
   // Estadísticas por especie (CERO drops de munición/vida en enemigos; Bosses mucho más duros y ágiles)
   ENEMIES: {
@@ -63,7 +79,8 @@ const CONFIG = {
       projSpeed: 6.4,
       painChance: 0.65,
       scale: 0.98,
-      rangedCd: [1.8, 3.1]
+      rangedCd: [1.8, 3.1],
+      dashChance: 0.10
     },
     CACODEMON: {
       hp: 5.4,
@@ -73,7 +90,8 @@ const CONFIG = {
       projSpeed: 7.2,
       painChance: 0.45,
       scale: 1.06,
-      rangedCd: [2.0, 3.4]
+      rangedCd: [2.0, 3.4],
+      dashChance: 0.26
     },
     BRUTE: {
       hp: 8.2,
@@ -83,7 +101,8 @@ const CONFIG = {
       projSpeed: 7.8,
       painChance: 0.28,
       scale: 1.2,
-      rangedCd: [2.2, 3.6]
+      rangedCd: [2.2, 3.6],
+      dashChance: 0.42
     },
 CHAMPION: {
       hp: 13.0, // Base en Sector 1 (escala progresivamente hasta el Sector 10)
@@ -99,7 +118,10 @@ CHAMPION: {
       chargeSpeed: 4.8,
       dashSpeed: 5.8,
       dashSec: 0.22,
-      dashCooldown: 4.2
+      dashCooldown: 4.2,
+      stompRadius: 4.4,
+      stompDamage: 16,
+      stompCooldown: 8.5
     },
     BOSS: {
       hp: 17.0, // Base en Sector 1 (escala progresivamente hasta ~45 HP en Sector 10)
@@ -115,7 +137,10 @@ CHAMPION: {
       chargeSpeed: 5.2,
       dashSpeed: 6.2,
       dashSec: 0.24,
-      dashCooldown: 3.8
+      dashCooldown: 3.8,
+      stompRadius: 4.8,
+      stompDamage: 20,
+      stompCooldown: 7.5
     }
   }
 };
@@ -653,71 +678,6 @@ function makeFirePillarSprite(frame) {
   return canvas;
 }
 
-function makeBarrelSprite(frame = 0) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 28;
-  canvas.height = 36;
-  const c = canvas.getContext('2d');
-  const px = (x, y, w, h, col) => {
-    c.fillStyle = col;
-    c.fillRect(x, y, w, h);
-  };
-  px(3, 4, 22, 31, '#140708');
-  px(4, 6, 20, 28, '#263327');
-  px(6, 6, 15, 28, '#3a4f3c');
-  px(8, 6, 8, 28, '#537056');
-  px(10, 6, 3, 28, '#6b8f6e');
-  px(3, 9, 22, 3, '#140708');
-  px(3, 20, 22, 3, '#140708');
-  px(3, 30, 22, 3, '#140708');
-  px(5, 4, 18, 4, '#38b000');
-  px(7, 5, 14, 2, '#70e000');
-  if (frame === 0) {
-    px(8, 2, 4, 3, '#ccff33');
-    px(16, 4, 3, 2, '#fff3b0');
-    px(6, 8, 2, 5, '#70e000');
-  } else {
-    px(14, 2, 4, 3, '#ccff33');
-    px(7, 4, 3, 2, '#fff3b0');
-    px(19, 8, 2, 6, '#70e000');
-  }
-  px(10, 13, 8, 6, '#ffbe0b');
-  px(12, 14, 4, 4, '#140708');
-  px(13, 15, 2, 2, '#ff4d00');
-  return canvas;
-}
-
-function makeBarrelExplosionFrames() {
-  return [0, 1, 2, 3].map((stage) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 40;
-    const c = canvas.getContext('2d');
-    const px = (x, y, w, h, col) => {
-      c.fillStyle = col;
-      c.fillRect(x, y, w, h);
-    };
-    if (stage === 0) {
-      px(6, 6, 28, 28, '#d90429');
-      px(10, 10, 20, 20, '#ff4d00');
-      px(13, 13, 14, 14, '#ffbe0b');
-      px(16, 16, 8, 8, '#fff3b0');
-    } else if (stage === 1) {
-      px(2, 2, 36, 36, '#d90429');
-      px(5, 5, 30, 30, '#ff4d00');
-      px(10, 10, 20, 20, '#ffbe0b');
-      px(14, 14, 12, 12, '#fff3b0');
-    } else if (stage === 2) {
-      px(2, 4, 36, 32, '#660708');
-      px(6, 8, 28, 24, '#d90429');
-      px(12, 12, 16, 16, '#ff4d00');
-    } else {
-      px(4, 10, 32, 20, '#2b1214');
-      px(10, 14, 20, 12, '#590d22');
-    }
-    return canvas;
-  });
-}
-
 function makeChestSprite(isOpen = false) {
   const canvas = document.createElement('canvas');
   canvas.width = 36;
@@ -755,6 +715,65 @@ function makeChestSprite(isOpen = false) {
     px(28, 15, 4, 12, '#adb5bd');
     px(15, 16, 6, 5, '#ffbe0b');
   }
+  return canvas;
+}
+
+function makeCoinSprite(frame = 0) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 18;
+  canvas.height = 18;
+  const c = canvas.getContext('2d');
+  const px = (x, y, w, h, col) => {
+    c.fillStyle = col;
+    c.fillRect(x, y, w, h);
+  };
+  const bob = frame % 2 === 0 ? 0 : -1;
+  px(3, 3 + bob, 12, 12, '#140708');
+  px(4, 4 + bob, 10, 10, '#ffbe0b');
+  px(5, 5 + bob, 8, 3, '#fff3b0');
+  px(6, 8 + bob, 6, 4, '#d9a400');
+  px(7, 7 + bob, 2, 6, '#fff3b0');
+  px(11, 6 + bob, 1, 2, '#ffffff');
+  return canvas;
+}
+
+function makeMerchantSprite(frame = 0) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 38;
+  canvas.height = 46;
+  const c = canvas.getContext('2d');
+  const px = (x, y, w, h, col) => {
+    c.fillStyle = col;
+    c.fillRect(x, y, w, h);
+  };
+  const bob = frame % 2 === 0 ? 0 : -1;
+  // Mostrador
+  px(2, 37, 34, 8, '#140708');
+  px(4, 37, 30, 5, '#4a2511');
+  px(6, 38, 26, 2, '#9c5a32');
+  px(7, 33, 5, 5, '#ffbe0b');
+  px(26, 33, 5, 5, '#d9a400');
+  // Túnica y capucha
+  px(11, 13 + bob, 16, 24, '#140708');
+  px(12, 14 + bob, 14, 22, '#5a1010');
+  px(15, 17 + bob, 8, 18, '#8a1c1c');
+  px(13, 30 + bob, 12, 4, '#3d0a0a');
+  px(8, 9 + bob, 22, 14, '#140708');
+  px(10, 10 + bob, 18, 11, '#6b1414');
+  px(12, 12 + bob, 14, 8, '#140708');
+  px(13, 14 + bob, 4, 3, '#ffbe0b');
+  px(21, 14 + bob, 4, 3, '#ffbe0b');
+  px(15, 19 + bob, 8, 2, '#c9a227');
+  // Brazos y bastón
+  px(6, 20 + bob, 6, 14, '#140708');
+  px(7, 21 + bob, 4, 12, '#5a1010');
+  px(26, 20 + bob, 6, 14, '#140708');
+  px(27, 21 + bob, 4, 12, '#5a1010');
+  px(31, 6, 3, 34, '#140708');
+  px(32, 7, 1, 32, '#c9a227');
+  px(29, 4, 7, 5, '#140708');
+  px(30, 5, 5, 3, '#ff4d00');
+  px(31, 6, 3, 1, '#ffbe0b');
   return canvas;
 }
 
@@ -1148,8 +1167,8 @@ export class HellfallGame {
     };
 
     this.fireFrames = [makeFirePillarSprite(0), makeFirePillarSprite(1), makeFirePillarSprite(2)];
-    this.barrelSprites = [makeBarrelSprite(0), makeBarrelSprite(1)];
-    this.explosionFrames = makeBarrelExplosionFrames();
+    this.coinSprites = [makeCoinSprite(0), makeCoinSprite(1)];
+    this.merchantSprites = [makeMerchantSprite(0), makeMerchantSprite(1)];
     this.chestClosedSprite = makeChestSprite(false);
     this.chestOpenSprite = makeChestSprite(true);
     this.keySprites = [makeKeySprite(0), makeKeySprite(1)];
@@ -1171,9 +1190,12 @@ export class HellfallGame {
     this.mapSize = CONFIG.MAP_SIZE;
     this.doors = new Map();
     this.chests = [];
-    this.barrels = [];
     this.armorPickups = [];
     this.powerups = [];
+    this.coins = [];
+    this.merchant = null;
+    this.shockwaves = [];
+    this.floorCracks = [];
     this.keyItem = null;
     this.fireProps = [];
     this.ammoPacks = [];
@@ -1190,6 +1212,8 @@ export class HellfallGame {
     this.finished = false;
     this.intermission = null;
     this.mouseDown = false;
+    this.shopOpen = false;
+    this.shopNotice = '';
     this.frameId = null;
     this.lastTime = 0;
     this.lastDamageTime = 0;
@@ -1221,6 +1245,7 @@ export class HellfallGame {
         this.advanceFromIntermission();
         return;
       }
+      if (this.shopOpen) return;
       const rect = this.canvas.getBoundingClientRect();
       const cx = ((event.clientX - rect.left) / rect.width) * WIDTH;
       const cy = ((event.clientY - rect.top) / rect.height) * HEIGHT;
@@ -1250,7 +1275,7 @@ export class HellfallGame {
       this.mouseDown = false;
     };
     this.onWheel = (e) => {
-      if (!this.running || this.paused || this.finished || this.intermission) return;
+      if (!this.running || this.paused || this.finished || this.intermission || this.shopOpen) return;
       const dir = Math.sign(e.deltaY);
       if (dir !== 0) this.selectWeapon(((this.player.weapon - 1 + dir + 3) % 3) + 1);
     };
@@ -1398,9 +1423,12 @@ export class HellfallGame {
     this.mapSize = size;
     this.doors.clear();
     this.chests = [];
-    this.barrels = [];
     this.armorPickups = [];
     this.powerups = [];
+    this.coins = [];
+    this.merchant = null;
+    this.shockwaves = [];
+    this.floorCracks = [];
 
     const grid = Array.from({ length: size }, (_, y) =>
       Array.from({ length: size }, (__, x) => {
@@ -1456,7 +1484,7 @@ export class HellfallGame {
       { roomX: 22, roomY: 2, w: 5, h: 4, doorX: 24, doorY: 6, orient: 'H', secret: false },
       { roomX: 2, roomY: 22, w: 4, h: 5, doorX: 6, doorY: 24, orient: 'V', secret: false },
       { roomX: 43, roomY: 22, w: 3, h: 5, doorX: 42, doorY: 24, orient: 'V', secret: false },
-      { roomX: 22, roomY: 43, w: 5, h: 3, doorX: 24, doorY: 42, orient: 'H', secret: false },
+      { roomX: 22, roomY: 43, w: 5, h: 3, doorX: 24, doorY: 42, orient: 'H', secret: false, merchant: true },
       { roomX: 8, roomY: 2, w: 5, h: 4, doorX: 10, doorY: 6, orient: 'H', secret: true }
     ];
 
@@ -1494,6 +1522,7 @@ export class HellfallGame {
         y: v.doorY,
         orient: v.orient,
         isSecret: v.secret,
+        isMerchant: Boolean(v.merchant),
         discovered: false
       });
 
@@ -1501,7 +1530,10 @@ export class HellfallGame {
       const cy = v.roomY + Math.floor(v.h / 2) + 0.5;
       mandatoryTargets.push({ gx: Math.floor(cx), gy: Math.floor(cy) });
 
-      if (v.secret) {
+      if (v.merchant) {
+        // Sala cerrada del mercader: queda aislada y sin demonios dentro.
+        this.merchant = { x: cx, y: cy, name: 'MERCADER DE ALMAS' };
+      } else if (v.secret) {
         this.powerups.push({ x: cx, y: cy, active: true });
       } else {
         regularVaultCenters.push({ x: cx, y: cy });
@@ -1615,22 +1647,6 @@ const verifyAndConnect = (targetGX, targetGY) => {
       }
     }
 
-    const barrelSpots = [
-      { x: nodes[1].cx + 1.8, y: nodes[1].cy + 1.5 },
-      { x: nodes[2].cx - 2.0, y: nodes[2].cy + 1.5 },
-      { x: nodes[3].cx + 1.8, y: nodes[3].cy - 1.5 },
-      { x: nodes[4].cx + 2.0, y: nodes[4].cy + 2.0 },
-      { x: nodes[5].cx - 1.8, y: nodes[5].cy + 1.5 },
-      { x: nodes[6].cx + 2.0, y: nodes[6].cy - 1.5 },
-      { x: nodes[7].cx + 1.8, y: nodes[7].cy + 1.5 },
-      { x: nodes[8].cx - 2.0, y: nodes[8].cy - 1.8 }
-    ];
-    for (const bs of barrelSpots) {
-      if (grid[Math.floor(bs.y)]?.[Math.floor(bs.x)] === '0') {
-        this.barrels.push({ x: bs.x, y: bs.y, state: 'INTACT', explodeTimer: 0 });
-      }
-    }
-
     this.fireProps = [];
     for (let idx = 0; idx < nodes.length; idx++) {
       const n = nodes[idx];
@@ -1659,6 +1675,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       fuel: CONFIG.START_FUEL,
       weapon: 1,
       kills: 0,
+      coins: 0,
       hasKey: false,
       berserkUntil: 0
     };
@@ -1678,6 +1695,10 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.bloodParticles = [];
     this.wallSparks = [];
     this.lootNotifications = [];
+    this.shockwaves = [];
+    this.floorCracks = [];
+    this.shopOpen = false;
+    this.shopNotice = '';
     this.player.hasKey = false;
     this.levelStartTime = performance.now();
 
@@ -1686,41 +1707,52 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.player.y = startPos.y;
     this.exitDoor = exitDoor;
 
-    // ESCASEZ REAL: Solo de forma poco frecuente y aleatoria aparece 0 o 1 caja / botiquín en todo el suelo del sector
+    // Suministros repartidos por el sector: más munición que antes, sin inundar el mapa
     this.medkits = [];
     this.ammoPacks = [];
-    const farFloorCells = emptyCells.filter((c) => distance(c.x, c.y, this.player.x, this.player.y) > 10);
+    this.coins = [];
+    const farFloorCells = emptyCells.filter(
+      (c) =>
+        distance(c.x, c.y, this.player.x, this.player.y) > 9 &&
+        !(c.x >= 21 && c.x <= 27 && c.y >= 42 && c.y <= 46)
+    );
+    const takeCell = () => {
+      if (farFloorCells.length === 0) return null;
+      return farFloorCells.splice(Math.floor(Math.random() * farFloorCells.length), 1)[0];
+    };
 
-    if (farFloorCells.length > 0 && Math.random() < CONFIG.FLOOR_AMMO_CHANCE) {
-      const cell = farFloorCells[Math.floor(Math.random() * farFloorCells.length)];
+    const ammoPacksCount = 1 + Math.floor((this.level - 1) / 3);
+    for (let i = 0; i < ammoPacksCount; i++) {
+      const cell = takeCell();
+      if (!cell) break;
       this.ammoPacks.push({
         x: cell.x,
         y: cell.y,
-        amount: CONFIG.FLOOR_AMMO_AMOUNT,
+        amount: CONFIG.FLOOR_AMMO_AMOUNT + Math.floor(this.level / 2),
         fuelAmount: CONFIG.FLOOR_FUEL_AMOUNT,
         active: true
       });
     }
 
-    if (farFloorCells.length > 1 && Math.random() < CONFIG.FLOOR_MEDKIT_CHANCE) {
-      const cell = farFloorCells[Math.floor(Math.random() * farFloorCells.length)];
-      this.medkits.push({
-        x: cell.x,
-        y: cell.y,
-        active: true
-      });
+    const medkitCount = this.level >= 5 && Math.random() < CONFIG.FLOOR_MEDKIT_CHANCE ? 2 : 1;
+    for (let i = 0; i < medkitCount; i++) {
+      if (i > 0 && Math.random() > CONFIG.FLOOR_MEDKIT_CHANCE) break;
+      const cell = takeCell();
+      if (!cell) break;
+      this.medkits.push({ x: cell.x, y: cell.y, active: true });
     }
 
-    if (this.player.ammo === 0 && this.player.reserve === 0) this.player.ammo = 4;
+    if (this.player.ammo === 0 && this.player.reserve === 0) this.player.ammo = 6;
 
     // Creación de Demonios regulares (no sueltan ni munición ni vida al morir)
     // Creación de Demonios regulares (fuera de las arenas cerradas de los Bosses)
     this.enemies = [];
     const spawns = emptyCells.filter(
       (c) =>
-        distance(c.x, c.y, this.player.x, this.player.y) > 8.5 &&
+        distance(c.x, c.y, this.player.x, this.player.y) > 7.5 &&
         !(c.x >= 32 && c.y >= 32) &&
-        !(c.x <= 15 && c.y >= 33)
+        !(c.x <= 15 && c.y >= 33) &&
+        !(c.x >= 21 && c.x <= 27 && c.y >= 42 && c.y <= 46)
     );
     const count = Math.min(
       CONFIG.MAX_REGULAR_ENEMIES,
@@ -1740,25 +1772,34 @@ const verifyAndConnect = (targetGX, targetGY) => {
         }
       }
       const pos = spawns.splice(chosenIdx, 1)[0];
-      const roll = i % 3;
-      const specKey = roll === 0 ? 'IMP' : (roll === 1 ? 'CACODEMON' : 'BRUTE');
+      const isElite =
+        this.level >= CONFIG.ELITE_START_LEVEL &&
+        Math.random() < CONFIG.ELITE_CHANCE + (this.level - CONFIG.ELITE_START_LEVEL) * 0.02;
+      const roll = Math.random();
+      const specKey = isElite
+        ? 'BRUTE'
+        : (roll < 0.45 ? 'IMP' : (roll < 0.78 ? 'CACODEMON' : 'BRUTE'));
       const cfg = CONFIG.ENEMIES[specKey];
+      const eliteHpMult = isElite ? 1.7 : 1;
+      const eliteDmgMult = isElite ? 1.3 : 1;
+      const eliteSpeedMult = isElite ? 1.08 : 1;
 
       this.enemies.push({
         id: i + 1,
         x: pos.x,
         y: pos.y,
         kind: specKey,
-        movePattern: roll === 0 ? 'STRAFE' : (roll === 1 ? 'HOVER' : 'MARCH'),
+        elite: isElite,
+        movePattern: specKey === 'IMP' ? 'STRAFE' : (specKey === 'CACODEMON' ? 'HOVER' : 'MARCH'),
         anims: this.animSets[specKey],
-        health: cfg.hp * hpScale,
-        maxHealth: cfg.hp * hpScale,
-        speedMultiplier: cfg.speed * spdScale,
-        damage: Math.round(cfg.meleeDmg * dmgScale),
+        health: cfg.hp * hpScale * eliteHpMult,
+        maxHealth: cfg.hp * hpScale * eliteHpMult,
+        speedMultiplier: cfg.speed * spdScale * eliteSpeedMult,
+        damage: Math.round(cfg.meleeDmg * dmgScale * eliteDmgMult),
         projSpeed: cfg.projSpeed,
-        projDamage: Math.round(cfg.projDmg * dmgScale),
-        painChance: cfg.painChance,
-        scale: cfg.scale,
+        projDamage: Math.round(cfg.projDmg * dmgScale * eliteDmgMult),
+        painChance: Math.max(0.12, cfg.painChance - (isElite ? 0.12 : 0)),
+        scale: cfg.scale * (isElite ? 1.18 : 1),
         isBoss: false,
         holdsKey: false,
         holdsArsenal: false,
@@ -1771,6 +1812,11 @@ const verifyAndConnect = (targetGX, targetGY) => {
         hitFlash: 0,
         painTimer: 0,
         rangedCooldown: cfg.rangedCd[0] + Math.random() * (cfg.rangedCd[1] - cfg.rangedCd[0]),
+        dashChance: Math.min(0.8, (cfg.dashChance || 0) + (this.level - 1) * 0.03),
+        dashCooldown: 1.8 + Math.random() * 2.6,
+        dashTime: 0,
+        dashDirX: 0,
+        dashDirY: 0,
         walkCycle: Math.random() * 10,
         strafeDir: i % 2 === 0 ? 1 : -1,
         growlTimer: 2 + Math.random() * 4,
@@ -1814,6 +1860,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       bossState: 'CHASE',
       bossTimer: 2.8 - tier * 1.1,
       dashCooldown: 3.4 - tier * 1.8,
+      stompCd: 4.5 - tier * 1.5,
       reactDashCd: 0,
       rangedCooldown: 2.6 - tier * 1.0,
       chargeDirX: 0,
@@ -1859,6 +1906,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       bossState: 'CHASE',
       bossTimer: 2.6 - tier * 1.0,
       dashCooldown: 3.2 - tier * 1.8,
+      stompCd: 4.0 - tier * 1.4,
       reactDashCd: 0,
       rangedCooldown: 2.4 - tier * 0.9,
       chargeDirX: 0,
@@ -1891,7 +1939,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       vz: -0.15 - Math.random() * 0.25
     }));
 
-    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS} // Escasez extrema: raciona balas y derrota al BOSS para la LLAVE 🔑`);
+    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS} // Compra suministros al MERCADER [E] y derrota al BOSS para la LLAVE 🔑`);
   }
 
   start() {
@@ -1944,6 +1992,20 @@ const verifyAndConnect = (targetGX, targetGY) => {
       return;
     }
 
+    if (this.shopOpen) {
+      if (e.code === 'KeyE' || e.code === 'Escape') {
+        e.preventDefault();
+        this.closeShop();
+        return;
+      }
+      if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) {
+        this.buyMerchantItem(Number(e.code.slice(-1)));
+        return;
+      }
+      if (e.code === 'Space') e.preventDefault();
+      return;
+    }
+
     if (this.intermission && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE')) {
       this.advanceFromIntermission();
       return;
@@ -1979,7 +2041,15 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
   handlePointerLockChange() {
     const locked = document.pointerLockElement === this.canvas;
-    if (this.wasPointerLocked && !locked && this.running && !this.finished && !this.paused && !this.intermission) {
+    if (
+      this.wasPointerLocked &&
+      !locked &&
+      this.running &&
+      !this.finished &&
+      !this.paused &&
+      !this.intermission &&
+      !this.shopOpen
+    ) {
       this.pause();
     }
     this.wasPointerLocked = locked;
@@ -2004,6 +2074,12 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
   interact() {
     if (!this.player) return;
+
+    if (this.merchant && distance(this.player.x, this.player.y, this.merchant.x, this.merchant.y) < 2.4) {
+      this.openShop();
+      return;
+    }
+
     for (const door of this.doors.values()) {
       if (distance(this.player.x, this.player.y, door.x + 0.5, door.y + 0.5) < 2.8 && door.target === 0) {
         door.target = 1;
@@ -2026,7 +2102,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
     }
   }
 
-  // Cofres con botín escaso y aleatorio (no siempre dan salud ni blindaje)
+  // Cofres de suministros con munición, gasolina, monedas y curación aleatoria
   openChest(chest) {
     chest.opened = true;
     this.sectorStats.items++;
@@ -2038,10 +2114,12 @@ const verifyAndConnect = (targetGX, targetGY) => {
     const gainedItems = [];
     const ammoAdd = randInt(CONFIG.CHEST_AMMO_RANGE[0], CONFIG.CHEST_AMMO_RANGE[1]);
     const fuelAdd = randInt(CONFIG.CHEST_FUEL_RANGE[0], CONFIG.CHEST_FUEL_RANGE[1]);
+    const coinAdd = randInt(CONFIG.CHEST_COIN_RANGE[0], CONFIG.CHEST_COIN_RANGE[1]);
 
     this.player.reserve = Math.min(MAX_RESERVE, this.player.reserve + ammoAdd);
     this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + fuelAdd);
-    gainedItems.push(`+${ammoAdd} CARTUCHOS · +${fuelAdd}% GASOLINA`);
+    this.player.coins = (this.player.coins || 0) + coinAdd;
+    gainedItems.push(`+${ammoAdd} CARTUCHOS · +${fuelAdd}% GASOLINA · +${coinAdd} MONEDAS`);
 
     if (Math.random() < CONFIG.CHEST_HEALTH_CHANCE) {
       this.player.health = Math.min(100, this.player.health + CONFIG.CHEST_HEALTH_AMOUNT);
@@ -2055,6 +2133,73 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.pushLootNotification('📦 ¡COFRE UAC ABIERTO!', gainedItems, '#ffbe0b');
     this.spawnBlood(chest.x, chest.y, 12, '#ffbe0b');
     this.onStatus(`¡COFRE UAC! ${gainedItems.join(' · ')}`);
+  }
+
+  merchantItems() {
+    const m = CONFIG.MERCHANT;
+    return [
+      {
+        ...m.AMMO,
+        canBuy: () => this.player.reserve < MAX_RESERVE,
+        apply: () => { this.player.reserve = Math.min(MAX_RESERVE, this.player.reserve + m.AMMO.amount); }
+      },
+      {
+        ...m.HEALTH,
+        canBuy: () => this.player.health < 100,
+        apply: () => { this.player.health = Math.min(100, this.player.health + m.HEALTH.amount); }
+      },
+      {
+        ...m.ARMOR,
+        canBuy: () => (this.player.armor || 0) < 100,
+        apply: () => { this.player.armor = Math.min(100, (this.player.armor || 0) + m.ARMOR.amount); }
+      },
+      {
+        ...m.FUEL,
+        canBuy: () => this.player.fuel < MAX_FUEL,
+        apply: () => { this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + m.FUEL.amount); }
+      }
+    ];
+  }
+
+  openShop() {
+    if (this.shopOpen) return;
+    this.shopOpen = true;
+    this.mouseDown = false;
+    this.wasPointerLocked = false;
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.shopNotice = 'ELIGE CON [1]-[4] · [E] O [ESC] PARA SALIR';
+    this.audio.playChestOpen();
+    this.onStatus('MERCADER DE ALMAS: compra munición, vida y blindaje con monedas');
+  }
+
+  closeShop() {
+    if (!this.shopOpen) return;
+    this.shopOpen = false;
+    this.shopNotice = '';
+    this.onStatus('Has salido del mercader');
+  }
+
+  buyMerchantItem(index) {
+    if (!this.shopOpen) return;
+    const item = this.merchantItems()[index - 1];
+    if (!item) return;
+
+    if (!item.canBuy()) {
+      this.shopNotice = 'NO NECESITAS ESO AHORA MISMO';
+      this.audio.playEmptyClip();
+      return;
+    }
+    if ((this.player.coins || 0) < item.price) {
+      this.shopNotice = `FALTAN ${item.price - (this.player.coins || 0)} MONEDAS`;
+      this.audio.playEmptyClip();
+      return;
+    }
+
+    this.player.coins -= item.price;
+    item.apply();
+    this.audio.playPickup();
+    this.shopNotice = `COMPRADO: ${item.label} (-${item.price} MONEDAS)`;
+    this.onStatus(`MERCADER: ${item.label} comprado por ${item.price} monedas`);
   }
 
   damagePlayer(rawAmount, sourceX = null, sourceY = null, now = performance.now()) {
@@ -2078,37 +2223,53 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.audio.playHurt();
   }
 
-  detonateBarrel(barrel) {
-    if (barrel.state !== 'INTACT') return;
-    barrel.state = 'EXPLODING';
-    barrel.explodeTimer = 0;
-    this.audio.playExplosion();
-    this.screenShake = 0.55;
-    this.spawnBlood(barrel.x, barrel.y, 24, '#ff4d00');
+  bossStomp(enemy) {
+    const cfg = enemy.holdsKey ? CONFIG.ENEMIES.BOSS : CONFIG.ENEMIES.CHAMPION;
+    const radius = cfg.stompRadius || 4.6;
+    const maxDamage = cfg.stompDamage || 18;
 
-    const blastRadius = 4.2;
-    for (const enemy of this.enemies) {
-      if (!enemy.alive) continue;
-      const d = distance(barrel.x, barrel.y, enemy.x, enemy.y);
-      if (d < blastRadius) {
-        enemy.health -= (1 - d / blastRadius) * 9.0;
-        enemy.hitFlash = 0.28;
-        enemy.painTimer = 0.35;
-        enemy.burnTimer = 2.5;
-        this.spawnBlood(enemy.x, enemy.y, 14);
-        if (enemy.health <= 0) this.killEnemy(enemy);
-      }
+    this.screenShake = 0.9;
+    this.audio.playExplosion();
+    this.shockwaves.push({
+      x: enemy.x,
+      y: enemy.y,
+      radius: 0.5,
+      maxRadius: radius,
+      life: 0.65,
+      maxLife: 0.65
+    });
+    this.floorCracks.push({
+      x: enemy.x,
+      y: enemy.y,
+      radius,
+      life: 22,
+      maxLife: 22,
+      seed: Math.random() * 10
+    });
+
+    for (let i = 0; i < 26; i++) {
+      const angle = (i / 26) * Math.PI * 2;
+      this.wallSparks.push({
+        x: enemy.x + Math.cos(angle) * 0.4,
+        y: enemy.y + Math.sin(angle) * 0.4,
+        z: 0.05,
+        vx: Math.cos(angle) * (1.6 + Math.random()),
+        vy: Math.sin(angle) * (1.6 + Math.random()),
+        vz: -0.9 - Math.random(),
+        life: 0.5 + Math.random() * 0.3,
+        color: i % 3 === 0 ? '#ffbe0b' : '#ff4d00'
+      });
     }
-    for (const other of this.barrels) {
-      if (other !== barrel && other.state === 'INTACT' && distance(barrel.x, barrel.y, other.x, other.y) < 3.4) {
-        this.detonateBarrel(other);
-      }
+
+    const d = distance(this.player.x, this.player.y, enemy.x, enemy.y);
+    if (d < radius) {
+      const dmg = Math.max(4, Math.round(maxDamage * (1 - d / radius)));
+      this.damagePlayer(dmg, enemy.x, enemy.y);
+      this.onStatus(`💥 ¡PISOTÓN! El suelo se agrieta a tu alrededor (-${dmg}% salud)`);
+    } else {
+      this.onStatus('💥 ¡PISOTÓN! El suelo se ha agrietado en el área');
     }
-    const pDist = distance(barrel.x, barrel.y, this.player.x, this.player.y);
-    if (pDist < 2.2) {
-      this.damagePlayer(Math.round((1 - pDist / 2.2) * 20), barrel.x, barrel.y);
-    }
-    this.onStatus('💥 ¡BARRIL DE RESIDUO TÓXICO DETONADO!');
+    this.pushLootNotification('💥 PISOTÓN DEMONÍACO', ['EL SUELO SE AGRIETA EN ÁREA'], '#ff4d00');
   }
 
   isWall(x, y) {
@@ -2134,7 +2295,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
     if (free(this.player.x, this.player.y + dy)) this.player.y += dy;
   }
 
-  // CERO drops de munición o vida al matar enemigos; los Bosses solo entregan su objetivo clave
+  // Los demonios sueltan monedas de forma aleatoria; los jefes, un buen montón
   killEnemy(enemy) {
     if (!enemy.alive) return;
     enemy.alive = false;
@@ -2144,6 +2305,22 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.sectorStats.kills++;
     this.audio.playMonsterDeath(enemy.isBoss);
     this.spawnBlood(enemy.x, enemy.y, enemy.isBoss ? 32 : 18);
+
+    if (enemy.isBoss) {
+      this.coins.push({
+        x: enemy.x,
+        y: enemy.y,
+        amount: randInt(CONFIG.BOSS_COIN_RANGE[0], CONFIG.BOSS_COIN_RANGE[1]),
+        active: true
+      });
+    } else if (Math.random() < (enemy.elite ? 1 : CONFIG.ENEMY_COIN_CHANCE + this.level * 0.01)) {
+      this.coins.push({
+        x: enemy.x + (Math.random() - 0.5) * 0.4,
+        y: enemy.y + (Math.random() - 0.5) * 0.4,
+        amount: randInt(CONFIG.ENEMY_COIN_RANGE[0], CONFIG.ENEMY_COIN_RANGE[1]),
+        active: true
+      });
+    }
 
     if (enemy.holdsKey) {
       this.keyItem = { x: enemy.x, y: enemy.y, active: true };
@@ -2250,7 +2427,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
   }
 
   update(dt, now) {
-    if (this.intermission) return;
+    if (this.intermission || this.shopOpen) return;
 
     const player = this.player;
     this.screenShake = Math.max(0, this.screenShake - dt * 1.8);
@@ -2331,22 +2508,28 @@ const verifyAndConnect = (targetGX, targetGY) => {
       }
     }
 
-    for (const barrel of this.barrels) {
-      if (barrel.state === 'EXPLODING') {
-        barrel.explodeTimer += dt * 8.5;
-        if (barrel.explodeTimer >= 4) barrel.state = 'DESTROYED';
-      } else if (barrel.state === 'INTACT' && Math.random() < dt * 2.5) {
-        this.wallSparks.push({
-          x: barrel.x + (Math.random() - 0.5) * 0.2,
-          y: barrel.y + (Math.random() - 0.5) * 0.2,
-          z: 0.1,
-          vx: 0,
-          vy: 0,
-          vz: -0.35,
-          life: 0.45,
-          color: '#70e000'
-        });
+    for (const coin of this.coins) {
+      if (!coin.active) continue;
+      if (distance(player.x, player.y, coin.x, coin.y) < 0.75) {
+        coin.active = false;
+        player.coins = (player.coins || 0) + coin.amount;
+        this.pickupFlashTime = now;
+        this.audio.playPickup();
+        this.onStatus(`+${coin.amount} MONEDAS (total ${player.coins})`);
       }
+    }
+
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const wave = this.shockwaves[i];
+      wave.life -= dt;
+      const progress = 1 - Math.max(0, wave.life) / wave.maxLife;
+      wave.radius = wave.maxRadius * Math.min(1, progress * 1.15);
+      if (wave.life <= 0) this.shockwaves.splice(i, 1);
+    }
+
+    for (let i = this.floorCracks.length - 1; i >= 0; i--) {
+      this.floorCracks[i].life -= dt;
+      if (this.floorCracks[i].life <= 0) this.floorCracks.splice(i, 1);
     }
 
     if (this.keyItem && this.keyItem.active && distance(player.x, player.y, this.keyItem.x, this.keyItem.y) < 0.95) {
@@ -2398,19 +2581,6 @@ const verifyAndConnect = (targetGX, targetGY) => {
           life: 0.16,
           color: Math.random() < 0.5 ? '#ffbe0b' : '#ff4d00'
         });
-      }
-
-      let detonated = false;
-      for (const b of this.barrels) {
-        if (b.state === 'INTACT' && distance(p.x, p.y, b.x, b.y) < 0.85) {
-          this.detonateBarrel(b);
-          detonated = true;
-          break;
-        }
-      }
-      if (detonated) {
-        this.flameProjectiles.splice(i, 1);
-        continue;
       }
 
       const hitRadius = 0.65 + progress * 0.35;
@@ -2576,6 +2746,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
         enemy.bossTimer -= dt;
         enemy.dashCooldown = Math.max(0, (enemy.dashCooldown || 0) - dt);
+        enemy.stompCd = Math.max(0, (enemy.stompCd || 0) - dt);
 
         if (enemy.bossState === 'CHASE') {
           // Movimiento de acecho zigzagueante constante (nunca camina en línea recta predecible)
@@ -2606,6 +2777,17 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
           // 2. Disparo de ráfaga en abanico si tiene línea de visión
           const tier = (this.level - 1) / Math.max(1, MAX_LEVELS - 1);
+
+          // Pisotón de área: telegrafiado, rompe el suelo y castiga quedarse cerca
+          if (hasLOS && dist < 6.5 && enemy.stompCd <= 0) {
+            enemy.bossState = 'STOMP_WINDUP';
+            enemy.bossTimer = Math.max(0.7, 1.05 - tier * 0.25);
+            enemy.stompCd = Math.max(3.0, ((enemy.holdsKey ? bCfg : CONFIG.ENEMIES.CHAMPION).stompCooldown || 7.5) - tier * 2.2);
+            enemy.bossTimer = Math.max(0.7, enemy.bossTimer);
+            this.audio.playBossChargeWarning();
+            this.onStatus(`⚠️ ¡${enemy.kind} PREPARA UN PISOTÓN! Aléjate del área`);
+            continue;
+          }
 
           // 2. Disparo con cadencia pausada en Sector 1 y rápida en Sector 10
           if (hasLOS && dist > 2.8 && dist < 14.5 && enemy.rangedCooldown <= 0) {
@@ -2649,6 +2831,26 @@ const verifyAndConnect = (targetGX, targetGY) => {
               enemy.bossTimer = 2.6 - tier * 1.0;
             }
           }
+        } else if (enemy.bossState === 'STOMP_WINDUP') {
+          enemy.walkCycle += dt * 10;
+          if (Math.random() < 0.45) {
+            const a = Math.random() * Math.PI * 2;
+            this.wallSparks.push({
+              x: enemy.x + Math.cos(a) * 0.5,
+              y: enemy.y + Math.sin(a) * 0.5,
+              z: 0.05,
+              vx: Math.cos(a) * 0.7,
+              vy: Math.sin(a) * 0.7,
+              vz: -0.8,
+              life: 0.3,
+              color: '#ff4d00'
+            });
+          }
+          if (enemy.bossTimer <= 0) {
+            this.bossStomp(enemy);
+            enemy.bossState = 'RECOVER';
+            enemy.bossTimer = Math.max(0.45, bCfg.recoverSec * 0.75);
+          }
         } else if (enemy.bossState === 'WINDUP') {
           enemy.walkCycle += dt * 14;
           if (enemy.bossTimer > bCfg.windupSec * 0.55) {
@@ -2686,41 +2888,71 @@ const verifyAndConnect = (targetGX, targetGY) => {
           enemy.bossTimer = (2.8 - tier * 1.1) * (enemy.enraged ? 0.8 : 1.0);
         }
       } else {
-        // Demonios regulares
-        if (hasLOS && dist > 2.6 && dist < 13.5 && enemy.rangedCooldown <= 0) {
-          enemy.rangedCooldown = 2.3 + Math.random() * 1.3;
-          const pSpeed = enemy.projSpeed || 6.5;
-          const key = enemy.kind || 'IMP';
-          this.enemyProjectiles.push({
-            ownerId: enemy.id,
-            ownerKind: enemy.kind,
-            ownerRef: enemy,
-            x: enemy.x + toX * 0.4,
-            y: enemy.y + toY * 0.4,
-            vx: toX * pSpeed,
-            vy: toY * pSpeed,
-            life: 2.6,
-            damage: enemy.projDamage || 10,
-            sprite: this.orbSprites[key] || this.orbSprites.IMP
-          });
-          this.audio.playDemonFireball(dist);
-        }
+        // Demonios regulares: dash cuerpo a cuerpo y ataque a distancia
+        enemy.dashCooldown = Math.max(0, (enemy.dashCooldown || 0) - dt);
 
-        if (dist > 1.0) {
-          const step = 0.75 * enemy.speedMultiplier * dt;
-          let mx = toX * step, my = toY * step;
-          if (enemy.movePattern === 'STRAFE') {
-            const w = Math.sin(now * 0.005 + enemy.walkCycle) * enemy.strafeDir;
-            mx += -toY * step * 0.88 * w;
-            my += toX * step * 0.88 * w;
-          } else if (enemy.movePattern === 'HOVER') {
-            mx += -toY * step * 0.48 * enemy.strafeDir;
-            my += toX * step * 0.48 * enemy.strafeDir;
+        if (enemy.dashTime > 0) {
+          enemy.dashTime -= dt;
+          const dSpeed = 4.6 * dt;
+          const nx = enemy.x + enemy.dashDirX * dSpeed;
+          const ny = enemy.y + enemy.dashDirY * dSpeed;
+          if (!this.isWall(nx, enemy.y)) enemy.x = nx;
+          else enemy.dashTime = 0;
+          if (!this.isWall(enemy.x, ny)) enemy.y = ny;
+          else enemy.dashTime = 0;
+          enemy.walkCycle += dt * 18;
+          if (Math.random() < 0.5) this.spawnWallSparks(enemy.x, enemy.y, 2, '#ff4d00');
+        } else {
+          const canDash =
+            hasLOS &&
+            dist > 1.5 &&
+            dist < 9 &&
+            enemy.dashCooldown <= 0 &&
+            Math.random() < (enemy.dashChance || 0);
+          if (canDash) {
+            enemy.dashTime = 0.26;
+            enemy.dashDirX = toX;
+            enemy.dashDirY = toY;
+            enemy.dashCooldown = 3.6 + Math.random() * 2.5;
+            this.audio.playBossDash(dist);
+            this.spawnWallSparks(enemy.x, enemy.y, 6, '#ff4d00');
           }
-          if (!this.isWall(enemy.x + mx, enemy.y)) enemy.x += mx;
-          else enemy.strafeDir *= -1;
-          if (!this.isWall(enemy.x, enemy.y + my)) enemy.y += my;
-          enemy.walkCycle += dt * 5.2;
+
+          if (hasLOS && dist > 2.6 && dist < 13.5 && enemy.rangedCooldown <= 0) {
+            enemy.rangedCooldown = 2.3 + Math.random() * 1.3;
+            const pSpeed = enemy.projSpeed || 6.5;
+            const key = enemy.kind || 'IMP';
+            this.enemyProjectiles.push({
+              ownerId: enemy.id,
+              ownerKind: enemy.kind,
+              ownerRef: enemy,
+              x: enemy.x + toX * 0.4,
+              y: enemy.y + toY * 0.4,
+              vx: toX * pSpeed,
+              vy: toY * pSpeed,
+              life: 2.6,
+              damage: enemy.projDamage || 10,
+              sprite: this.orbSprites[key] || this.orbSprites.IMP
+            });
+            this.audio.playDemonFireball(dist);
+          }
+
+          if (dist > 1.0) {
+            const step = 0.75 * enemy.speedMultiplier * dt;
+            let mx = toX * step, my = toY * step;
+            if (enemy.movePattern === 'STRAFE') {
+              const w = Math.sin(now * 0.005 + enemy.walkCycle) * enemy.strafeDir;
+              mx += -toY * step * 0.88 * w;
+              my += toX * step * 0.88 * w;
+            } else if (enemy.movePattern === 'HOVER') {
+              mx += -toY * step * 0.48 * enemy.strafeDir;
+              my += toX * step * 0.48 * enemy.strafeDir;
+            }
+            if (!this.isWall(enemy.x + mx, enemy.y)) enemy.x += mx;
+            else enemy.strafeDir *= -1;
+            if (!this.isWall(enemy.x, enemy.y + my)) enemy.y += my;
+            enemy.walkCycle += dt * 5.2;
+          }
         }
       }
 
@@ -2751,7 +2983,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
   }
 
   shoot() {
-    if (!this.running || this.paused || this.finished || this.intermission) return;
+    if (!this.running || this.paused || this.finished || this.intermission || this.shopOpen) return;
     const now = performance.now();
     if (now < this.shotUntil) return;
     const w = this.player.weapon;
@@ -2761,7 +2993,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       if (this.player.fuel <= 0) {
         this.audio.playEmptyClip();
         this.shotUntil = now + 250;
-        this.onStatus('¡SIN GASOLINA! Abre cofres en las compuertas o usa [1]/[2]');
+        this.onStatus('¡SIN GASOLINA! Compra al mercader [E] o abre cofres con suministros');
         return;
       }
       this.shotUntil = now + CONFIG.FLAMER_COOLDOWN_MS;
@@ -2803,7 +3035,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       }
       this.audio.playEmptyClip();
       this.shotUntil = now + 250;
-      this.onStatus('¡SIN CARTUCHOS! Abre cofres tras las compuertas o dispara a barriles');
+      this.onStatus('¡SIN CARTUCHOS! Compra al mercader [E] o abre cofres con suministros');
       return;
     }
 
@@ -2816,31 +3048,6 @@ const verifyAndConnect = (targetGX, targetGY) => {
     this.screenShake = Math.max(this.screenShake, isChaingun ? 0.05 : 0.15);
     if (isChaingun) this.audio.playChaingun();
     else this.audio.playShotgun();
-
-    let hitBarrel = null;
-    let bestBarrelDist = Infinity;
-    for (const barrel of this.barrels) {
-      if (barrel.state !== 'INTACT') continue;
-      const dx = barrel.x - this.player.x;
-      const dy = barrel.y - this.player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 17) continue;
-
-      const angle = Math.atan2(dy, dx);
-      const delta = Math.atan2(Math.sin(angle - this.player.angle), Math.cos(angle - this.player.angle));
-      const perpDist = Math.abs(Math.sin(delta)) * dist;
-      const maxPerpRadius = isChaingun ? 0.46 : 0.64;
-
-      if (
-        Math.cos(delta) > 0 &&
-        (perpDist <= maxPerpRadius || Math.abs(delta) < 0.24) &&
-        dist < bestBarrelDist &&
-        this.lineOfSight(this.player.x, this.player.y, barrel.x, barrel.y)
-      ) {
-        hitBarrel = barrel;
-        bestBarrelDist = dist;
-      }
-    }
 
     let selected = null, bestEnemyDist = Infinity;
     for (const enemy of this.enemies) {
@@ -2855,11 +3062,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
       }
     }
 
-    if (hitBarrel && (!selected || bestBarrelDist <= bestEnemyDist + 0.8 || !isChaingun)) {
-      this.detonateBarrel(hitBarrel);
-    }
-
-    if (selected && (!hitBarrel || !isChaingun || bestEnemyDist < bestBarrelDist)) {
+    if (selected) {
       const baseDmg = isChaingun ? CONFIG.CHAINGUN_DAMAGE : CONFIG.SHOTGUN_DAMAGE;
       const closeBonus = !isChaingun && bestEnemyDist < 4.2 ? 1.38 : 1.0;
       selected.health -= baseDmg * closeBonus * dmgMult;
@@ -2879,7 +3082,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
       this.spawnBlood(selected.x, selected.y, isChaingun ? 8 : 16);
       if (selected.health <= 0) this.killEnemy(selected);
-    } else if (!hitBarrel) {
+    } else {
       const wallDist = Math.min(12, this.zBuffer[Math.floor(WIDTH / 2)] || 4);
       const hx = this.player.x + Math.cos(this.player.angle) * (wallDist - 0.15);
       const hy = this.player.y + Math.sin(this.player.angle) * (wallDist - 0.15);
@@ -2940,6 +3143,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
         this.renderWorld(now);
       }
       this.drawHUD(now);
+      if (this.shopOpen) this.drawShopScreen();
       this.frameId = requestAnimationFrame(this.boundLoop);
     }
   }
@@ -3111,6 +3315,7 @@ const verifyAndConnect = (targetGX, targetGY) => {
     }
 
     this.renderBillboards(dirX, dirY, planeX, planeY, horizon, now);
+    this.drawGroundEffects(dirX, dirY, planeX, planeY, horizon);
     this.drawObjectiveBanner(now);
     this.drawInteractionPrompt();
     this.drawLootNotifications();
@@ -3134,7 +3339,13 @@ const verifyAndConnect = (targetGX, targetGY) => {
   drawInteractionPrompt() {
     const c = this.ctx;
     let promptTxt = null;
+
+    if (this.merchant && distance(this.player.x, this.player.y, this.merchant.x, this.merchant.y) < 2.4) {
+      promptTxt = '[E] COMERCIAR CON EL MERCADER DE ALMAS';
+    }
+
     for (const chest of this.chests) {
+      if (promptTxt) break;
       if (!chest.opened && distance(this.player.x, this.player.y, chest.x, chest.y) < 2.2) {
         promptTxt = '[E] O ACÉRCATE: ABRIR COFRE DE SUMINISTROS';
         break;
@@ -3145,7 +3356,9 @@ const verifyAndConnect = (targetGX, targetGY) => {
         if (door.open < 0.2 && distance(this.player.x, this.player.y, door.x + 0.5, door.y + 0.5) < 2.8) {
           promptTxt = door.isSecret
             ? '[E] INSPECCIONAR MURO SOSPECHOSO'
-            : (door.isBossGate ? '⚠️ [E] ENTRAR A LA ARENA DEL BOSS' : '[E] ABRIR COMPUERTA BLINDADA UAC');
+            : (door.isBossGate
+              ? '⚠️ [E] ENTRAR A LA ARENA DEL BOSS'
+              : (door.isMerchant ? '[E] ABRIR LA CÁMARA DEL MERCADER' : '[E] ABRIR COMPUERTA BLINDADA UAC'));
           break;
         }
       }
@@ -3222,12 +3435,24 @@ const verifyAndConnect = (targetGX, targetGY) => {
       return { ...e, type: 'enemy', sprite, stepBounce };
     });
 
-    const barrelObjs = this.barrels.filter((b) => b.state !== 'DESTROYED').map((b) => ({
-      x: b.x,
-      y: b.y,
-      type: 'barrel',
-      sprite: b.state === 'EXPLODING' ? this.explosionFrames[clamp(Math.floor(b.explodeTimer), 0, 3)] : this.barrelSprites[pulseFrame],
-      scale: b.state === 'EXPLODING' ? 1.05 : 0.72
+    const merchantObjs = this.merchant
+      ? [{
+          x: this.merchant.x,
+          y: this.merchant.y,
+          type: 'merchant',
+          sprite: this.merchantSprites[pulseFrame],
+          scale: 1.05,
+          stepBounce: Math.sin(now * 0.003) * 1.5
+        }]
+      : [];
+
+    const coinObjs = this.coins.filter((c) => c.active).map((c) => ({
+      x: c.x,
+      y: c.y,
+      type: 'coin',
+      sprite: this.coinSprites[pulseFrame],
+      scale: 0.42,
+      stepBounce: itemBob
     }));
 
     const chestObjs = this.chests.map((ch) => ({
@@ -3275,7 +3500,8 @@ const verifyAndConnect = (targetGX, targetGY) => {
 
     const objects = [
       ...enemyObjs,
-      ...barrelObjs,
+      ...merchantObjs,
+      ...coinObjs,
       ...chestObjs,
       ...keyObjs,
       ...armorObjs,
@@ -3320,8 +3546,8 @@ const verifyAndConnect = (targetGX, targetGY) => {
         if (obj.type === 'enemy' && obj.hitFlash > 0) {
           c.fillStyle = 'rgba(255, 243, 176, 0.58)';
           c.fillRect(stripe, startY, 1, Math.max(1, endY - startY));
-        } else if (obj.type === 'enemy' && obj.bossState === 'DASH') {
-          c.fillStyle = 'rgba(0, 245, 212, 0.34)';
+        } else if (obj.type === 'enemy' && (obj.bossState === 'DASH' || obj.dashTime > 0)) {
+          c.fillStyle = 'rgba(255, 77, 0, 0.3)';
           c.fillRect(stripe, startY, 1, Math.max(1, endY - startY));
         } else if (obj.type === 'enemy' && (obj.burnTimer > 0 || obj.enraged)) {
           c.fillStyle = obj.enraged ? 'rgba(217, 4, 41, 0.25)' : 'rgba(255, 90, 0, 0.28)';
@@ -3356,6 +3582,74 @@ const verifyAndConnect = (targetGX, targetGY) => {
         c.fillStyle = bp.color;
         c.fillRect(screenX, screenY, bp.pSize, bp.pSize);
       }
+    }
+  }
+
+  drawGroundEffects(dirX, dirY, planeX, planeY, horizon) {
+    if (this.floorCracks.length === 0 && this.shockwaves.length === 0) return;
+    const c = this.ctx;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+
+    const project = (x, y) => {
+      const sx = x - this.player.x, sy = y - this.player.y;
+      const tx = invDet * (dirY * sx - dirX * sy);
+      const ty = invDet * (-planeY * sx + planeX * sy);
+      if (ty <= 0.25) return null;
+      const screenX = (WIDTH / 2) * (1 + tx / ty);
+      if (screenX < 0 || screenX >= WIDTH) return null;
+      if (ty >= this.zBuffer[Math.floor(screenX)]) return null;
+      const floorY = horizon + (VIEW_HEIGHT * WALL_SCALE * 0.5) / ty;
+      return { screenX, floorY, ty };
+    };
+
+    for (const crack of this.floorCracks) {
+      const p = project(crack.x, crack.y);
+      if (!p) continue;
+      const alpha = clamp(crack.life / 4, 0, 0.85);
+      const rx = clamp((crack.radius / p.ty) * (VIEW_HEIGHT * 0.9), 4, WIDTH);
+
+      c.save();
+      c.globalAlpha = alpha;
+      c.translate(p.screenX, p.floorY);
+      c.scale(1, 0.32);
+      c.strokeStyle = '#140708';
+      c.lineWidth = 1.4;
+      for (let i = 0; i < 9; i++) {
+        const angle = crack.seed + i * 0.7;
+        const reach = rx * (0.8 + ((i * 37) % 20) / 100);
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.lineTo(Math.cos(angle + 0.25) * rx * 0.45, Math.sin(angle + 0.25) * rx * 0.45);
+        c.lineTo(Math.cos(angle) * reach, Math.sin(angle) * reach);
+        c.stroke();
+      }
+      c.strokeStyle = 'rgba(255, 77, 0, 0.35)';
+      c.lineWidth = 0.7;
+      c.beginPath();
+      c.ellipse(0, 0, rx * 0.92, rx * 0.92, 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+
+    for (const wave of this.shockwaves) {
+      const p = project(wave.x, wave.y);
+      if (!p) continue;
+      const alpha = clamp(wave.life / wave.maxLife, 0, 1);
+      const rx = clamp((wave.radius / p.ty) * (VIEW_HEIGHT * 0.95), 3, WIDTH);
+
+      c.save();
+      c.globalAlpha = alpha * 0.9;
+      c.strokeStyle = '#ffbe0b';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.ellipse(p.screenX, p.floorY, rx, Math.max(2, rx * 0.32), 0, 0, Math.PI * 2);
+      c.stroke();
+      c.strokeStyle = 'rgba(255, 77, 0, 0.6)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.ellipse(p.screenX, p.floorY, rx * 0.72, Math.max(1.5, rx * 0.23), 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
     }
   }
 
@@ -3763,16 +4057,79 @@ const verifyAndConnect = (targetGX, targetGY) => {
       c.fillRect(243, VIEW_HEIGHT + 19, 3, 3);
     }
 
-    c.font = 'bold 11px monospace';
-    drawDoomNum(`S${String(this.level).padStart(2, '0')} K:${String(this.player.kills).padStart(2, '0')}`, 284, VIEW_HEIGHT + 17, '#ffbe0b');
-
     c.font = 'bold 7px monospace';
+    drawDoomNum(
+      `S${String(this.level).padStart(2, '0')} K:${String(this.player.kills).padStart(3, '0')} C:${String(this.player.coins || 0).padStart(3, '0')}`,
+      276,
+      VIEW_HEIGHT + 17,
+      '#ffbe0b'
+    );
+
+    c.font = 'bold 6.5px monospace';
     c.fillStyle = '#d8d2c5';
     c.fillText('AMMO', 28, VIEW_HEIGHT + 28);
     c.fillText('HEALTH', 84, VIEW_HEIGHT + 28);
     c.fillText('ARMS', 128, VIEW_HEIGHT + 28);
     c.fillText('ARMOR', 204, VIEW_HEIGHT + 28);
-    c.fillText('KEY · SECTOR', 280, VIEW_HEIGHT + 28);
+    c.fillText('KEY · KILLS · COINS', 276, VIEW_HEIGHT + 28);
+  }
+
+  drawShopScreen() {
+    const c = this.ctx;
+    c.save();
+    c.fillStyle = 'rgba(8, 3, 4, 0.94)';
+    c.fillRect(0, 0, WIDTH, VIEW_HEIGHT);
+
+    c.strokeStyle = '#ffbe0b';
+    c.lineWidth = 1;
+    c.strokeRect(14, 8, WIDTH - 28, VIEW_HEIGHT - 16);
+
+    c.textAlign = 'center';
+    c.fillStyle = '#ff4d00';
+    c.font = 'bold 13px monospace';
+    c.fillText('MERCADER DE ALMAS', WIDTH / 2, 22);
+    c.fillStyle = '#d8d2c5';
+    c.font = '6px monospace';
+    c.fillText('"TODO TIENE UN PRECIO EN SANGRE"', WIDTH / 2, 31);
+
+    c.fillStyle = '#ffbe0b';
+    c.font = 'bold 9px monospace';
+    c.fillText(`MONEDAS: ${this.player.coins || 0}`, WIDTH / 2, 43);
+
+    const items = this.merchantItems();
+    items.forEach((item, idx) => {
+      const y = 52 + idx * 22;
+      const affordable = (this.player.coins || 0) >= item.price && item.canBuy();
+      c.fillStyle = affordable ? 'rgba(74, 37, 17, 0.92)' : 'rgba(30, 18, 18, 0.92)';
+      c.fillRect(30, y, WIDTH - 60, 19);
+      c.strokeStyle = affordable ? '#ffbe0b' : '#4a2c30';
+      c.strokeRect(30, y, WIDTH - 60, 19);
+
+      c.textAlign = 'left';
+      c.font = 'bold 7px monospace';
+      c.fillStyle = affordable ? '#fff3b0' : '#8d7b6a';
+      c.fillText(`[${idx + 1}] ${item.label}`, 35, y + 8);
+      c.font = '5.5px monospace';
+      c.fillStyle = affordable ? '#d8d2c5' : '#6b5a4a';
+      c.fillText(item.detail, 35, y + 15);
+
+      c.textAlign = 'right';
+      c.font = 'bold 9px monospace';
+      c.fillStyle = affordable ? '#ffbe0b' : '#6b5a4a';
+      c.fillText(`${item.price}`, WIDTH - 36, y + 12);
+    });
+
+    c.textAlign = 'center';
+    c.font = 'bold 6.5px monospace';
+    c.fillStyle = this.shopNotice.startsWith('FALTAN') || this.shopNotice.startsWith('NO NECESITAS')
+      ? '#ff4d00'
+      : '#70e000';
+    c.fillText(this.shopNotice, WIDTH / 2, 146);
+
+    c.fillStyle = '#adb5bd';
+    c.font = 'bold 6px monospace';
+    c.fillText('[1]-[4] COMPRAR · [E] O [ESC] SALIR', WIDTH / 2, 155);
+    c.restore();
   }
 
   drawPauseScreen() {
