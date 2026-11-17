@@ -47,9 +47,10 @@ export function verificarDominioEmail(email) {
 }
 
 export class UserService {
-  constructor(userRepository, { bcryptRounds = 12 } = {}) {
+  constructor(userRepository, { bcryptRounds = 12, requireEmailConfirmation = null } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
+    this.requireEmailConfirmation = requireEmailConfirmation;
     this.emailService = new EmailService();
   }
 
@@ -75,6 +76,44 @@ export class UserService {
     }
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
+
+    const requireEmailConfirmation =
+      this.requireEmailConfirmation !== null
+        ? Boolean(this.requireEmailConfirmation)
+        : process.env.REQUIRE_EMAIL_CONFIRMATION === 'true' &&
+          process.env.NODE_ENV !== 'test' &&
+          !process.env.VITEST;
+          
+    // 1. MODO TEST / SIN CONFIRMACIÓN DE CORREO (Crea el usuario 'active' directamente)
+    if (!requireEmailConfirmation) {
+      if (existing && existing.status !== 'deleted') {
+        throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+      }
+
+      const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
+
+      try {
+        if (existing && existing.status === 'deleted') {
+          return await this.userRepository.update(existing.id, {
+            status: 'active',
+            passwordHash
+          });
+        }
+        return await this.userRepository.create({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          status: 'active'
+        });
+      } catch (error) {
+        if (error.code === '23505') {
+          throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+        }
+        throw error;
+      }
+    }
+
+    // 2. MODO PRODUCCIÓN CON BREVO (Render: REQUIRE_EMAIL_CONFIRMATION=true)
     if (existing && existing.status === 'active') {
       throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
     }
