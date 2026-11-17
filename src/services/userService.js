@@ -1,11 +1,19 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/AppError.js';
+import { EmailService } from './emailService.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+function cleanBaseUrl(rawUrl) {
+  const str = String(rawUrl || 'https://hellfall-game.onrender.com').trim();
+  const withoutMarkdown = str.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const match = withoutMarkdown.match(/https?:\/\/[^\s)\]]+/);
+  return (match ? match[0] : 'https://hellfall-game.onrender.com').replace(/\/$/, '');
 }
 
 export function verificarDominioEmail(email) {
@@ -30,15 +38,20 @@ export function verificarDominioEmail(email) {
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
 
+  if (dominiosPermitidos.length === 0) {
+    return { permitido: true };
+  }
+
   const permitido = dominiosPermitidos.includes(dominioEmail);
   return { permitido };
 }
 
 export class UserService {
-  /** El repositorio se inyecta: la lógica no depende de si los datos están en memoria o PostgreSQL. */
-  constructor(userRepository, { bcryptRounds = 12 } = {}) {
+  constructor(userRepository, { bcryptRounds = 12, requireEmailConfirmation = null } = {}) {
     this.userRepository = userRepository;
     this.bcryptRounds = bcryptRounds;
+    this.requireEmailConfirmation = requireEmailConfirmation;
+    this.emailService = new EmailService();
   }
 
   verificarDominioEmail(email) {
@@ -56,18 +69,123 @@ export class UserService {
     if (Buffer.byteLength(password, 'utf8') > 72) {
       throw badRequest('La contraseña no puede superar 72 bytes.', 'PASSWORD_TOO_LONG');
     }
+
+    const dominioVerif = this.verificarDominioEmail(normalizedEmail);
+    if (!dominioVerif.permitido) {
+      throw forbidden('El dominio de correo no está permitido.', 'DOMAIN_NOT_ALLOWED');
+    }
+
     const existing = await this.userRepository.findByEmail(normalizedEmail);
-    if (existing) throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+
+    const requireEmailConfirmation =
+      this.requireEmailConfirmation !== null
+        ? Boolean(this.requireEmailConfirmation)
+        : process.env.REQUIRE_EMAIL_CONFIRMATION === 'true' &&
+          process.env.NODE_ENV !== 'test' &&
+          !process.env.VITEST;
+          
+    // 1. MODO TEST / SIN CONFIRMACIÓN DE CORREO (Crea el usuario 'active' directamente)
+    if (!requireEmailConfirmation) {
+      if (existing && existing.status !== 'deleted') {
+        throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+      }
+
+      const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
+
+      try {
+        if (existing && existing.status === 'deleted') {
+          return await this.userRepository.update(existing.id, {
+            status: 'active',
+            passwordHash
+          });
+        }
+        return await this.userRepository.create({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          status: 'active'
+        });
+      } catch (error) {
+        if (error.code === '23505') {
+          throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+        }
+        throw error;
+      }
+    }
+
+    // 2. MODO PRODUCCIÓN CON BREVO (Render: REQUIRE_EMAIL_CONFIRMATION=true)
+    if (existing && existing.status === 'active') {
+      throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
+    }
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
+
+    const token = this.emailService.createConfirmationToken({
+      email: normalizedEmail,
+      passwordHash
+    });
+    const baseUrl = cleanBaseUrl(process.env.APP_BASE_URL);
+    const confirmUrl = `${baseUrl}/api/auth/confirm?token=${encodeURIComponent(token)}`;
+
     try {
-      // En Hito 2 se permite activación inmediata; la confirmación por correo queda para el Hito 4.
-      return await this.userRepository.create({ email: normalizedEmail, passwordHash, role: 'user', status: 'active' });
+      await this.emailService.sendConfirmationEmail({
+        toEmail: normalizedEmail,
+        confirmUrl
+      });
+    } catch (emailError) {
+      console.error('Error real de Brevo:', emailError);
+      throw badRequest(`Fallo al enviar el correo (${emailError.code || emailError.message}).`, 'BREVO_FAILED');
+    }
+
+    try {
+      if (existing) {
+        await this.userRepository.update(existing.id, { status: 'pending', passwordHash });
+      } else {
+        await this.userRepository.create({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          status: 'pending'
+        });
+      }
     } catch (error) {
-      // Cubre la carrera entre dos registros simultáneos con el mismo email en PostgreSQL.
       if (error.code === '23505') throw conflict('Ya existe una cuenta con ese correo.', 'EMAIL_EXISTS');
       throw error;
     }
+
+    return {
+      pendingConfirmation: true,
+      email: normalizedEmail,
+      message: `Se ha enviado un correo de verificación a ${normalizedEmail}. Revisa tu bandeja de entrada (y Spam) para activar tu cuenta.`
+    };
+  }
+
+  async confirmEmailToken(token) {
+    const payload = this.emailService.verifyConfirmationToken(token);
+    if (!payload || !payload.email || !payload.passwordHash) {
+      throw badRequest('El enlace de activación no es válido o ha caducado.', 'INVALID_CONFIRMATION_TOKEN');
+    }
+
+    let user = await this.userRepository.findByEmail(payload.email);
+    if (!user) {
+      user = await this.userRepository.create({
+        email: payload.email,
+        passwordHash: payload.passwordHash,
+        role: 'user',
+        status: 'active'
+      });
+      return user;
+    }
+
+    if (user.status === 'active') {
+      return user;
+    }
+
+    const updated = await this.userRepository.update(user.id, {
+      status: 'active',
+      passwordHash: payload.passwordHash
+    });
+    return updated;
   }
 
   async authenticate({ email, password }) {
@@ -76,9 +194,12 @@ export class UserService {
       throw unauthorized('Correo o contraseña incorrectos.', 'INVALID_CREDENTIALS');
     }
     const user = await this.userRepository.findByEmail(normalizedEmail);
-    // Respuesta genérica para evitar revelar si un email está registrado.
+
     if (!user || user.status === 'deleted' || !(await bcrypt.compare(password, user.passwordHash))) {
       throw unauthorized('Correo o contraseña incorrectos.', 'INVALID_CREDENTIALS');
+    }
+    if (user.status === 'pending') {
+      throw forbidden('La cuenta todavía no está activa. Revisa tu correo.', 'ACCOUNT_PENDING_CONFIRMATION');
     }
     if (user.status !== 'active') {
       throw forbidden('La cuenta todavía no está activa.', 'ACCOUNT_NOT_ACTIVE');
@@ -94,13 +215,20 @@ export class UserService {
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {
-      if (existing.status === 'deleted' || existing.status !== 'active') {
-        throw forbidden('La cuenta está desactivada o eliminada.', 'ACCOUNT_NOT_ACTIVE');
+      if (existing.status === 'deleted') {
+        const randomPassword = crypto.randomUUID();
+        const passwordHash = await bcrypt.hash(randomPassword, this.bcryptRounds);
+        return await this.userRepository.update(existing.id, {
+          status: 'active',
+          passwordHash
+        });
+      }
+      if (existing.status !== 'active') {
+        return await this.userRepository.update(existing.id, { status: 'active' });
       }
       return existing;
     }
 
-    // Generamos una contraseña aleatoria de 36 bytes para cumplir con el esquema sin superar los 72 bytes de bcrypt
     const randomPassword = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(randomPassword, this.bcryptRounds);
 
@@ -113,7 +241,11 @@ export class UserService {
       });
     } catch (error) {
       if (error.code === '23505') {
-        return await this.userRepository.findByEmail(normalizedEmail);
+        const row = await this.userRepository.findByEmail(normalizedEmail);
+        if (row && row.status !== 'active') {
+          return await this.userRepository.update(row.id, { status: 'active' });
+        }
+        return row;
       }
       throw error;
     }
@@ -121,7 +253,9 @@ export class UserService {
 
   async getCurrentUser(id) {
     const user = await this.userRepository.findById(id);
-    if (!user || user.status === 'deleted') throw unauthorized('La sesión ya no es válida.', 'INVALID_SESSION');
+    if (!user || user.status === 'deleted' || user.status !== 'active') {
+      throw unauthorized('La sesión ya no es válida.', 'INVALID_SESSION');
+    }
     return user;
   }
 

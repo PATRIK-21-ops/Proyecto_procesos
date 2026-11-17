@@ -8,15 +8,35 @@ let game = null;
 let noticeTimer = null;
 
 function escapeText(value) { return String(value ?? ''); }
+
 function showNotice(message, type = '', timeout = 5000) {
   const notice = $('#notice');
+  if (!notice) return;
   notice.textContent = message;
   notice.className = `notice${type ? ` ${type}` : ''}`;
   notice.classList.remove('hidden');
   clearTimeout(noticeTimer);
   if (timeout > 0) noticeTimer = setTimeout(() => notice.classList.add('hidden'), timeout);
 }
-function hideNotice() { $('#notice').classList.add('hidden'); }
+
+function hideNotice() {
+  const notice = $('#notice');
+  if (notice) notice.classList.add('hidden');
+}
+
+function showRegisterBox(message, type = 'success') {
+  const alertBox = $('#register-alert');
+  if (!alertBox) return;
+  alertBox.textContent = message;
+  alertBox.className = `notice ${type}`;
+  alertBox.classList.remove('hidden');
+}
+
+function hideRegisterBox() {
+  const alertBox = $('#register-alert');
+  if (alertBox) alertBox.classList.add('hidden');
+}
+
 function showView(name) {
   if (!views.includes(name)) name = 'home';
   if (name !== 'game' && game?.running && !game.paused && !game.finished) game.pause();
@@ -35,43 +55,45 @@ function showView(name) {
   if (name === 'game') prepareGameView();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
 function setCurrentUser(user) {
   currentUser = user || null;
-  
-  // Actualiza el texto de la esquina superior
+
   $('#session-badge').textContent = currentUser ? currentUser.email : 'INVITADO';
-  
-  // Elementos que SÓLO ven los usuarios logueados:
+
   $('#nav-profile').classList.toggle('hidden', !currentUser);
   $('#nav-admin').classList.toggle('hidden', currentUser?.role !== 'admin');
   $('#home-play').textContent = currentUser ? '▶ CONTINUAR' : '▶ JUGAR';
 
-  // Elementos que SÓLO ven los invitados:
-  document.querySelectorAll('[data-view="login"]').forEach(el => {
+  document.querySelectorAll('[data-view="login"]').forEach((el) => {
     el.classList.toggle('hidden', currentUser !== null);
   });
-  
-  document.querySelectorAll('[data-view="register"]').forEach(el => {
+
+  document.querySelectorAll('[data-view="register"]').forEach((el) => {
     el.classList.toggle('hidden', currentUser !== null);
   });
 }
+
 function showApiError(error) {
   const isApiError = error.name === 'ApiError' || error instanceof ApiError;
   const message = isApiError ? error.message : 'No se ha podido completar la operación. Revisa la conexión e inténtalo de nuevo.';
-  if (!isApiError) console.error("Error nativo interceptado:", error);
-  showNotice(message, 'error');
+  if (!isApiError) console.error('Error nativo interceptado:', error);
+  showNotice(message, 'error', 8000);
 }
+
 function createCell(text, className = '') {
   const td = document.createElement('td');
   td.textContent = escapeText(text);
   if (className) td.className = className;
   return td;
 }
+
 function formatDate(dateString) {
   if (!dateString) return '—';
   const date = new Date(dateString);
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-ES');
 }
+
 function renderLeaderboard(container, scores, { personal = false } = {}) {
   container.replaceChildren();
   if (!scores?.length) {
@@ -85,7 +107,11 @@ function renderLeaderboard(container, scores, { personal = false } = {}) {
   table.className = 'leaderboard-table';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  ['#', 'JUGADOR', 'PUNTOS', 'BAJAS', 'FECHA'].forEach((label) => { const th = document.createElement('th'); th.textContent = label; headerRow.append(th); });
+  ['#', 'JUGADOR', 'PUNTOS', 'BAJAS', 'FECHA'].forEach((label) => {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headerRow.append(th);
+  });
   thead.append(headerRow);
   const tbody = document.createElement('tbody');
   scores.forEach((score, index) => {
@@ -100,12 +126,14 @@ function renderLeaderboard(container, scores, { personal = false } = {}) {
   table.append(thead, tbody);
   container.append(table);
 }
+
 async function loadTopScores() {
   try {
     const { scores } = await api.topScores(10);
     renderLeaderboard($('#home-leaderboard'), scores);
-  } catch { /* La portada sigue visible aunque no haya API disponible temporalmente. */ }
+  } catch { /* Portada visible aunque no haya API */ }
 }
+
 async function renderProfile() {
   if (!currentUser) return showView('login');
   $('#profile-email').textContent = currentUser.email;
@@ -120,6 +148,7 @@ async function renderProfile() {
     $('#personal-best').textContent = `${best} PTS`;
   } catch (error) { showApiError(error); }
 }
+
 async function loadAdminUsers() {
   const body = $('#admin-users-body');
   body.replaceChildren();
@@ -130,7 +159,10 @@ async function loadAdminUsers() {
     const { users } = await api.users();
     body.replaceChildren();
     if (users.length === 0) {
-      const row = document.createElement('tr'); row.append(createCell('No hay usuarios.', '',)); body.append(row); return;
+      const row = document.createElement('tr');
+      row.append(createCell('No hay usuarios.'));
+      body.append(row);
+      return;
     }
     users.forEach((user) => {
       const row = document.createElement('tr');
@@ -141,20 +173,27 @@ async function loadAdminUsers() {
       const actionCell = document.createElement('td');
       if (user.status !== 'deleted' && user.id !== currentUser.id) {
         const button = document.createElement('button');
-        button.type = 'button'; button.className = 'button button-danger button-small'; button.textContent = 'ELIMINAR';
+        button.type = 'button';
+        button.className = 'button button-danger button-small';
+        button.textContent = 'ELIMINAR';
         button.dataset.deleteUser = user.id;
         button.dataset.userEmail = user.email;
         actionCell.append(button);
-      } else actionCell.textContent = '—';
+      } else {
+        actionCell.textContent = '—';
+      }
       row.append(actionCell);
       body.append(row);
     });
   } catch (error) {
     body.replaceChildren();
-    const row = document.createElement('tr'); row.append(createCell('No se ha podido cargar el listado.')); body.append(row);
+    const row = document.createElement('tr');
+    row.append(createCell('No se ha podido cargar el listado.'));
+    body.append(row);
     showApiError(error);
   }
 }
+
 function prepareGameView() {
   $('#game-status').textContent = 'READY';
   $('#game-status-text').textContent = 'A la espera del despliegue';
@@ -162,6 +201,7 @@ function prepareGameView() {
   $('#game-overlay').classList.remove('hidden');
   $('#start-game').textContent = 'INICIAR MISIÓN';
 }
+
 function startGame() {
   if (!currentUser) return showView('login');
   $('#game-overlay').classList.add('hidden');
@@ -190,7 +230,6 @@ function startGame() {
   game.start();
 }
 
-// Navegación de pantallas
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => showView(button.dataset.view));
 }
@@ -200,71 +239,93 @@ $('#home-play').addEventListener('click', () => currentUser ? showView('game') :
 $('#start-game').addEventListener('click', startGame);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
+// REGISTRO CON AVISO EN PANTALLA
 $('#register-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); 
+  event.preventDefault();
   hideNotice();
-  
+  hideRegisterBox();
+
   const formElement = event.target;
   const form = new FormData(formElement);
-  
-  const email = String(form.get('email') || '');
+
+  const email = String(form.get('email') || '').trim();
   const password = String(form.get('password') || '');
   const passwordConfirm = String(form.get('passwordConfirm') || '');
-  
+
   if (password !== passwordConfirm) {
-    return showNotice('Las contraseñas no coinciden.', 'error');
+    showRegisterBox('Las contraseñas no coinciden.', 'error');
+    showNotice('Las contraseñas no coinciden.', 'error');
+    return;
   }
-  
+
   try {
-    await api.register({ email, password });
+    showNotice(`Enviando correo de verificación a ${email}...`, '', 10000);
+    const result = await api.register({ email, password });
+
+    if (result && result.pendingConfirmation) {
+      formElement.reset();
+      const msg = `Se ha enviado un correo de verificación a ${email}. Revisa tu bandeja de entrada (y Spam) y pulsa en "ACTIVAR CUENTA".`;
+      showRegisterBox(msg, 'success');
+      showNotice(msg, 'success', 20000);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     formElement.reset();
     showView('login');
     showNotice('Cuenta creada correctamente. Ya puedes iniciar sesión.', 'success');
-  } catch (error) { 
-    showApiError(error); 
+  } catch (error) {
+    showRegisterBox(error.message || 'Error al registrar la cuenta.', 'error');
+    showApiError(error);
   }
 });
 
+// LOGIN
 $('#login-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); 
+  event.preventDefault();
   hideNotice();
-  
+
   const formElement = event.target;
   const form = new FormData(formElement);
-  
+
   try {
-    await api.login({ 
-      email: String(form.get('email') || ''), 
-      password: String(form.get('password') || '') 
+    await api.login({
+      email: String(form.get('email') || ''),
+      password: String(form.get('password') || '')
     });
-    
+
     const { user } = await api.me();
     setCurrentUser(user);
-    
+
     formElement.reset();
-    showNotice('Logueado correctamente', 'success');
-    showView('home'); 
-    
-  } catch (error) { 
+    showNotice('Logueado correctamente.', 'success');
+    showView('home');
+  } catch (error) {
     if (error.code === 'INVALID_CREDENTIALS') {
       showNotice('Correo o contraseña incorrectos (o la cuenta ha sido eliminada).', 'error');
     } else {
-      showApiError(error); 
+      showApiError(error);
     }
   }
 });
 
 $('#logout-button').addEventListener('click', async () => {
   try {
-    await api.logout(); setCurrentUser(null); showView('home'); showNotice('Has cerrado sesión.', 'success');
+    await api.logout();
+    setCurrentUser(null);
+    showView('home');
+    showNotice('Has cerrado sesión.', 'success');
   } catch (error) { showApiError(error); }
 });
+
 $('#delete-account-button').addEventListener('click', async () => {
   if (!currentUser || !window.confirm('¿Seguro que quieres eliminar tu cuenta? No podrás volver a iniciar sesión con ella.')) return;
   try {
     const result = await api.deleteUser(currentUser.id);
     if (result.deletedCurrentUser) {
-      setCurrentUser(null); showView('home'); showNotice('Tu cuenta ha sido eliminada.', 'success');
+      setCurrentUser(null);
+      showView('home');
+      showNotice('Tu cuenta ha sido eliminada.', 'success');
     }
   } catch (error) { showApiError(error); }
 });
@@ -280,7 +341,27 @@ $('#admin-users-body').addEventListener('click', async (event) => {
   } catch (error) { showApiError(error); }
 });
 
-// Al iniciar, se pregunta al backend si existe una sesión anterior (PBI 6).
+function handleUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const confirmed = params.get('confirmed');
+  const oauth = params.get('oauth');
+  const error = params.get('error');
+
+  if (confirmed === 'success') {
+    showNotice('¡Cuenta verificada y activada correctamente! Ya estás conectado.', 'success', 12000);
+  } else if (oauth === 'success') {
+    showNotice('Sesión iniciada con Google correctamente.', 'success', 8000);
+  } else if (error === 'invalid_confirmation_token') {
+    showNotice('El enlace de activación no es válido o ha caducado.', 'error', 10000);
+  } else if (error) {
+    showNotice('No se pudo completar la autenticación.', 'error', 8000);
+  }
+
+  if (confirmed || oauth || error) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
 async function boot() {
   try {
     const { user } = await api.me();
@@ -289,6 +370,7 @@ async function boot() {
     if (!(error instanceof ApiError) || error.status !== 401) showApiError(error);
     setCurrentUser(null);
   }
+  handleUrlParams();
   await loadTopScores();
 }
 boot();

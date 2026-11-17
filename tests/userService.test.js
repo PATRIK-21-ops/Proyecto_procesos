@@ -114,8 +114,105 @@ describe('UserService — reglas de negocio (PBI 1, 8, 9, 10, 12)', () => {
     expect(user1.email).toBe('jugador@gmail.com');
     expect(user1.id).toBeDefined();
 
-    // Si vuelve a entrar con el mismo correo de Google, devuelve el mismo usuario sin duplicarlo
     const user2 = await service.loginWithGoogle({ email: 'jugador@gmail.com' });
     expect(user2.id).toBe(user1.id);
+  });
+});
+
+describe('UserService — Confirmación de correo electrónico (Brevo)', () => {
+  function createTestSetup() {
+    const confirmRepo = new UserRepositoryMemory();
+    const confirmService = new UserService(confirmRepo, {
+      bcryptRounds: 4,
+      requireEmailConfirmation: true
+    });
+
+    let sentEmailData = null;
+    confirmService.emailService.sendConfirmationEmail = async ({ toEmail, confirmUrl }) => {
+      sentEmailData = { toEmail, confirmUrl };
+    };
+
+    return {
+      service: confirmService,
+      repo: confirmRepo,
+      getSentEmail: () => sentEmailData
+    };
+  }
+
+  it('deja la cuenta en estado pending al registrarse y genera el enlace con token de activación', async () => {
+    const { service: confirmService, repo: confirmRepo, getSentEmail } = createTestSetup();
+
+    const result = await confirmService.register({
+      email: 'recluta@gmail.com',
+      password: 'PasswordSegura123'
+    });
+
+    expect(result.pendingConfirmation).toBe(true);
+    expect(result.email).toBe('recluta@gmail.com');
+
+    const storedUser = await confirmRepo.findByEmail('recluta@gmail.com');
+    expect(storedUser).not.toBeNull();
+    expect(storedUser.status).toBe('pending');
+
+    const sent = getSentEmail();
+    expect(sent).not.toBeNull();
+    expect(sent.toEmail).toBe('recluta@gmail.com');
+    expect(sent.confirmUrl).toContain('/api/auth/confirm?token=');
+  });
+
+  it('bloquea el inicio de sesión si la cuenta aún está pendiente de confirmar por correo', async () => {
+    const { service: confirmService } = createTestSetup();
+
+    await confirmService.register({
+      email: 'pendiente@gmail.com',
+      password: 'PasswordSegura123'
+    });
+
+    await expect(
+      confirmService.authenticate({
+        email: 'pendiente@gmail.com',
+        password: 'PasswordSegura123'
+      })
+    ).rejects.toMatchObject({
+      status: 403,
+      code: 'ACCOUNT_PENDING_CONFIRMATION'
+    });
+  });
+
+  it('activa la cuenta al confirmar el token del correo y permite iniciar sesión después', async () => {
+    const { service: confirmService, repo: confirmRepo, getSentEmail } = createTestSetup();
+
+    await confirmService.register({
+      email: 'activar@gmail.com',
+      password: 'PasswordSegura123'
+    });
+
+    const { confirmUrl } = getSentEmail();
+    const urlObj = new URL(confirmUrl);
+    const token = urlObj.searchParams.get('token');
+
+    const activatedUser = await confirmService.confirmEmailToken(token);
+    expect(activatedUser.status).toBe('active');
+
+    const storedUser = await confirmRepo.findByEmail('activar@gmail.com');
+    expect(storedUser.status).toBe('active');
+
+    const loggedIn = await confirmService.authenticate({
+      email: 'activar@gmail.com',
+      password: 'PasswordSegura123'
+    });
+    expect(loggedIn.email).toBe('activar@gmail.com');
+    expect(loggedIn.status).toBe('active');
+  });
+
+  it('rechaza un token de confirmación inválido o manipulado', async () => {
+    const { service: confirmService } = createTestSetup();
+
+    await expect(
+      confirmService.confirmEmailToken('token-falso.firma-invalida')
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_CONFIRMATION_TOKEN'
+    });
   });
 });

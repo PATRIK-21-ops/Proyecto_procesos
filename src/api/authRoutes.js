@@ -32,9 +32,38 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
   });
 
   router.post('/register', csrfProtection, asyncHandler(async (req, res) => {
-    const user = await userService.register(req.body || {});
-    logger.info({ event: 'user.registered', userId: user.id }, 'Nuevo usuario registrado');
-    res.status(201).json({ user: publicUser(user), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+    const result = await userService.register(req.body || {});
+
+    if (result && result.pendingConfirmation) {
+      logger.info({ event: 'auth.register.pending', email: result.email }, 'Registro pendiente de confirmación por correo');
+      return res.status(202).json({
+        pendingConfirmation: true,
+        email: result.email,
+        message: result.message
+      });
+    }
+
+    logger.info({ event: 'user.registered', userId: result.id }, 'Nuevo usuario registrado');
+    res.status(201).json({ user: publicUser(result), message: 'Cuenta creada. Ya puedes iniciar sesión.' });
+  }));
+
+  // Activa la cuenta al pulsar el enlace del correo e inicia sesión automáticamente
+  router.get('/confirm', asyncHandler(async (req, res) => {
+    try {
+      const token = String(req.query.token || '');
+      const user = await userService.confirmEmailToken(token);
+
+      await regenerateSession(req);
+      req.session.userId = user.id;
+      req.session.csrfToken = randomBytes(32).toString('hex');
+      await saveSession(req);
+
+      logger.info({ event: 'auth.confirm.success', userId: user.id }, 'Cuenta activada correctamente');
+      return res.redirect('/?confirmed=success');
+    } catch (err) {
+      logger.warn({ event: 'auth.confirm.failed', reason: err.message }, 'Fallo al procesar token de confirmación');
+      return res.redirect('/?error=invalid_confirmation_token');
+    }
   }));
 
   router.post('/login', csrfProtection, asyncHandler(async (req, res) => {
@@ -48,11 +77,11 @@ export function authRoutes({ userService, logger, cookieName = 'hellfall.sid' })
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.csrfToken = randomBytes(32).toString('hex');
+    await saveSession(req);
     logger.info({ event: 'auth.login.success', userId: user.id }, 'Inicio de sesión correcto');
     res.json({ user: publicUser(user), csrfToken: req.session.csrfToken });
   }));
 
-  // --- OAUTH 2.0 CON GOOGLE (HITO 4) ---
   router.get('/google', (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = process.env.GOOGLE_CALLBACK_URL;
