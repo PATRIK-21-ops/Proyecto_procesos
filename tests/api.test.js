@@ -108,6 +108,24 @@ describe('API HTTP', () => {
     expect(response.body.error.code).toBe('INVALID_KILLS');
   });
 
+  it('suma los bonus de combo al total calculado en el servidor', async () => {
+    const agent = request.agent(app);
+    await login(agent, 'player@hellfall.test', USER_PASSWORD);
+    const me = await agent.get('/api/auth/me');
+    const response = await agent.post('/api/scores').set('X-CSRF-Token', me.body.csrfToken).send({ kills: 4, durationMs: 20000, bonusPoints: 850, points: 1 });
+    expect(response.status).toBe(201);
+    expect(response.body.score.points).toBe(1250);
+  });
+
+  it('rechaza bonus de combo desproporcionado', async () => {
+    const agent = request.agent(app);
+    await login(agent, 'player@hellfall.test', USER_PASSWORD);
+    const me = await agent.get('/api/auth/me');
+    const response = await agent.post('/api/scores').set('X-CSRF-Token', me.body.csrfToken).send({ kills: 2, durationMs: 5000, bonusPoints: 100000 });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('INVALID_BONUS_POINTS');
+  });
+
   it('cerrar sesión invalida el acceso protegido', async () => {
     const agent = request.agent(app);
     await login(agent, 'player@hellfall.test', USER_PASSWORD);

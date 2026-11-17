@@ -218,10 +218,12 @@ function startGame() {
         $('#game-overlay').classList.remove('hidden');
         $('#start-game').textContent = 'VOLVER A JUGAR';
         $('#game-status-text').textContent = result.won ? 'Sector despejado' : 'Agente caído';
-        $('#game-message').textContent = `Bajas: ${result.kills} · Puntuación: ${result.kills * 100}.`;
+        const bonus = result.bonusPoints || 0;
+        const points = result.points ?? (result.kills * 100 + bonus);
+        $('#game-message').textContent = `Bajas: ${result.kills} · Puntos: ${points}${bonus > 0 ? ` (bonus combo: +${bonus})` : ''}.`;
         $('#game-status').textContent = result.won ? 'CLEAR' : 'KIA';
         try {
-          const saved = await api.submitScore({ kills: result.kills, durationMs: result.durationMs });
+          const saved = await api.submitScore({ kills: result.kills, bonusPoints: bonus, durationMs: result.durationMs });
           showNotice(`Partida guardada. Puntuación: ${saved.score.points}.`, 'success');
         } catch (error) { showApiError(error); }
       }
