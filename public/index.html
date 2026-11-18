@@ -10,7 +10,7 @@
   <script type="module" src="/js/ui/main.js"></script>
 </head>
 <body>
-  <!-- Reproductor global en bucle para doom.mp3 (en portada y dentro del juego) -->
+  <!-- Reproductor de música BSO (se inicia únicamente al comenzar la partida) -->
   <audio id="doom-bgm" src="/doom.mp3" loop preload="auto"></audio>
 
   <div class="scanlines" aria-hidden="true"></div>
@@ -32,29 +32,29 @@
 
     <section id="view-home" class="view hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> ALERTA ROJA // 10 SECTORES INFERNALES</p>
+        <p class="eyebrow"><span class="status-dot"></span> ALERTA ROJA // 10 SECTORES ROGUELITE INFERNALES</p>
         <h1>HELL<span>FALL</span><em>INFERNAL LABYRINTH</em></h1>
-        <p class="hero-lede">El infierno ha tomado el sector. Los pasillos se han retorcido en un laberinto en llamas infestado de demonios y la munición escasea. Empuña tu escopeta, la ametralladora, el lanzallamas o la motosierra, desmiembra a las hordas y encuentra la compuerta EXIT para sobrevivir.</p>
+        <p class="hero-lede">El infierno ha tomado el sector. Enfréntate a un bestiario implacable dirigido por una IA táctica y emboscadas ocultas. Empieza con tu Super Escopeta, descubre el Lanzacohetes, Rifle de Plasma y BFG-9000 en el mapa, elige rutas entre sectores, sobrevive a misiones variadas y derrota al Icon of Sin.</p>
         <div class="hero-actions">
           <button class="button button-primary" id="home-play" type="button">▶ ENTRAR AL INFIERNO</button>
           <button class="button button-secondary" data-view="login" type="button">INICIAR SESIÓN</button>
           <button class="button button-ghost" data-view="register" type="button">CREAR CUENTA</button>
         </div>
         <div class="spec-row">
-          <div><span class="spec-label">ARSENAL</span><strong>SHOTGUN · CHAINGUN · FLAMER · CHAINSAW</strong></div>
-          <div><span class="spec-label">MAPAS</span><strong>10 LABERINTOS ALEATORIOS</strong></div>
-          <div><span class="spec-label">ESTADO</span><strong class="green">BRUTAL DOOM BUILD</strong></div>
+          <div><span class="spec-label">ARSENAL [1-7]</span><strong>ESCOPETA · CHAINGUN · FLAMER · SIERRA · COHETES · PLASMA · BFG</strong></div>
+          <div><span class="spec-label">MISIONES & RUTAS</span><strong>6 OBJETIVOS · PUERTAS ROGUELITE · DIRECTOR IA</strong></div>
+          <div><span class="spec-label">BESTIARIO</span><strong class="green">15 ENEMIGOS · 6 JEFES ÚNICOS · FASES FINALES</strong></div>
         </div>
       </div>
 
       <!-- Vista previa en Pixel-Art 320x200 fiel al motor estilo DOOM -->
       <div class="hero-art" aria-label="Vista previa en primera persona del laberinto infernal estilo DOOM">
-        <div class="art-topline"><span>CAM 01 // SECTOR 04</span><span>REC ●</span></div>
+        <div class="art-topline"><span>CAM 01 // SECTOR 10 · ICON OF SIN</span><span>REC ●</span></div>
         <div class="pixel-scene" style="padding: 0; overflow: hidden; background: #140505;">
-          <svg viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="none" shape-rendering="crispEdges" style="display: block; width: 100%; height: 100%;">
+          <svg viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="none" shape-rendering="crispEdges" style="display: block; width: 100%; height="100%;">
             <defs>
               <linearGradient id="hellSky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#280406"/>
+                <stop offset="0%" stop-color="#220306"/>
                 <stop offset="65%" stop-color="#8a1109"/>
                 <stop offset="100%" stop-color="#ff4d00"/>
               </linearGradient>
@@ -127,7 +127,24 @@
             <rect x="102" y="58" width="16" height="3" fill="#ff4d00"/>
             <rect x="135" y="92" width="18" height="3" fill="#ff4d00"/>
 
-            <!-- Pared derecha con la COMPUERTA EXIT EMPOTRADA -->
+            <!-- Pilón de Alma destructible en esquina izquierda con rayo protector -->
+            <g>
+              <rect x="94" y="66" width="10" height="42" fill="#121e28" stroke="#070a0f" stroke-width="1"/>
+              <rect x="96" y="70" width="6" height="34" fill="#00b4d8"/>
+              <rect x="97" y="74" width="4" height="26" fill="#00f5d4"/>
+              <line x1="101" y1="76" x2="146" y2="62" stroke="#00f5d4" stroke-width="2" opacity="0.8"/>
+              <animate attributeName="opacity" values="0.75;1;0.6;1" dur="0.7s" repeatCount="indefinite"/>
+            </g>
+
+            <!-- Espectro translúcido (SPECTRE) acechando a la izquierda -->
+            <g opacity="0.32">
+              <rect x="36" y="96" width="18" height="28" fill="#9d4edd"/>
+              <rect x="39" y="100" width="12" height="12" fill="#e0aaff"/>
+              <rect x="41" y="104" width="2" height="2" fill="#ff003c"/>
+              <rect x="47" y="104" width="2" height="2" fill="#ff003c"/>
+            </g>
+
+            <!-- Pared derecha con la COMPUERTA EXIT y TORRETA AUTOMÁTICA -->
             <polygon points="320,12 214,36 214,136 320,164" fill="#2b1717"/>
             <rect x="226" y="44" width="54" height="88" fill="#1a0909"/>
             <rect x="230" y="46" width="46" height="84" fill="#381818"/>
@@ -153,7 +170,15 @@
             <rect x="243" y="72" width="20" height="42" fill="#00f5d4"/>
             <rect x="248" y="80" width="10" height="26" fill="#caf0f8"/>
 
-            <!-- 4. ELEMENTOS 3D DEL ESCENARIO -->
+            <!-- Torreta Centinela automatizada derecha -->
+            <g>
+              <rect x="284" y="108" width="14" height="20" fill="#25282e"/>
+              <rect x="280" y="96" width="22" height="14" fill="#495057" stroke="#140708" stroke-width="1"/>
+              <rect x="282" y="101" width="10" height="4" fill="#ff003c"/>
+              <rect x="274" y="100" width="8" height="3" fill="#adb5bd"/>
+            </g>
+
+            <!-- 4. ELEMENTOS 3D DEL ESCENARIO: Brasero, Pedestal BFG-9000 y Charcos de Sangre -->
             <rect x="68" y="118" width="14" height="14" fill="#2b1b1e"/>
             <rect x="66" y="130" width="18" height="4" fill="#14090b"/>
             <g>
@@ -164,55 +189,65 @@
               <animate attributeName="transform" type="translate" values="0,0; 0,-2; 0,1; 0,0" dur="0.3s" repeatCount="indefinite"/>
             </g>
 
-            <rect x="192" y="134" width="16" height="10" fill="#2d3a27"/>
-            <rect x="194" y="131" width="3" height="4" fill="#d90429"/>
-            <rect x="198" y="131" width="3" height="4" fill="#d90429"/>
-            <rect x="202" y="131" width="3" height="4" fill="#d90429"/>
-            <rect x="194" y="138" width="12" height="2" fill="#ffbe0b"/>
+            <!-- Pedestal de Arma Descubrible (BFG-9000 / Plasma) -->
+            <g>
+              <rect x="190" y="133" width="20" height="11" fill="#1d2d44" stroke="#00f5d4" stroke-width="1"/>
+              <rect x="193" y="129" width="14" height="5" fill="#38b000"/>
+              <rect x="196" y="130" width="8" height="3" fill="#ccff33"/>
+              <rect x="192" y="137" width="16" height="2" fill="#00f5d4"/>
+            </g>
 
-            <rect x="84" y="146" width="38" height="8" fill="#660000"/>
-            <rect x="88" y="143" width="30" height="8" fill="#a30000"/>
-            <rect x="92" y="141" width="22" height="6" fill="#d90429"/>
+            <!-- Charco de sangre orgánico realista + Cráneo -->
+            <rect x="76" y="147" width="46" height="9" fill="#48020a"/>
+            <rect x="82" y="144" width="36" height="9" fill="#7c0512"/>
+            <rect x="88" y="142" width="24" height="6" fill="#a8081a"/>
+            <rect x="92" y="141" width="12" height="3" fill="#d90429"/>
             <rect x="94" y="139" width="7" height="6" fill="#e5e5e5"/>
             <rect x="95" y="141" width="2" height="2" fill="#111"/>
             <rect x="98" y="141" width="2" height="2" fill="#111"/>
-            <rect x="104" y="141" width="8" height="2" fill="#f8f9fa"/>
-            <rect x="105" y="144" width="6" height="2" fill="#f8f9fa"/>
 
-            <!-- 5. BOSS CYBERDEMON -->
+            <!-- 5. JEFE FINAL: ICON OF SIN (FASE III CON CUERNOS COLOSALES) -->
             <g>
-              <rect x="134" y="42" width="8" height="10" fill="#e5e5e5"/>
-              <rect x="168" y="42" width="8" height="10" fill="#e5e5e5"/>
-              <rect x="138" y="50" width="34" height="18" fill="#590d22"/>
-              <rect x="130" y="64" width="50" height="26" fill="#9e2a2b"/>
-              <rect x="146" y="72" width="18" height="10" fill="#adb5bd"/>
-              <rect x="142" y="56" width="6" height="4" fill="#ff0000"/>
-              <rect x="162" y="56" width="6" height="4" fill="#ff0000"/>
-              <rect x="144" y="63" width="22" height="5" fill="#1a0909"/>
-              <rect x="146" y="64" width="3" height="3" fill="#ffffff"/>
-              <rect x="161" y="64" width="3" height="3" fill="#ffffff"/>
-              <rect x="122" y="66" width="8" height="28" fill="#9e2a2b"/>
-              <rect x="180" y="64" width="12" height="30" fill="#495057"/>
-              <rect x="182" y="88" width="8" height="8" fill="#ff4d00"/>
-              <rect x="136" y="90" width="14" height="28" fill="#590d22"/>
-              <rect x="160" y="88" width="14" height="26" fill="#adb5bd"/>
-              <rect x="134" y="116" width="16" height="8" fill="#1b1113"/>
-              <rect x="160" y="112" width="16" height="8" fill="#2b2d42"/>
+              <!-- Cuernos de cabra masivos -->
+              <rect x="122" y="34" width="12" height="8" fill="#a59d8d"/>
+              <rect x="128" y="42" width="10" height="10" fill="#e5dec9"/>
+              <rect x="176" y="34" width="12" height="8" fill="#a59d8d"/>
+              <rect x="172" y="42" width="10" height="10" fill="#e5dec9"/>
+              <!-- Cráneo cyber-orgánico -->
+              <rect x="136" y="48" width="38" height="22" fill="#3b1c26"/>
+              <rect x="140" y="50" width="30" height="18" fill="#6d1a2c"/>
+              <!-- Cerebro expuesto pulsante en la frente -->
+              <rect x="147" y="49" width="16" height="6" fill="#ff0055"/>
+              <rect x="151" y="50" width="8" height="4" fill="#ffbe0b"/>
+              <!-- Ojos abisales -->
+              <rect x="142" y="57" width="7" height="4" fill="#ff002b"/>
+              <rect x="161" y="57" width="7" height="4" fill="#ff002b"/>
+              <rect x="144" y="58" width="3" height="2" fill="#fff3b0"/>
+              <rect x="163" y="58" width="3" height="2" fill="#fff3b0"/>
+              <!-- Torso acorazado -->
+              <rect x="126" y="68" width="58" height="30" fill="#252830"/>
+              <rect x="132" y="70" width="46" height="26" fill="#800f2f"/>
+              <rect x="145" y="74" width="20" height="14" fill="#adb5bd"/>
+              <rect x="150" y="77" width="10" height="7" fill="#00f5d4"/>
+              <rect x="116" y="70" width="10" height="28" fill="#495057"/>
+              <rect x="184" y="68" width="12" height="32" fill="#495057"/>
+              <rect x="185" y="92" width="10" height="8" fill="#ff4d00"/>
+              <rect x="134" y="98" width="16" height="24" fill="#49111c"/>
+              <rect x="160" y="98" width="16" height="24" fill="#adb5bd"/>
             </g>
 
-            <g fill="#ff002b">
-              <rect x="148" y="76" width="5" height="5"/>
-              <rect x="135" y="70" width="4" height="4"/>
-              <rect x="166" y="72" width="5" height="5"/>
-              <rect x="128" y="82" width="4" height="4"/>
-              <rect x="174" y="84" width="3" height="3"/>
-              <rect x="154" y="68" width="4" height="4" fill="#d90429"/>
-            </g>
+            <!-- Barra HUD superior del Boss + Icono 3 Llaves -->
+            <rect x="4" y="4" width="76" height="12" fill="rgba(16,5,7,0.88)" stroke="#ff4d00" stroke-width="1"/>
+            <text x="9" y="12" font-family="monospace" font-size="6" font-weight="bold" fill="#ffbe0b">🗝️ 3 LLAVES (2/3)</text>
+            <rect x="86" y="4" width="130" height="12" fill="rgba(16,5,7,0.9)" stroke="#00f5d4" stroke-width="1"/>
+            <text x="151" y="10.5" font-family="monospace" font-size="5.5" font-weight="bold" fill="#fff3b0" text-anchor="middle">ICON OF SIN · FASE III</text>
+            <rect x="92" y="12" width="84" height="2" fill="#d90429"/>
 
-            <rect x="154" y="84" width="4" height="1" fill="#ffbe0b"/>
-            <rect x="162" y="84" width="4" height="1" fill="#ffbe0b"/>
-            <rect x="159" y="79" width="2" height="4" fill="#ffbe0b"/>
-            <rect x="159" y="87" width="2" height="4" fill="#ffbe0b"/>
+            <!-- Retícula centrada -->
+            <rect x="154" y="84" width="4" height="1" fill="#00f5d4"/>
+            <rect x="162" y="84" width="4" height="1" fill="#00f5d4"/>
+            <rect x="159" y="79" width="2" height="4" fill="#00f5d4"/>
+            <rect x="159" y="87" width="2" height="4" fill="#00f5d4"/>
 
             <!-- 6. MINIRRADAR -->
             <rect x="268" y="4" width="48" height="48" fill="rgba(14,5,6,0.88)" stroke="#ff4d00" stroke-width="1"/>
@@ -226,83 +261,97 @@
             </g>
             <rect x="307" y="18" width="4" height="4" fill="#00f5d4"/>
             <rect x="278" y="28" width="2" height="2" fill="#ffbe0b"/>
-            <rect x="298" y="34" width="2" height="2" fill="#ffbe0b"/>
+            <rect x="298" y="34" width="2" height="2" fill="#ff003c"/>
             <rect x="290" y="20" width="4" height="4" fill="#ff0055"/>
             <rect x="288" y="30" width="3" height="3" fill="#80ed99"/>
 
-            <!-- 7. SUPER ESCOPETA DOOM -->
+            <!-- 7. ARMA DE PLASMA / BFG Y SUPER ESCOPETA DOOM EN PRIMER PLANO -->
             <g>
-              <rect x="136" y="102" width="48" height="20" fill="#ff4d00"/>
-              <rect x="146" y="94" width="28" height="30" fill="#ff4d00"/>
-              <rect x="144" y="106" width="32" height="14" fill="#ffbe0b"/>
-              <rect x="152" y="110" width="16" height="8" fill="#ffffff"/>
-              <animate attributeName="opacity" values="1;0.25;0.9;0.4;1" dur="0.6s" repeatCount="indefinite"/>
+              <rect x="134" y="100" width="52" height="22" fill="#00b4d8" opacity="0.78"/>
+              <rect x="144" y="92" width="32" height="32" fill="#00f5d4" opacity="0.85"/>
+              <rect x="150" y="106" width="20" height="12" fill="#ffffff"/>
+              <animate attributeName="opacity" values="1;0.35;0.9;0.45;1" dur="0.5s" repeatCount="indefinite"/>
             </g>
-            <rect x="146" y="118" width="12" height="26" fill="#1b1d21"/>
-            <rect x="162" y="118" width="12" height="26" fill="#1b1d21"/>
-            <rect x="148" y="118" width="4" height="24" fill="#6c757d"/>
-            <rect x="164" y="118" width="4" height="24" fill="#6c757d"/>
-            <rect x="150" y="118" width="2" height="22" fill="#adb5bd"/>
-            <rect x="166" y="118" width="2" height="22" fill="#adb5bd"/>
-            <rect x="159" y="116" width="2" height="3" fill="#d90429"/>
-            <rect x="141" y="140" width="38" height="16" fill="#2b2d33"/>
-            <rect x="145" y="140" width="30" height="12" fill="#495057"/>
-            <rect x="137" y="152" width="46" height="16" fill="#4a2511"/>
-            <rect x="141" y="154" width="38" height="10" fill="#7f4f24"/>
-            <rect x="146" y="156" width="28" height="5" fill="#9c6644"/>
-            <rect x="132" y="159" width="14" height="9" fill="#3d2314"/>
-            <rect x="174" y="159" width="14" height="9" fill="#3d2314"/>
-            <rect x="135" y="158" width="9" height="3" fill="#d4a373"/>
-            <rect x="176" y="158" width="9" height="3" fill="#d4a373"/>
+            <rect x="142" y="116" width="36" height="28" fill="#1d2d44"/>
+            <rect x="145" y="118" width="12" height="24" fill="#364f70"/>
+            <rect x="163" y="118" width="12" height="24" fill="#233349"/>
+            <rect x="148" y="122" width="24" height="3" fill="#00f5d4"/>
+            <rect x="148" y="130" width="24" height="3" fill="#00f5d4"/>
+            <rect x="148" y="138" width="24" height="3" fill="#00f5d4"/>
+            <rect x="136" y="142" width="48" height="26" fill="#2b2d33"/>
+            <rect x="144" y="148" width="32" height="12" fill="#0077b6"/>
+            <rect x="148" y="150" width="24" height="7" fill="#00f5d4"/>
 
-            <!-- 8. BARRA DE ESTADO DOOM (STBAR) -->
+            <!-- 8. BARRA DE ESTADO DOOM (STBAR CON 7 ARMAS, 3 LLAVES Y ROSTRO SOMBREADO) -->
             <g>
-              <rect x="0" y="168" width="68" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
-              <rect x="68" y="168" width="76" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="0" y="168" width="58" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="58" y="168" width="54" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="112" y="168" width="32" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
               <rect x="144" y="168" width="32" height="32" fill="#262626" stroke="#141414" stroke-width="1"/>
-              <rect x="176" y="168" width="72" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
-              <rect x="248" y="168" width="72" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="176" y="168" width="60" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
+              <rect x="236" y="168" width="84" height="32" fill="#4f5254" stroke="#242628" stroke-width="1"/>
 
-              <text x="34" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">08/16</text>
-              <text x="106" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">85%</text>
-              <text x="212" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">024</text>
-              <text x="284" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#ffb703" text-anchor="middle">04/10</text>
+              <text x="29" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#00f5d4" text-anchor="middle">120</text>
+              <text x="85" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#e63946" text-anchor="middle">92%</text>
+              <text x="206" y="185" font-family="monospace" font-size="13" font-weight="bold" fill="#70e000" text-anchor="middle">75%</text>
+              <text x="284" y="185" font-family="monospace" font-size="8" font-weight="bold" fill="#ffb703" text-anchor="middle">S10 K:184</text>
 
-              <text x="34" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">SHOTGUN [1]</text>
-              <text x="106" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">HEALTH</text>
-              <text x="212" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">KILLS</text>
-              <text x="284" y="196" font-family="monospace" font-size="7" font-weight="bold" fill="#d8d2c5" text-anchor="middle">SECTOR</text>
+              <!-- Panel ARMS 1..7 -->
+              <rect x="115" y="171" width="6" height="7" fill="#26282a"/><text x="118" y="177" font-family="monospace" font-size="6" fill="#adb5bd" text-anchor="middle">1</text>
+              <rect x="122" y="171" width="6" height="7" fill="#26282a"/><text x="125" y="177" font-family="monospace" font-size="6" fill="#adb5bd" text-anchor="middle">2</text>
+              <rect x="129" y="171" width="6" height="7" fill="#26282a"/><text x="132" y="177" font-family="monospace" font-size="6" fill="#adb5bd" text-anchor="middle">3</text>
+              <rect x="136" y="171" width="6" height="7" fill="#26282a"/><text x="139" y="177" font-family="monospace" font-size="6" fill="#ff4d00" text-anchor="middle">4</text>
+              <rect x="115" y="180" width="6" height="7" fill="#26282a"/><text x="118" y="186" font-family="monospace" font-size="6" fill="#ff4d00" text-anchor="middle">5</text>
+              <rect x="122" y="180" width="6" height="7" fill="#ffbe0b"/><text x="125" y="186" font-family="monospace" font-size="6" fill="#140708" font-weight="bold" text-anchor="middle">6</text>
+              <rect x="129" y="180" width="6" height="7" fill="#26282a"/><text x="132" y="186" font-family="monospace" font-size="6" fill="#70e000" text-anchor="middle">7</text>
 
-              <rect x="150" y="171" width="20" height="6" fill="#4a2c18"/>
-              <rect x="150" y="176" width="20" height="17" fill="#e0ac8b"/>
-              <rect x="152" y="191" width="16" height="4" fill="#c68b67"/>
-              <rect x="152" y="178" width="6" height="2" fill="#3b2010"/>
-              <rect x="162" y="178" width="6" height="2" fill="#3b2010"/>
+              <!-- Mini Llaves Roja, Azul, Amarilla -->
+              <rect x="240" y="173" width="7" height="5" fill="#ff003c"/>
+              <rect x="240" y="179" width="7" height="5" fill="#00b4d8"/>
+              <rect x="240" y="185" width="7" height="5" fill="#2b2224"/>
+
+              <text x="29" y="196" font-family="monospace" font-size="6.5" font-weight="bold" fill="#d8d2c5" text-anchor="middle">CELLS</text>
+              <text x="85" y="196" font-family="monospace" font-size="6.5" font-weight="bold" fill="#d8d2c5" text-anchor="middle">HEALTH</text>
+              <text x="128" y="196" font-family="monospace" font-size="6.5" font-weight="bold" fill="#d8d2c5" text-anchor="middle">ARMS</text>
+              <text x="206" y="196" font-family="monospace" font-size="6.5" font-weight="bold" fill="#d8d2c5" text-anchor="middle">ARMOR</text>
+              <text x="280" y="196" font-family="monospace" font-size="6" font-weight="bold" fill="#d8d2c5" text-anchor="middle">KEYS · SECTOR</text>
+
+              <!-- Rostro realista sombreado en HUD -->
+              <rect x="150" y="170" width="20" height="6" fill="#3a2012"/>
+              <rect x="152" y="171" width="16" height="4" fill="#5a341f"/>
+              <rect x="150" y="175" width="20" height="17" fill="#d8a27d"/>
+              <rect x="152" y="176" width="16" height="5" fill="#eebc9a"/>
+              <rect x="150" y="184" width="3" height="6" fill="#9c6343"/>
+              <rect x="167" y="184" width="3" height="6" fill="#9c6343"/>
+              <rect x="153" y="190" width="14" height="5" fill="#b47855"/>
+              <rect x="152" y="178" width="6" height="2" fill="#26140a"/>
+              <rect x="162" y="178" width="6" height="2" fill="#26140a"/>
               <rect x="153" y="180" width="5" height="3" fill="#ffffff"/>
               <rect x="162" y="180" width="5" height="3" fill="#ffffff"/>
-              <rect x="155" y="180" width="2" height="3" fill="#ffbe0b"/>
-              <rect x="164" y="180" width="2" height="3" fill="#ffbe0b"/>
+              <rect x="155" y="180" width="2" height="3" fill="#00f5d4"/>
+              <rect x="164" y="180" width="2" height="3" fill="#00f5d4"/>
+              <rect x="158" y="181" width="4" height="4" fill="#b47855"/>
               <rect x="153" y="188" width="14" height="4" fill="#2b0909"/>
               <rect x="154" y="189" width="12" height="2" fill="#ffffff"/>
-              <rect x="151" y="177" width="3" height="5" fill="#b80c09"/>
-              <rect x="165" y="185" width="3" height="4" fill="#d90429"/>
+              <rect x="151" y="177" width="2" height="7" fill="#a80614"/>
+              <rect x="165" y="184" width="3" height="6" fill="#d90429"/>
             </g>
           </svg>
         </div>
-        <div class="art-caption"><span>FIG 01. // EL INFIERNO HA TOMADO EL SECTOR</span><span>WARNING: CYBERDEMON DETECTED</span></div>
+        <div class="art-caption"><span>FIG 01. // EL INFIERNO HA TOMADO EL SECTOR</span><span>WARNING: ICON OF SIN · PHASE III</span></div>
       </div>
 
       <div class="home-lower panel">
         <div>
           <p class="eyebrow">OPERATION BRIEFING</p>
-          <h2>EL INFIERNO HA TOMADO EL SECTOR</h2>
-          <p>Ábrete paso por 10 laberintos gigantescos generados aleatoriamente. Raciona cada cartucho, quema a las bestias con el lanzallamas y busca la puerta EXIT en los muros. Solo se guarda tu puntuación al morir o al conquistar el Sector 10.</p>
+          <h2>COMBATE TÁCTICO Y PROGRESIÓN ROGUELITE</h2>
+          <p>Elige entre Marcus Vane o Valeria Karn y ábrete paso por 10 sectores únicos. Encuentra el Lanzacohetes [5], Rifle de Plasma [6] y BFG-9000 [7] en el terreno, destruye reactores, escolta científicos VIP, cruza puertas con recompensas al estilo roguelite y sobrevive al Director de IA.</p>
         </div>
         <div class="brief-stats">
           <div><strong>WASD</strong><span>MOVIMIENTO</span></div>
-          <div><strong>1 · 2 · 3 · 4</strong><span>ARMAS DOOM + MOTOSIERRA</span></div>
-          <div><strong>E</strong><span>INTERACTUAR / GLORY KILL</span></div>
-          <div><strong>CLICK / R / TAB</strong><span>FUEGO / RECARGAR / MAPA</span></div>
+          <div><strong>1 · · · 7</strong><span>ARSENAL DESCUBRIBLE</span></div>
+          <div><strong>E</strong><span>VIP / NÚCLEO / GLORY</span></div>
+          <div><strong>PUERTAS 1-3</strong><span>RUTAS ROGUELITE</span></div>
         </div>
       </div>
 
@@ -346,8 +395,37 @@
     <section id="view-game" class="view game-layout hidden">
       <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // 10 SECTORS</p><h2>INFERNAL LABYRINTH PROTOCOL</h2></div><span class="micro-tag" id="game-status">READY</span></div>
       <div class="game-frame">
-        <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay"><div class="overlay-box"><p class="eyebrow" id="overlay-eyebrow">HELL INVASION ACTIVE</p><h2 id="overlay-title">SECTOR <span>01 / 10</span></h2><p id="overlay-desc">El infierno ha tomado el complejo. Revisa el manual táctico de comandos y objetivos antes de desplegarte.</p><div id="mission-briefing" class="mission-briefing"><div class="briefing-col"><h3>⌨️ COMANDOS DE COMBATE</h3><ul><li><strong>W A S D + Ratón</strong><span>Moverse y apuntar (<b>Shift</b> correr)</span></li><li><strong>Clic Izq / Espacio</strong><span>Disparar arma · <b>R</b> Recargar</span></li><li><strong>[1] [2] [3] [4]</strong><span>Escopeta · Chaingun · Lanzallamas · Motosierra <i>(40 bajas)</i></span></li><li><strong>V / Clic Derecho</strong><span>Puñetazo (empuja y estampa contra muros)</span></li><li><strong>E</strong><span>Puertas, cofres, Mercader, secretos y <b>Glory Kill</b></span></li><li><strong>C · TAB · F · ESC</strong><span>Dash · Automapa · Pantalla completa · Pausa</span></li></ul></div><div class="briefing-col"><h3>🔥 QUÉ PUEDES HACER EN EL JUEGO</h3><ul><li><strong>1. Explora y saquea</strong><span>Abre cofres UAC, dispara a barriles explosivos y descubre <b>2 salas secretas</b> por sector.</span></li><li><strong>2. Mercader de Almas</strong><span>Recoge monedas de los demonios para comprar munición, salud, blindaje o <b>+12% daño</b>.</span></li><li><strong>3. Arenas de Jefes</strong><span>El Campeón y el Boss esperan parados en el centro de su sala y te atacan al entrar.</span></li><li><strong>4. Llave 🔑 y Altar EXIT</strong><span>Derrota al Boss Guardián, recoge la llave, cruza <b>EXIT</b> y elige <b>Mejoras Dinámicas</b>.</span></li></ul></div></div><div id="combat-report" class="combat-report hidden"></div><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><small>Pulsa [H] en cualquier momento dentro de la partida para volver a ver este manual</small></div></div></div>
-        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>V / CLIC DER <small>PUÑETAZO</small></span><span>E <small>INTERACTUAR / GLORY</small></span><span>1 · 2 · 3 · 4 <small>ARMAS</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>TAB <small>AUTOMAPA</small></span><span>F / ESC <small>PANTALLA / PAUSA</small></span></div>
+        <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay">
+          <div id="metal-menu" class="metal-menu">
+            <canvas id="metal-fire-canvas" width="160" height="100" aria-hidden="true"></canvas>
+            <div class="metal-menu-inner">
+              <p class="metal-kicker">⚔️ IRON &amp; BRIMSTONE // SECTOR SELECT ⚔️</p>
+              <h2 class="metal-title">HELLFALL</h2>
+              <p class="metal-subtitle">ELIGE TU PERSONAJE ANTES DEL DESPLIEGUE</p>
+              <div class="character-grid" id="character-select-grid" role="radiogroup" aria-label="Selección de personaje">
+                <button type="button" class="char-card selected" data-character="male" role="radio" aria-checked="true">
+                  <canvas class="char-portrait-canvas" width="64" height="60" data-portrait="male" aria-hidden="true"></canvas>
+                  <div class="char-info">
+                    <span class="char-gender">HOMBRE · SLAYER</span>
+                    <strong class="char-name">MARCUS &quot;IRONJAW&quot; VANE</strong>
+                    <small class="char-trait">Asalto Pesado UAC · Voz grave</small>
+                  </div>
+                </button>
+                <button type="button" class="char-card" data-character="female" role="radio" aria-checked="false">
+                  <canvas class="char-portrait-canvas" width="64" height="60" data-portrait="female" aria-hidden="true"></canvas>
+                  <div class="char-info">
+                    <span class="char-gender">MUJER · VALKYRIE</span>
+                    <strong class="char-name">VALERIA &quot;HELLFIRE&quot; KARN</strong>
+                    <small class="char-trait">Comando Élite UAC · Reflejos letales</small>
+                  </div>
+                </button>
+              </div>
+              <button class="button metal-start-btn" id="metal-start-btn" type="button">🔥 INICIAR PARTIDA 🔥</button>
+            </div>
+          </div>
+          <div class="overlay-box hidden" id="briefing-box"><p class="eyebrow" id="overlay-eyebrow">HELL INVASION ACTIVE</p><h2 id="overlay-title">SECTOR <span>01 / 10</span></h2><p id="overlay-desc">El infierno ha tomado el complejo. Revisa el manual táctico de comandos y objetivos antes de desplegarte.</p><div id="mission-briefing" class="mission-briefing"><div class="briefing-col"><h3>⌨️ COMANDOS DE COMBATE</h3><ul><li><strong>W A S D + Ratón</strong><span>Moverse y apuntar (<b>Shift</b> correr)</span></li><li><strong>Clic Izq / Espacio</strong><span>Disparar arma · <b>R</b> Recargar</span></li><li><strong>[1]-[4] · [5]-[7]</strong><span>Escopeta, Chaingun, Flamer, Sierra · <b>Cohetes, Plasma y BFG-9000</b></span></li><li><strong>V / Clic Derecho</strong><span>Puñetazo (empuja y estampa contra muros)</span></li><li><strong>E</strong><span>Puertas, cofres, VIP, Reactores, Núcleo y <b>Glory Kill</b></span></li><li><strong>C · TAB · F · ESC</strong><span>Dash · Automapa · Pantalla completa · Pausa</span></li></ul></div><div class="briefing-col"><h3>🔥 QUÉ PUEDES HACER EN EL JUEGO</h3><ul><li><strong>1. Encuentra Arsenal [1-7]</strong><span>Empiezas con Super Escopeta: busca pedestales de armas, cofres UAC y <b>2 salas secretas</b> por sector.</span></li><li><strong>2. Mercader y Rutas</strong><span>Compra munición pesada o <b>+12% daño</b>, y elige entre <b>3 Puertas Roguelite</b> tras cada sector.</span></li><li><strong>3. Misiones y Director IA</strong><span>Reactores, oleadas, escolta VIP, cuenta atrás y 3 llaves con emboscadas ocultas y teletransportes.</span></li><li><strong>4. Jefes y Sector 10</strong><span>Cada Jefe tiene patrón propio. En el Sector 10 derrota al <b>ICON OF SIN</b> en 3 fases.</span></li></ul></div></div><div id="combat-report" class="combat-report hidden"></div><div class="overlay-actions-row"><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><button class="button button-ghost button-small" id="back-to-metal-menu" type="button">← CAMBIAR PERSONAJE</button></div><small>Pulsa [H] en cualquier momento dentro de la partida para volver a ver este manual</small></div>
+        </div></div>
+        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>V / CLIC DER <small>PUÑETAZO</small></span><span>E <small>VIP / NÚCLEO / GLORY</small></span><span>1 · · · 7 <small>ARMAS</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>TAB <small>AUTOMAPA</small></span><span>F / ESC <small>PANTALLA / PAUSA</small></span></div>
       </div>
       <div class="game-bottom"><div class="panel mini-panel"><p class="eyebrow">MISSION STATUS</p><strong id="game-status-text">A la espera del despliegue</strong><p id="game-message">Inicia la misión cuando estés preparado.</p></div><div class="panel mini-panel"><p class="eyebrow">PERSONAL BEST</p><strong id="personal-best">— PTS</strong><p>Las mejores puntuaciones se guardan con tu usuario.</p></div></div>
     </section>
@@ -363,94 +441,7 @@
       <div class="panel admin-panel"><div class="admin-toolbar"><p>Este listado se autoriza en el servidor. Ocultar el botón no sustituye a los permisos de API.</p><button id="refresh-users" class="button button-secondary button-small" type="button">↻ ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>EMAIL</th><th>ROL</th><th>ESTADO</th><th>REGISTRO</th><th>ACCIÓN</th></tr></thead><tbody id="admin-users-body"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></div>
     </section>
 
-    <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.4.0</span></footer>
+    <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.5.0</span></footer>
   </main>
-
-  <!-- Controlador global para reproducir doom.mp3 y mostrar notificaciones de OAuth y Confirmación -->
-  <script>
-    (function() {
-      // 1. Feedback claro al usuario tras redirección OAuth 2.0 y Verificación de Correo
-      window.addEventListener('DOMContentLoaded', () => {
-        const params = new URLSearchParams(window.location.search);
-        const oauthError = params.get('error');
-        const oauthSuccess = params.get('oauth');
-        const confirmedSuccess = params.get('confirmed'); // <-- NUEVO: Captura el éxito del correo
-        const notice = document.getElementById('notice');
-        const terminalLine = document.getElementById('login-terminal-line');
-
-        const errorMessages = {
-          oauth_not_configured: 'El inicio de sesión con Google no está configurado en el servidor.',
-          oauth_cancelled: 'Has cancelado el inicio de sesión con Google.',
-          oauth_token_failed: 'No se pudo verificar la credencial con Google. Inténtalo de nuevo.',
-          oauth_profile_failed: 'No se pudo obtener tu perfil desde Google.',
-          oauth_account_inactive: 'Tu cuenta está desactivada o ha sido eliminada.',
-          oauth_server_error: 'Error interno al autenticar con Google.',
-          invalid_confirmation_token: 'El enlace de confirmación de correo no es válido o ha caducado.'
-        };
-
-        if (oauthError && errorMessages[oauthError]) {
-          if (notice) {
-            notice.textContent = errorMessages[oauthError];
-            notice.className = 'notice error';
-            notice.classList.remove('hidden');
-          }
-          if (terminalLine) {
-            terminalLine.textContent = '> ERROR: ' + oauthError.toUpperCase();
-          }
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (oauthSuccess === 'success') {
-          if (notice) {
-            notice.textContent = 'Sesión iniciada correctamente con Google.';
-            notice.className = 'notice success';
-            notice.classList.remove('hidden');
-          }
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (confirmedSuccess === 'success') {
-          // <-- NUEVO BLOQUE: Activa el aviso verde tras verificar el correo
-          if (notice) {
-            notice.textContent = 'Cuenta confirmada y activada con éxito. Ya puedes iniciar sesión.';
-            notice.className = 'notice success';
-            notice.classList.remove('hidden');
-          }
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      });
-
-      // 2. Controlador de música BSO
-      const bgm = document.getElementById('doom-bgm');
-      const toggleBtn = document.getElementById('music-toggle');
-      if (!bgm) return;
-
-      bgm.volume = 0.45;
-      let musicMuted = false;
-
-      function tryPlayMusic() {
-        if (musicMuted) return;
-        if (bgm.paused) {
-          bgm.play().then(() => {
-            if (toggleBtn) toggleBtn.textContent = '🔊 BSO: ON';
-          }).catch(() => {});
-        }
-      }
-
-      window.addEventListener('DOMContentLoaded', tryPlayMusic);
-      document.addEventListener('click', tryPlayMusic, { passive: true });
-      document.addEventListener('keydown', tryPlayMusic, { passive: true });
-
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          musicMuted = !musicMuted;
-          bgm.muted = musicMuted;
-          if (!musicMuted) {
-            bgm.play().catch(() => {});
-            toggleBtn.textContent = '🔊 BSO: ON';
-          } else {
-            toggleBtn.textContent = '🔇 BSO: OFF';
-          }
-        });
-      }
-    })();
-  </script>
 </body>
 </html>

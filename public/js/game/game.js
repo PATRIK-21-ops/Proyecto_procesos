@@ -1,5 +1,26 @@
+import { getCharacterProfile, drawCharacterFace } from './portrait.js';
+import {
+  BAYER_4X4,
+  VOXEL_SPECIES_SPECS,
+  makeEnemyAnimationSet,
+  getOrBakeVoxelSprite,
+  getTintedSprite
+} from './voxels.js';
+import {
+  makeWeaponSprites,
+  makeRocketProjectileSprite,
+  makePlasmaBoltSprite,
+  makeBfgOrbSprite,
+  makeWeaponPickupSprite,
+  makeGeneratorSprite,
+  makePylonSprite,
+  makeVipSprite,
+  makeColoredKeySprite,
+  makeCoreSprite
+} from './weapons.js';
+
 // ============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE BALANCE Y MOTOR (HELLFALL // DOOM 1993 EDITION)
+// CONFIGURACIÓN CENTRALIZADA DE BALANCE Y MOTOR (HELLFALL // BRUTAL EDITION)
 // ============================================================================
 const CONFIG = {
   WIDTH: 320,
@@ -10,17 +31,21 @@ const CONFIG = {
   DEBUG_SPRITES: false,
   ENABLE_DITHER: false,
   FOV_PLANE: 0.76,
-  WALL_SCALE: 1.58, // Techos altos e imponentes para que los Bosses grandes quepan con holgura
+  WALL_SCALE: 1.58,
   MAX_LEVELS: 10,
   MAP_SIZE: 48,
 
-  // Armas y economía: escopeta con 7 perdigones reales y lanzallamas eficiente (0.35 fuel/disparo)
+  // Armas y economía: 7 armas (empiezas con Escopeta [1] y encuentras el resto en los sectores)
   CLIP_SIZE: 12,
   MAX_RESERVE: 96,
   MAX_FUEL: 100,
+  MAX_ROCKETS: 30,
+  MAX_CELLS: 180,
   START_AMMO: 16,
-  START_RESERVE: 24,
+  START_RESERVE: 28,
   START_FUEL: 45,
+  START_ROCKETS: 0,
+  START_CELLS: 0,
   START_ARMOR: 20,
   SHOTGUN_COOLDOWN_MS: 420,
   SHOTGUN_DAMAGE: 2.15,
@@ -30,14 +55,26 @@ const CONFIG = {
   CHAINGUN_COOLDOWN_MS: 92,
   CHAINGUN_DAMAGE: 1.12,
   FLAMER_COOLDOWN_MS: 58,
-  FLAMER_DAMAGE: 0.54,
+  FLAMER_DAMAGE: 0.56,
   FLAMER_FUEL_COST: 0.35,
+  ROCKET_COOLDOWN_MS: 680,
+  ROCKET_DAMAGE: 6.2,
+  ROCKET_RADIUS: 2.9,
+  ROCKET_SPEED: 14.5,
+  PLASMA_COOLDOWN_MS: 105,
+  PLASMA_DAMAGE: 1.55,
+  PLASMA_SPEED: 19.5,
+  BFG_COOLDOWN_MS: 1100,
+  BFG_CELL_COST: 30,
+  BFG_DAMAGE: 14.5,
+  BFG_RADIUS: 5.2,
+  BFG_SPEED: 8.6,
   REROLL_COST: 8,
   BARREL_COUNT: 6,
   BARREL_RADIUS: 3.2,
   BARREL_DAMAGE: 6.5,
 
-  // Motosierra: se desbloquea con 40 bajas y convierte los cadáveres en suministros
+  // Motosierra: desbloqueo por 40 bajas o recogida en cámara secreta
   CHAINSAW_UNLOCK_KILLS: 40,
   CHAINSAW_COOLDOWN_MS: 115,
   CHAINSAW_DAMAGE: 1.45,
@@ -45,7 +82,7 @@ const CONFIG = {
   CHAINSAW_SHELL_RANGE: [2, 3],
   CHAINSAW_FUEL_RANGE: [6, 10],
 
-  // Ejecuciones de gloria: remate cercano con [E] o motosierra
+  // Ejecuciones de gloria
   GLORY_THRESHOLD: 0.2,
   GLORY_WINDOW_MS: 1500,
   GLORY_HEAL: 10,
@@ -61,8 +98,6 @@ const CONFIG = {
   HAZARD_RADIUS: [2.2, 3.6],
   HAZARD_DPS: 1,
   HAZARD_IDLE_SEC: 0.35,
-  DARK_LEVELS: [2, 6, 10],
-  TOXIC_LEVELS: [4, 8],
 
   // Demonios especiales
   LOST_SOUL_PACK: 3,
@@ -79,7 +114,7 @@ const CONFIG = {
   CHEST_ARMOR_CHANCE: 0.5,
   CHEST_ARMOR_AMOUNT: 20,
   CHEST_COIN_RANGE: [6, 10],
-  FLOOR_AMMO_CHANCE: 1.0, // Siempre hay al menos una caja de munición por sector
+  FLOOR_AMMO_CHANCE: 1.0,
   FLOOR_AMMO_AMOUNT: 8,
   FLOOR_FUEL_AMOUNT: 18,
   FLOOR_MEDKIT_CHANCE: 0.75,
@@ -88,46 +123,109 @@ const CONFIG = {
   MAX_SOUL_HEALTH: 135,
   BERSERK_DURATION: 12.0,
 
-  // Monedas: salen de los cofres y, a veces, de los demonios
-  ENEMY_COIN_CHANCE: 0.35,
+  // Monedas
+  ENEMY_COIN_CHANCE: 0.38,
   ENEMY_COIN_RANGE: [1, 3],
   BOSS_COIN_RANGE: [12, 18],
 
-  // Mercader de almas: sala cerrada con compuerta propia y mejoras de arsenal
+  // Mercader de almas: incluye cohetes y celdas de plasma
   MERCHANT: {
     AMMO: { price: 8, amount: 14, label: 'CAJA DE CARTUCHOS', detail: '+14 balas de reserva' },
     HEALTH: { price: 10, amount: 35, label: 'BOTIQUÍN DE CAMPO', detail: '+35% de salud' },
     ARMOR: { price: 12, amount: 30, label: 'PLACA DE BLINDAJE', detail: '+30% de armadura' },
     FUEL: { price: 6, amount: 35, label: 'BIDÓN DE GASOLINA', detail: '+35% de combustible' },
-    WEAPON_MOD: { price: 15, amount: 12, label: 'TEMPLAR ARSENAL', detail: '+12% daño de armas permanente' }
+    WEAPON_MOD: { price: 15, amount: 12, label: 'TEMPLAR ARSENAL', detail: '+12% daño de armas permanente' },
+    ROCKETS: { price: 9, amount: 6, label: 'CAJA DE COHETES', detail: '+6 cohetes explosivos [5]' },
+    CELLS: { price: 9, amount: 45, label: 'BATERÍAS DE PLASMA', detail: '+45 celdas para Plasma/BFG [6/7]' }
   },
 
-  // Paletas temáticas visuales para cada uno de los 10 sectores
+  // Paletas temáticas y bestiario exclusivo por sector
   SECTOR_THEMES: [
-    { name: 'HANGAR DE CONTENCIÓN', layout: 'GRID', wall1: '#3d2b2f', wall2: '#5e1715', floor: '#2b1619', ceil: '#4a080a', vein: '#ff4d00', glow: '#ffbe0b', fog: [32, 10, 12], tint: [255, 224, 210] },
-    { name: 'PLANTA NUCLEAR', layout: 'RING', wall1: '#23362b', wall2: '#1b4332', floor: '#13241b', ceil: '#0f291e', vein: '#70e000', glow: '#ccff33', fog: [10, 26, 16], tint: [215, 255, 210] },
-    { name: 'REFINERÍA TÓXICA', layout: 'CORRIDORS', wall1: '#42331b', wall2: '#5c4318', floor: '#261e10', ceil: '#33240c', vein: '#ffbe0b', glow: '#fff3b0', fog: [34, 22, 8], tint: [255, 236, 195] },
-    { name: 'CENTRO DE MANDO', layout: 'CROSS', wall1: '#1d2d44', wall2: '#1b3b5a', floor: '#111d2b', ceil: '#0d1b2a', vein: '#00b4d8', glow: '#caf0f8', fog: [11, 20, 34], tint: [205, 235, 255] },
-    { name: 'LABORATORIOS UAC', layout: 'CITADEL', wall1: '#495057', wall2: '#343a40', floor: '#212529', ceil: '#2b3035', vein: '#00f5d4', glow: '#ffffff', fog: [18, 28, 30], tint: [225, 250, 250] },
-    { name: 'ANOMALÍA DE DEIMOS', layout: 'RING', wall1: '#3c1e4d', wall2: '#4a154b', floor: '#210f2b', ceil: '#2d0c3a', vein: '#9d4edd', glow: '#e0aaff', fog: [28, 10, 38], tint: [240, 210, 255] },
-    { name: 'FORTALEZA DE CARNE', layout: 'CROSS', wall1: '#590d22', wall2: '#800f2f', floor: '#38040e', ceil: '#590d22', vein: '#ff0055', glow: '#ffccd5', fog: [42, 6, 14], tint: [255, 205, 215] },
-    { name: 'TORRE DE BABEL', layout: 'CITADEL', wall1: '#2b2623', wall2: '#4a3b2c', floor: '#1a1614', ceil: '#291f14', vein: '#ffd700', glow: '#fff3b0', fog: [24, 18, 12], tint: [255, 240, 205] },
-    { name: 'SANTUARIO PROFANO', layout: 'CORRIDORS', wall1: '#1a2e2b', wall2: '#264653', floor: '#101f1d', ceil: '#142b27', vein: '#2ec4b6', glow: '#cbf3f0', fog: [10, 24, 22], tint: [205, 255, 242] },
-    { name: 'EL ABISMO', layout: 'RING', wall1: '#240046', wall2: '#3c096c', floor: '#10002b', ceil: '#190033', vein: '#ff007f', glow: '#ffbe0b', fog: [22, 4, 34], tint: [250, 195, 255] }
+    {
+      name: 'HANGAR DE CONTENCIÓN', layout: 'GRID', wall1: '#3d2b2f', wall2: '#5e1715', floor: '#2b1619', ceil: '#4a080a', vein: '#ff4d00', glow: '#ffbe0b', fog: [32, 10, 12], tint: [255, 224, 210],
+      commons: ['IMP', 'RIFLEMAN', 'PINKY'], signature: ['RIFLEMAN', 'TURRET', 'SHIELD']
+    },
+    {
+      name: 'PLANTA NUCLEAR', layout: 'RING', wall1: '#23362b', wall2: '#1b4332', floor: '#13241b', ceil: '#0f291e', vein: '#70e000', glow: '#ccff33', fog: [10, 26, 16], tint: [215, 255, 210],
+      commons: ['IMP', 'CACODEMON', 'RIFLEMAN'], signature: ['TURRET', 'MANCUBUS', 'SHIELD']
+    },
+    {
+      name: 'REFINERÍA TÓXICA', layout: 'CORRIDORS', wall1: '#42331b', wall2: '#5c4318', floor: '#261e10', ceil: '#33240c', vein: '#ffbe0b', glow: '#fff3b0', fog: [34, 22, 8], tint: [255, 236, 195],
+      commons: ['IMP', 'BRUTE', 'PINKY'], signature: ['MANCUBUS', 'RIFLEMAN', 'TURRET']
+    },
+    {
+      name: 'CENTRO DE MANDO', layout: 'CROSS', wall1: '#1d2d44', wall2: '#1b3b5a', floor: '#111d2b', ceil: '#0d1b2a', vein: '#00b4d8', glow: '#caf0f8', fog: [11, 20, 34], tint: [205, 235, 255],
+      commons: ['RIFLEMAN', 'SHIELD', 'CACODEMON'], signature: ['SNIPER', 'TURRET', 'RIFLEMAN']
+    },
+    {
+      name: 'LABORATORIOS UAC', layout: 'CITADEL', wall1: '#495057', wall2: '#343a40', floor: '#212529', ceil: '#2b3035', vein: '#00f5d4', glow: '#ffffff', fog: [18, 28, 30], tint: [225, 250, 250],
+      commons: ['CACODEMON', 'SHIELD', 'LOST_SOUL'], signature: ['SPECTRE', 'SNIPER', 'TURRET']
+    },
+    {
+      name: 'ANOMALÍA DE DEIMOS', layout: 'RING', wall1: '#3c1e4d', wall2: '#4a154b', floor: '#210f2b', ceil: '#2d0c3a', vein: '#9d4edd', glow: '#e0aaff', fog: [28, 10, 38], tint: [240, 210, 255],
+      commons: ['CACODEMON', 'REVENANT', 'LOST_SOUL'], signature: ['SPECTRE', 'HELL_KNIGHT', 'SUMMONER']
+    },
+    {
+      name: 'FORTALEZA DE CARNE', layout: 'CROSS', wall1: '#590d22', wall2: '#800f2f', floor: '#38040e', ceil: '#590d22', vein: '#ff0055', glow: '#ffccd5', fog: [42, 6, 14], tint: [255, 205, 215],
+      commons: ['PINKY', 'BRUTE', 'IMP'], signature: ['HELL_KNIGHT', 'MANCUBUS', 'SPECTRE']
+    },
+    {
+      name: 'TORRE DE BABEL', layout: 'CITADEL', wall1: '#2b2623', wall2: '#4a3b2c', floor: '#1a1614', ceil: '#291f14', vein: '#ffd700', glow: '#fff3b0', fog: [24, 18, 12], tint: [255, 240, 205],
+      commons: ['REVENANT', 'BRUTE', 'CACODEMON'], signature: ['CYBERDEMON', 'SNIPER', 'HELL_KNIGHT']
+    },
+    {
+      name: 'SANTUARIO PROFANO', layout: 'CORRIDORS', wall1: '#1a2e2b', wall2: '#264653', floor: '#101f1d', ceil: '#142b27', vein: '#2ec4b6', glow: '#cbf3f0', fog: [10, 24, 22], tint: [205, 255, 242],
+      commons: ['SUMMONER', 'REVENANT', 'LOST_SOUL'], signature: ['SPECTRE', 'HELL_KNIGHT', 'MANCUBUS']
+    },
+    {
+      name: 'EL ABISMO', layout: 'RING', wall1: '#240046', wall2: '#3c096c', floor: '#10002b', ceil: '#190033', vein: '#ff007f', glow: '#ffbe0b', fog: [22, 4, 34], tint: [250, 195, 255],
+      commons: ['HELL_KNIGHT', 'REVENANT', 'MANCUBUS'], signature: ['CYBERDEMON', 'SPECTRE', 'SUMMONER']
+    }
   ],
 
-  // Densidad y escalado de dificultad
-  BASE_ENEMIES: 11,
-  ENEMIES_PER_LEVEL: 1.55,
-  MAX_REGULAR_ENEMIES: 26,
+  // Pool aleatorio de eventos de sector por partida (ya no atados al nivel)
+  SECTOR_EVENTS_POOL: [
+    { type: 'PATROL', label: 'GUARDIA EN ALERTA', short: 'ALERTA', detail: 'Patrullas activas y muros trampa listos para emboscar' },
+    { type: 'DARKNESS', label: 'APAGÓN TOTAL', short: 'APAGÓN', detail: 'Oscuridad densa: los espectros acechan en la penumbra' },
+    { type: 'LAVA', label: 'FUGA DE MAGMA', short: 'MAGMA', detail: 'Grietas de magma ardiente queman a jugador y demonios' },
+    { type: 'TOXIC', label: 'SUELO TÓXICO', short: 'TÓXICO', detail: 'Charcas ácidas corrosivas si te detienes sobre ellas' },
+    { type: 'AMBUSH', label: 'ESCUADRÓN DE CHOQUE', short: 'EMBOSCADA', detail: 'Refuerzos por teletransporte más frecuentes y tropas blindadas' },
+    { type: 'METEORS', label: 'LLUVIA ÍGNEA', short: 'METEOROS', detail: 'Impactos meteóricos periódicos sobre todo el sector' },
+    { type: 'BLOOD_FOG', label: 'NIEBLA SANGRIENTA', short: 'NIEBLA', detail: 'Bruma carmesí que enfurece y acelera a los hostiles' },
+    { type: 'OVERCHARGE', label: 'SOBRECARGA ABISAL', short: 'SOBRECARGA', detail: 'Proyectiles más rápidos, pero +50% monedas y drops de energía' }
+  ],
+
+  // Modificadores de puertas de ruta (estilo Hades / Slay the Spire)
+  ROUTE_MODIFIERS: {
+    TREASURE: { id: 'TREASURE', label: 'CÁMARA DE TESOROS', icon: '💎', color: '#ffbe0b', rewardHint: '+2 Cofres UAC y alijo extra de arma/munición' },
+    MERCHANT: { id: 'MERCHANT', label: 'RUTA DEL MERCADER', icon: '⚖️', color: '#00f5d4', rewardHint: '+40% Monedas, Soulsphere cercana y tienda' },
+    ELITE: { id: 'ELITE', label: 'INCURSIÓN DE ÉLITE', icon: '☠️', color: '#ff0055', rewardHint: 'Más élites, pero +50% monedas y +300 PTS extra' },
+    ARCANE: { id: 'ARCANE', label: 'ALTAR ARCANO', icon: '🔮', color: '#9d4edd', rewardHint: 'Sala secreta extra y Soulsphere garantizada' }
+  },
+
+  // 6 tipos de objetivos de misión por sector
+  OBJECTIVE_LABELS: {
+    BOSS_KEY: { name: 'CAZA AL GUARDIÁN', short: 'BOSS + LLAVE', desc: 'Derrota al Boss Guardián, coge la llave y sal por EXIT' },
+    GENERATORS: { name: 'SABOTAJE INFERNAL', short: 'GENERADORES', desc: 'Destruye todos los Generadores Demoníacos para abrir EXIT' },
+    SURVIVAL_WAVES: { name: 'RESISTENCIA ABISAL', short: 'OLEADAS', desc: 'Activa el Nexo Central y sobrevive a 3 oleadas demoníacas' },
+    ESCORT_RESCUE: { name: 'RESCATE Y ESCOLTA', short: 'ESCOLTA VIP', desc: 'Rescata al Científico UAC [E] y llévalo vivo hasta EXIT' },
+    ESCAPE_COUNTDOWN: { name: 'SOBRECARGA Y FUGA', short: 'CUENTA ATRÁS', desc: 'Detona el Núcleo [E] y escapa por EXIT antes del colapso' },
+    THREE_KEYS: { name: 'TRIPLE SELLO UAC', short: '3 LLAVES', desc: 'Recoge las llaves Roja, Azul y Amarilla para abrir EXIT' },
+    FINAL_ICON: { name: 'JUICIO FINAL', short: 'ICON OF SIN', desc: 'Destruye los Pilones y derrota al Icon of Sin en 3 fases' }
+  },
+
+  // Densidad y escalado de dificultad (Director controla spawns iniciales + refuerzos)
+  BASE_ENEMIES: 10,
+  ENEMIES_PER_LEVEL: 1.45,
+  MAX_REGULAR_ENEMIES: 24,
   MIN_ENEMY_SPACING: 3.4,
   LEVEL_HP_SCALE: 0.14,
   LEVEL_DMG_SCALE: 0.10,
   LEVEL_SPEED_SCALE: 0.04,
-  ELITE_START_LEVEL: 4,
+  ELITE_START_LEVEL: 3,
   ELITE_CHANCE: 0.22,
 
-  // Mejoras permanentes que se eligen en el intermedio (con rangos: se pueden mejorar dos veces)
+  // Mejoras permanentes del Altar
   UPGRADES: [
     {
       id: 'POWER_FIST', label: 'PUÑO INFERNAL', short: 'PUÑO', type: 'ACTIVA [V]', maxRank: 2, color: '#ff4d00', dynamic: true,
@@ -159,7 +257,7 @@ const CONFIG = {
     },
     {
       id: 'AMMO_POUCH', label: 'CARTUCHERA AMPLIADA', short: 'CARTUCH', type: 'PASIVA', maxRank: 2, color: '#ffd166',
-      ranks: ['+8 de reserva máxima y 8 cartuchos de regalo', '+8 más de reserva máxima (+16 en total)']
+      ranks: ['+8 reserva máxima, +2 cohetes y +15 celdas de plasma', '+8 reserva máxima, +3 cohetes y +20 celdas más']
     },
     {
       id: 'VAMPIRISM', label: 'VAMPIRISMO INFERNAL', short: 'VAMPIRO', type: 'PASIVA', maxRank: 2, color: '#e63946',
@@ -171,17 +269,15 @@ const CONFIG = {
     }
   ],
 
-  // El infierno responde a las mejoras acumuladas (rangos totales) con más presión
   UPGRADE_PRESSURE: {
     HP: 0.06,
     DAMAGE: 0.05,
     SPEED: 0.015,
-    EXTRA_ENEMIES: 0.6,
+    EXTRA_ENEMIES: 0.55,
     BOSS_HP: 0.05,
     ELITE: 0.015
   },
 
-  // Combate cuerpo a cuerpo (el puñetazo base está siempre disponible con [V] o clic derecho)
   PUNCH_COOLDOWN_MS: 620,
   PUNCH_RANGE: 1.5,
   PUNCH_DAMAGE: 1.3,
@@ -204,7 +300,6 @@ const CONFIG = {
   EXPLOSION_DAMAGE: [2.6, 4.2],
   AURA_RADIUS: [1.9, 2.5],
 
-  // Medallas de fin de partida
   MEDALS: [
     { id: 'BUTCHER', name: 'CARNICERO', desc: '+15 bajas con motosierra', color: '#ff4d00' },
     { id: 'UNTOUCHABLE', name: 'INTOCABLE', desc: 'Sector sin recibir daño', color: '#00f5d4' },
@@ -223,134 +318,85 @@ const CONFIG = {
     'ANOMALÍA DE DEIMOS', 'FORTALEZA DE CARNE', 'TORRE DE BABEL', 'SANTUARIO PROFANO', 'EL ABISMO'
   ],
 
-  // Estadísticas por especie (CERO drops de munición/vida en enemigos; Bosses mucho más duros y ágiles)
+  // Bestiario completo: 15 especies normales/pesadas + Campeón + Jefes + Icon of Sin
   ENEMIES: {
     IMP: {
-      hp: 3.6,
-      speed: 1.25,
-      meleeDmg: 10,
-      projDmg: 9,
-      projSpeed: 6.4,
-      painChance: 0.65,
-      scale: 0.98,
-      rangedCd: [1.8, 3.1],
-      dashChance: 0.10
+      hp: 3.6, speed: 1.25, meleeDmg: 10, projDmg: 9, projSpeed: 6.4,
+      painChance: 0.65, scale: 0.98, rangedCd: [1.8, 3.1], dashChance: 0.10
+    },
+    RIFLEMAN: {
+      hp: 3.4, speed: 1.05, meleeDmg: 8, projDmg: 5, projSpeed: 0, hitscan: true,
+      painChance: 0.72, scale: 0.98, rangedCd: [1.9, 3.0], dashChance: 0.05
+    },
+    SNIPER: {
+      hp: 4.2, speed: 0.96, meleeDmg: 8, projDmg: 19, projSpeed: 0, sniper: true,
+      painChance: 0.55, scale: 1.04, rangedCd: [3.2, 4.4], dashChance: 0.04
+    },
+    TURRET: {
+      hp: 6.2, speed: 0, meleeDmg: 0, projDmg: 7, projSpeed: 12.5, turret: true,
+      painChance: 0.08, scale: 0.92, rangedCd: [1.4, 2.2], dashChance: 0
     },
     CACODEMON: {
-      hp: 5.4,
-      speed: 1.1,
-      meleeDmg: 14,
-      projDmg: 12,
-      projSpeed: 7.2,
-      painChance: 0.45,
-      scale: 1.06,
-      rangedCd: [2.0, 3.4],
-      dashChance: 0.26
+      hp: 5.4, speed: 1.1, meleeDmg: 14, projDmg: 12, projSpeed: 7.2,
+      painChance: 0.45, scale: 1.06, rangedCd: [2.0, 3.4], dashChance: 0.26
     },
     BRUTE: {
-      hp: 8.2,
-      speed: 1.0,
-      meleeDmg: 18,
-      projDmg: 15,
-      projSpeed: 7.8,
-      painChance: 0.28,
-      scale: 1.2,
-      rangedCd: [2.2, 3.6],
-      dashChance: 0.42
+      hp: 8.2, speed: 1.0, meleeDmg: 18, projDmg: 15, projSpeed: 7.8,
+      painChance: 0.28, scale: 1.2, rangedCd: [2.2, 3.6], dashChance: 0.42
+    },
+    MANCUBUS: {
+      hp: 14.5, speed: 0.68, meleeDmg: 20, projDmg: 13, projSpeed: 7.4, mancubus: true,
+      painChance: 0.18, scale: 1.28, rangedCd: [2.4, 3.6], dashChance: 0.04
+    },
+    HELL_KNIGHT: {
+      hp: 10.5, speed: 1.32, meleeDmg: 19, projDmg: 13, projSpeed: 9.2, hellKnight: true,
+      painChance: 0.25, scale: 1.18, rangedCd: [1.9, 3.0], dashChance: 0.48
+    },
+    SPECTRE: {
+      hp: 5.8, speed: 1.92, meleeDmg: 16, projDmg: 0, projSpeed: 0, invisible: true,
+      painChance: 0.35, scale: 1.04, rangedCd: [99, 99], dashChance: 0.58
     },
     SUMMONER: {
-      hp: 8.5,
-      speed: 1.35,
-      meleeDmg: 10,
-      projDmg: 8,
-      projSpeed: 6.8,
-      painChance: 0.4,
-      scale: 1.05,
-      rangedCd: [3.2, 5.0],
-      dashChance: 0.08
+      hp: 8.5, speed: 1.35, meleeDmg: 10, projDmg: 8, projSpeed: 6.8,
+      painChance: 0.4, scale: 1.05, rangedCd: [3.2, 5.0], dashChance: 0.08
     },
     LOST_SOUL: {
-      hp: 1.15,
-      speed: 2.15,
-      meleeDmg: 11,
-      projDmg: 0,
-      projSpeed: 0,
-      painChance: 0.9,
-      scale: 0.68,
-      rangedCd: [99, 99],
-      dashChance: 0
+      hp: 1.15, speed: 2.15, meleeDmg: 11, projDmg: 0, projSpeed: 0,
+      painChance: 0.9, scale: 0.68, rangedCd: [99, 99], dashChance: 0
     },
     SHIELD: {
-      hp: 11,
-      speed: 0.82,
-      meleeDmg: 17,
-      projDmg: 11,
-      projSpeed: 6.2,
-      painChance: 0.22,
-      scale: 1.18,
-      rangedCd: [2.8, 4.2],
-      dashChance: 0.04
+      hp: 11, speed: 0.82, meleeDmg: 17, projDmg: 11, projSpeed: 6.2,
+      painChance: 0.22, scale: 1.18, rangedCd: [2.8, 4.2], dashChance: 0.04
     },
     PINKY: {
-      hp: 6.4,
-      speed: 1.75,
-      meleeDmg: 16,
-      projDmg: 0,
-      projSpeed: 0,
-      painChance: 0.35,
-      scale: 1.04,
-      rangedCd: [99, 99],
-      dashChance: 0.52
+      hp: 6.4, speed: 1.75, meleeDmg: 16, projDmg: 0, projSpeed: 0,
+      painChance: 0.35, scale: 1.04, rangedCd: [99, 99], dashChance: 0.52
     },
     REVENANT: {
-      hp: 7.4,
-      speed: 1.15,
-      meleeDmg: 13,
-      projDmg: 12,
-      projSpeed: 5.5,
-      painChance: 0.34,
-      scale: 1.12,
-      rangedCd: [2.5, 3.8],
-      dashChance: 0.16,
-      homing: true
+      hp: 7.4, speed: 1.15, meleeDmg: 13, projDmg: 12, projSpeed: 5.5,
+      painChance: 0.34, scale: 1.12, rangedCd: [2.5, 3.8], dashChance: 0.16, homing: true
+    },
+    CYBERDEMON: {
+      hp: 21.0, speed: 0.85, meleeDmg: 24, projDmg: 18, projSpeed: 10.2, cyberRocket: true,
+      painChance: 0.12, scale: 1.34, rangedCd: [2.2, 3.2], dashChance: 0.12
     },
     CHAMPION: {
-      hp: 13.0, // Base en Sector 1 (escala progresivamente hasta el Sector 10)
-      speed: 0.92,
-      meleeDmg: 13,
-      projDmg: 9,
-      projSpeed: 5.6,
-      painChance: 0.28,
-      scale: 1.28,
-      windupSec: 0.92,
-      chargeSec: 0.58,
-      recoverSec: 1.05,
-      chargeSpeed: 4.8,
-      dashSpeed: 5.8,
-      dashSec: 0.22,
-      dashCooldown: 4.2,
-      stompRadius: 4.4,
-      stompDamage: 16,
-      stompCooldown: 8.5
+      hp: 13.5, speed: 0.94, meleeDmg: 14, projDmg: 9, projSpeed: 5.8,
+      painChance: 0.26, scale: 1.28, windupSec: 0.9, chargeSec: 0.58, recoverSec: 1.0,
+      chargeSpeed: 4.9, dashSpeed: 5.8, dashSec: 0.22, dashCooldown: 4.1,
+      stompRadius: 4.4, stompDamage: 16, stompCooldown: 8.2
     },
     BOSS: {
-      hp: 17.0, // Base en Sector 1 (escala progresivamente hasta ~45 HP en Sector 10)
-      speed: 0.98,
-      meleeDmg: 15,
-      projDmg: 10,
-      projSpeed: 6.0,
-      painChance: 0.22,
-      scale: 1.38,
-      windupSec: 0.9,
-      chargeSec: 0.62,
-      recoverSec: 1.0,
-      chargeSpeed: 5.2,
-      dashSpeed: 6.2,
-      dashSec: 0.24,
-      dashCooldown: 3.8,
-      stompRadius: 4.8,
-      stompDamage: 20,
-      stompCooldown: 7.5
+      hp: 17.5, speed: 0.98, meleeDmg: 16, projDmg: 10, projSpeed: 6.2,
+      painChance: 0.22, scale: 1.38, windupSec: 0.88, chargeSec: 0.62, recoverSec: 0.95,
+      chargeSpeed: 5.2, dashSpeed: 6.2, dashSec: 0.24, dashCooldown: 3.7,
+      stompRadius: 4.8, stompDamage: 20, stompCooldown: 7.4
+    },
+    ICON_OF_SIN: {
+      hp: 58.0, speed: 0.92, meleeDmg: 24, projDmg: 15, projSpeed: 7.4,
+      painChance: 0.08, scale: 1.62, windupSec: 0.78, chargeSec: 0.65, recoverSec: 0.85,
+      chargeSpeed: 6.0, dashSpeed: 7.2, dashSec: 0.26, dashCooldown: 3.0,
+      stompRadius: 5.6, stompDamage: 24, stompCooldown: 6.2
     }
   }
 };
@@ -366,7 +412,9 @@ const {
   MAX_LEVELS,
   CLIP_SIZE,
   MAX_RESERVE,
-  MAX_FUEL
+  MAX_FUEL,
+  MAX_ROCKETS,
+  MAX_CELLS
 } = CONFIG;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -374,7 +422,7 @@ const distance = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const randInt = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
 
 // ============================================================================
-// REPRODUCTOR GLOBAL DE DOOM.MP3 (Se conserva intacto y sincronizado)
+// REPRODUCTOR DE MÚSICA (SOLO INICIA AL COMENZAR LA PARTIDA, NO EN LA WEB)
 // ============================================================================
 class DoomMusicPlayer {
   constructor() {
@@ -384,27 +432,26 @@ class DoomMusicPlayer {
     this.bgm.preload = 'auto';
     this.bgm.volume = 0.55;
     this.muted = false;
+    this.inMatch = false;
     this.toggleBtn = document.getElementById('music-toggle');
     this.setupListeners();
   }
 
   setupListeners() {
-    const unlockAndPlay = () => {
-      if (!this.muted && this.bgm.paused) {
-        this.bgm.play().then(() => this.updateButton()).catch(() => {});
-      }
-    };
-    window.addEventListener('pointerdown', unlockAndPlay, true);
-    window.addEventListener('keydown', unlockAndPlay, true);
     if (this.toggleBtn) {
       this.toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.muted = !this.muted;
         this.bgm.muted = this.muted;
-        if (!this.muted) this.bgm.play().catch(() => {});
+        if (!this.muted && this.inMatch) {
+          this.bgm.play().catch(() => {});
+        } else if (this.muted) {
+          this.bgm.pause();
+        }
         this.updateButton();
       });
     }
+    this.updateButton();
   }
 
   updateButton() {
@@ -412,12 +459,40 @@ class DoomMusicPlayer {
     if (this.toggleBtn) this.toggleBtn.textContent = this.muted ? '🔇 BSO: OFF' : '🔊 BSO: ON';
   }
 
+  startMatch() {
+    this.inMatch = true;
+    this.bgm.muted = this.muted;
+    if (!this.muted && this.bgm.paused) {
+      this.bgm.currentTime = 0;
+      this.bgm.play().then(() => this.updateButton()).catch(() => {});
+    }
+  }
+
+  stopMatch() {
+    this.inMatch = false;
+    if (!this.bgm.paused) {
+      this.bgm.pause();
+    }
+    try { this.bgm.currentTime = 0; } catch (_) {}
+  }
+
+  setPaused(paused) {
+    if (!this.inMatch || this.muted) return;
+    if (paused) {
+      if (!this.bgm.paused) this.bgm.pause();
+    } else if (this.bgm.paused) {
+      this.bgm.play().catch(() => {});
+    }
+  }
+
   ensurePlaying() {
-    if (!this.muted && this.bgm.paused) this.bgm.play().catch(() => {});
+    if (this.inMatch && !this.muted && this.bgm.paused) {
+      this.bgm.play().catch(() => {});
+    }
   }
 }
 
-const globalDoomMusic = new DoomMusicPlayer();
+export const globalDoomMusic = new DoomMusicPlayer();
 
 // ============================================================================
 // MOTOR DE SONIDO SINTETIZADO WEB AUDIO
@@ -434,50 +509,58 @@ class HellAudioEngine {
   }
 
   init() {
-    globalDoomMusic.ensurePlaying();
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-      const sr = this.ctx.sampleRate;
-      this.noiseBuffer = this.ctx.createBuffer(1, sr * 2, sr);
-      const data = this.noiseBuffer.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    }
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    try {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.ctx = new AudioCtx();
+        const sr = this.ctx.sampleRate;
+        this.noiseBuffer = this.ctx.createBuffer(1, sr * 2, sr);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        const res = this.ctx.resume();
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      }
+    } catch (_) {}
   }
 
   startAmbience() {
-    this.init();
-    if (!this.ctx || this.ambienceNodes) return;
-    const now = this.ctx.currentTime;
-    const masterGain = this.ctx.createGain();
-    masterGain.gain.setValueAtTime(this.isMuted() ? 0.0001 : 0.055, now);
-    masterGain.connect(this.ctx.destination);
+    try {
+      this.init();
+      if (!this.ctx || this.ambienceNodes) return;
+      const now = this.ctx.currentTime;
+      const masterGain = this.ctx.createGain();
+      masterGain.gain.setValueAtTime(this.isMuted() ? 0.0001 : 0.055, now);
+      masterGain.connect(this.ctx.destination);
 
-    const osc1 = this.ctx.createOscillator();
-    const osc2 = this.ctx.createOscillator();
-    osc1.type = 'sawtooth';
-    osc2.type = 'triangle';
-    osc1.frequency.setValueAtTime(38.5, now);
-    osc2.frequency.setValueAtTime(57.8, now);
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc2.type = 'triangle';
+      osc1.frequency.setValueAtTime(38.5, now);
+      osc2.frequency.setValueAtTime(57.8, now);
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(110, now);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(110, now);
 
-    osc1.connect(filter);
-    osc2.connect(filter);
-    filter.connect(masterGain);
-    osc1.start(now);
-    osc2.start(now);
-    this.ambienceNodes = { masterGain, osc1, osc2 };
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(masterGain);
+      osc1.start(now);
+      osc2.start(now);
+      this.ambienceNodes = { masterGain, osc1, osc2 };
+    } catch (_) {}
   }
 
   setAmbiencePaused(paused) {
-    if (!this.ctx || !this.ambienceNodes) return;
-    const target = paused || this.isMuted() ? 0.0001 : 0.055;
-    this.ambienceNodes.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
+    try {
+      if (!this.ctx || !this.ambienceNodes) return;
+      const target = paused || this.isMuted() ? 0.0001 : 0.055;
+      this.ambienceNodes.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
+    } catch (_) {}
   }
 
   stopAmbience() {
@@ -492,40 +575,48 @@ class HellAudioEngine {
 
   playTone(type, freqStart, freqEnd, duration, vol = 0.3, delay = 0) {
     if (this.isMuted()) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime + delay;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freqStart, now);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(12, freqEnd), now + duration);
-    gain.gain.setValueAtTime(vol, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + duration + 0.02);
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime + Math.max(0, delay || 0);
+      const dur = Math.max(0.02, duration || 0.1);
+      const safeVol = Math.max(0.01, vol || 0.2);
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(Math.max(12, freqStart || 100), now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(12, freqEnd || 60), now + dur);
+      gain.gain.setValueAtTime(safeVol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    } catch (_) {}
   }
 
   playNoise(filterType, freq, duration, vol = 0.4, delay = 0) {
     if (this.isMuted()) return;
-    this.init();
-    if (!this.ctx || !this.noiseBuffer) return;
-    const now = this.ctx.currentTime + delay;
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = filterType;
-    filter.frequency.setValueAtTime(freq, now);
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(vol, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-    src.start(now);
-    src.stop(now + duration + 0.02);
+    try {
+      this.init();
+      if (!this.ctx || !this.noiseBuffer) return;
+      const now = this.ctx.currentTime + Math.max(0, delay || 0);
+      const dur = Math.max(0.02, duration || 0.1);
+      const safeVol = Math.max(0.01, vol || 0.2);
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = filterType;
+      filter.frequency.setValueAtTime(clamp(freq || 400, 40, 18000), now);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(safeVol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(now);
+      src.stop(now + dur + 0.02);
+    } catch (_) {}
   }
 
   playShotgun() {
@@ -548,6 +639,58 @@ class HellAudioEngine {
   playChainsaw() {
     this.playNoise('bandpass', 620 + Math.random() * 260, 0.1, 0.22);
     this.playTone('sawtooth', 82, 58, 0.11, 0.16);
+  }
+
+  playRocketLauncher() {
+    this.playTone('sawtooth', 135, 32, 0.32, 0.48);
+    this.playNoise('bandpass', 650, 0.3, 0.46);
+  }
+
+  playPlasma() {
+    this.playTone('sine', 960, 240, 0.1, 0.26);
+    this.playTone('square', 620, 180, 0.08, 0.18);
+  }
+
+  playBfgDetonate() {
+    this.playTone('sawtooth', 260, 22, 0.72, 0.62);
+    this.playTone('sine', 640, 75, 0.65, 0.38, 0.03);
+    this.playNoise('lowpass', 1600, 0.68, 0.56);
+  }
+
+  playWeaponPickup() {
+    [330, 440, 587.33, 880].forEach((f, i) => {
+      this.playTone('square', f, f * 1.04, 0.14, 0.24, i * 0.05);
+    });
+  }
+
+  playRifleBurst(dist = 8) {
+    const vol = clamp((1 - dist / 24) * 0.32, 0.05, 0.34);
+    this.playNoise('bandpass', 2200, 0.07, vol);
+    this.playTone('square', 280, 90, 0.06, vol * 0.6);
+  }
+
+  playSniperLock() {
+    this.playTone('sine', 1240, 1680, 0.18, 0.14);
+  }
+
+  playSniperShot(dist = 10) {
+    const vol = clamp((1 - dist / 28) * 0.44, 0.1, 0.45);
+    this.playTone('sawtooth', 520, 65, 0.22, vol);
+    this.playNoise('highpass', 1800, 0.16, vol * 0.8);
+  }
+
+  playTurretBeep() {
+    this.playTone('square', 980, 1280, 0.05, 0.12);
+  }
+
+  playTeleport() {
+    this.playTone('sine', 180, 760, 0.32, 0.28);
+    this.playNoise('bandpass', 1100, 0.28, 0.22);
+  }
+
+  playAlarm() {
+    this.playTone('sawtooth', 540, 420, 0.16, 0.22);
+    this.playTone('sawtooth', 540, 420, 0.16, 0.22, 0.2);
   }
 
   playGloryKill() {
@@ -675,13 +818,13 @@ class HellAudioEngine {
   }
 
   playMonsterGrowl(kind = 'IMP', dist = 6) {
-    const vol = clamp((1 - dist / 22) * (kind.includes('BOSS') || kind.includes('TYRANT') || kind.includes('OVERLORD') || kind.includes('CHAMPION') ? 0.42 : 0.24), 0.04, 0.42);
-    if (kind === 'IMP') {
+    const vol = clamp((1 - dist / 22) * (kind.includes('BOSS') || kind.includes('ICON') || kind.includes('TYRANT') || kind.includes('CHAMPION') ? 0.42 : 0.24), 0.04, 0.42);
+    if (kind === 'IMP' || kind === 'RIFLEMAN' || kind === 'SNIPER') {
       this.playTone('sawtooth', 140, 65, 0.32, vol);
       this.playNoise('bandpass', 900, 0.25, vol * 0.6);
-    } else if (kind === 'CACODEMON') {
+    } else if (kind === 'CACODEMON' || kind === 'SPECTRE') {
       this.playTone('triangle', 95, 42, 0.45, vol);
-    } else if (kind === 'BRUTE') {
+    } else if (kind === 'BRUTE' || kind === 'MANCUBUS' || kind === 'HELL_KNIGHT') {
       this.playTone('sawtooth', 72, 32, 0.52, vol);
     } else {
       this.playTone('sawtooth', 52, 22, 0.68, vol);
@@ -703,8 +846,8 @@ class HellAudioEngine {
     this.playTone('triangle', 480, 820, 0.09, 0.24, 0.09);
   }
 
-  playHurt() {
-    this.playTone('sawtooth', 140, 48, 0.2, 0.4);
+  playHurt(pitchMult = 1.0) {
+    this.playTone('sawtooth', 140 * pitchMult, 48 * pitchMult, 0.2, 0.4);
   }
 
   playPickup() {
@@ -1243,1221 +1386,6 @@ function makeDemonOrbSprite(outer, inner) {
   return canvas;
 }
 
-// ============================================================================
-// MOTOR DE SPRITES VOXEL 3D PRERRENDERIZADOS (FASE 1 & FASE 2)
-// ============================================================================
-const VOXEL_L_MAG = Math.hypot(-0.45, 0.5, 0.75);
-const VOXEL_LIGHT = [-0.45 / VOXEL_L_MAG, 0.5 / VOXEL_L_MAG, 0.75 / VOXEL_L_MAG];
-const VOXEL_SPRITE_CACHE = new Map();
-const TINTED_SPRITE_CACHE = new WeakMap();
-const BAYER_4X4 = [
-  -7.5, 0.5, -5.5, 2.5,
-  4.5, -3.5, 6.5, -1.5,
-  -4.5, 3.5, -6.5, 1.5,
-  7.5, -0.5, 5.5, -2.5
-];
-
-const VOXEL_SCRATCH = {
-  size: 0,
-  depth: new Float32Array(0),
-  mat: new Uint8Array(0),
-  tone: new Uint8Array(0),
-  emissive: new Uint8Array(0),
-  ensure(len) {
-    if (this.size < len) {
-      this.size = len;
-      this.depth = new Float32Array(len);
-      this.mat = new Uint8Array(len);
-      this.tone = new Uint8Array(len);
-      this.emissive = new Uint8Array(len);
-    }
-    this.depth.fill(-1e9, 0, len);
-    this.mat.fill(0, 0, len);
-    this.tone.fill(0, 0, len);
-    this.emissive.fill(0, 0, len);
-  }
-};
-
-function parseHexRgb(hex) {
-  const clean = (hex || '#ffffff').replace('#', '');
-  const n = parseInt(clean, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** Genera rampa de 4 tonos con desplazamiento térmico (sombras frías, brillos cálidos). */
-function makeColorRamp(hex, emissive = false) {
-  const [r, g, b] = parseHexRgb(hex);
-  if (emissive) {
-    return {
-      emissive: true,
-      tones: [
-        [clamp(Math.round(r * 0.88 + 12), 0, 255), clamp(Math.round(g * 0.88 + 8), 0, 255), clamp(Math.round(b * 0.88 + 6), 0, 255)],
-        [r, g, b],
-        [clamp(Math.round(r + (255 - r) * 0.22), 0, 255), clamp(Math.round(g + (255 - g) * 0.22), 0, 255), clamp(Math.round(b + (255 - b) * 0.16), 0, 255)],
-        [clamp(Math.round(r + (255 - r) * 0.45), 0, 255), clamp(Math.round(g + (255 - g) * 0.45), 0, 255), clamp(Math.round(b + (255 - b) * 0.34), 0, 255)]
-      ]
-    };
-  }
-  return {
-    emissive: false,
-    tones: [
-      [clamp(Math.round(r * 0.48 + 4), 10, 255), clamp(Math.round(g * 0.44 + 2), 6, 255), clamp(Math.round(b * 0.56 + 12), 12, 255)],
-      [clamp(Math.round(r * 0.75 + 2), 12, 255), clamp(Math.round(g * 0.72 + 2), 8, 255), clamp(Math.round(b * 0.8 + 7), 12, 255)],
-      [r, g, b],
-      [clamp(Math.round(r + (255 - r) * 0.34), 0, 255), clamp(Math.round(g + (242 - g) * 0.3), 0, 255), clamp(Math.round(b + (185 - b) * 0.22), 0, 255)]
-    ]
-  };
-}
-
-class VoxelModel {
-  /** Modelo volumétrico de vóxeles (X: izq-der, Y: espalda-frente, Z: abajo-arriba). */
-  constructor(w, d, h) {
-    this.w = w;
-    this.d = d;
-    this.h = h;
-    this.data = new Uint8Array(w * d * h);
-    this._baked = null;
-  }
-
-  get(x, y, z) {
-    const ix = Math.round(x);
-    const iy = Math.round(y);
-    const iz = Math.round(z);
-    if (ix < 0 || ix >= this.w || iy < 0 || iy >= this.d || iz < 0 || iz >= this.h) return 0;
-    return this.data[(iz * this.d + iy) * this.w + ix];
-  }
-
-  set(x, y, z, mat) {
-    const ix = Math.round(x);
-    const iy = Math.round(y);
-    const iz = Math.round(z);
-    if (ix < 0 || ix >= this.w || iy < 0 || iy >= this.d || iz < 0 || iz >= this.h) return;
-    this.data[(iz * this.d + iy) * this.w + ix] = mat;
-    this._baked = null;
-  }
-
-  symSet(dx, y, z, mat) {
-    const cx = (this.w - 1) * 0.5;
-    this.set(cx + dx, y, z, mat);
-    this.set(cx - dx, y, z, mat);
-  }
-
-  symBox(dx0, y0, z0, dx1, y1, z1, mat) {
-    const cx = (this.w - 1) * 0.5;
-    this.box(cx + dx0, y0, z0, cx + dx1, y1, z1, mat);
-    this.box(cx - dx1, y0, z0, cx - dx0, y1, z1, mat);
-  }
-
-  box(x0, y0, z0, x1, y1, z1, mat) {
-    const minX = Math.max(0, Math.floor(Math.min(x0, x1)));
-    const maxX = Math.min(this.w - 1, Math.ceil(Math.max(x0, x1)));
-    const minY = Math.max(0, Math.floor(Math.min(y0, y1)));
-    const maxY = Math.min(this.d - 1, Math.ceil(Math.max(y0, y1)));
-    const minZ = Math.max(0, Math.floor(Math.min(z0, z1)));
-    const maxZ = Math.min(this.h - 1, Math.ceil(Math.max(z0, z1)));
-    for (let z = minZ; z <= maxZ; z++) {
-      for (let y = minY; y <= maxY; y++) {
-        const base = (z * this.d + y) * this.w;
-        for (let x = minX; x <= maxX; x++) {
-          this.data[base + x] = mat;
-        }
-      }
-    }
-    this._baked = null;
-  }
-
-  ellipsoid(cx, cy, cz, rx, ry, rz, mat) {
-    const minX = Math.max(0, Math.floor(cx - rx));
-    const maxX = Math.min(this.w - 1, Math.ceil(cx + rx));
-    const minY = Math.max(0, Math.floor(cy - ry));
-    const maxY = Math.min(this.d - 1, Math.ceil(cy + ry));
-    const minZ = Math.max(0, Math.floor(cz - rz));
-    const maxZ = Math.min(this.h - 1, Math.ceil(cz + rz));
-    const invRx2 = 1 / Math.max(0.25, rx * rx);
-    const invRy2 = 1 / Math.max(0.25, ry * ry);
-    const invRz2 = 1 / Math.max(0.25, rz * rz);
-    for (let z = minZ; z <= maxZ; z++) {
-      const dz = z - cz;
-      const nz2 = dz * dz * invRz2;
-      for (let y = minY; y <= maxY; y++) {
-        const dy = y - cy;
-        const ny2 = nz2 + dy * dy * invRy2;
-        if (ny2 > 1.05) continue;
-        const base = (z * this.d + y) * this.w;
-        for (let x = minX; x <= maxX; x++) {
-          const dx = x - cx;
-          if (ny2 + dx * dx * invRx2 <= 1.02) {
-            this.data[base + x] = mat;
-          }
-        }
-      }
-    }
-    this._baked = null;
-  }
-
-  cylinder(cx, cy, z0, z1, rx, ry, mat) {
-    const minZ = Math.max(0, Math.floor(Math.min(z0, z1)));
-    const maxZ = Math.min(this.h - 1, Math.ceil(Math.max(z0, z1)));
-    const minX = Math.max(0, Math.floor(cx - rx));
-    const maxX = Math.min(this.w - 1, Math.ceil(cx + rx));
-    const minY = Math.max(0, Math.floor(cy - ry));
-    const maxY = Math.min(this.d - 1, Math.ceil(cy + ry));
-    const invRx2 = 1 / Math.max(0.25, rx * rx);
-    const invRy2 = 1 / Math.max(0.25, ry * ry);
-    for (let z = minZ; z <= maxZ; z++) {
-      for (let y = minY; y <= maxY; y++) {
-        const dy = y - cy;
-        const ny2 = dy * dy * invRy2;
-        if (ny2 > 1.04) continue;
-        const base = (z * this.d + y) * this.w;
-        for (let x = minX; x <= maxX; x++) {
-          const dx = x - cx;
-          if (ny2 + dx * dx * invRx2 <= 1.02) {
-            this.data[base + x] = mat;
-          }
-        }
-      }
-    }
-    this._baked = null;
-  }
-
-  /** Extremidad orgánica inclinada entre dos puntos 3D con radio interpolado. */
-  capsule(x0, y0, z0, x1, y1, z1, r0, r1, mat) {
-    const steps = Math.max(3, Math.ceil(Math.hypot(x1 - x0, y1 - y0, z1 - z0) * 1.4));
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = x0 + (x1 - x0) * t;
-      const y = y0 + (y1 - y0) * t;
-      const z = z0 + (z1 - z0) * t;
-      const r = r0 + (r1 - r0) * t;
-      this.ellipsoid(x, y, z, r, r, r, mat);
-    }
-  }
-
-  symCapsule(dx0, y0, z0, dx1, y1, z1, r0, r1, mat) {
-    const cx = (this.w - 1) * 0.5;
-    this.capsule(cx - dx0, y0, z0, cx - dx1, y1, z1, r0, r1, mat);
-    this.capsule(cx + dx0, y0, z0, cx + dx1, y1, z1, r0, r1, mat);
-  }
-
-  symEllipsoid(dx, y, z, rx, ry, rz, mat) {
-    const cx = (this.w - 1) * 0.5;
-    this.ellipsoid(cx - dx, y, z, rx, ry, rz, mat);
-    this.ellipsoid(cx + dx, y, z, rx, ry, rz, mat);
-  }
-
-  mirrorX() {
-    const half = Math.floor(this.w / 2);
-    for (let z = 0; z < this.h; z++) {
-      for (let y = 0; y < this.d; y++) {
-        const base = (z * this.d + y) * this.w;
-        for (let x = 0; x < half; x++) {
-          const mx = this.w - 1 - x;
-          const v = this.data[base + x];
-          if (v !== 0 && this.data[base + mx] === 0) {
-            this.data[base + mx] = v;
-          }
-        }
-      }
-    }
-    this._baked = null;
-  }
-
-  bake() {
-    if (this._baked) return this._baked;
-    const { w, d, h, data } = this;
-    const cx = (w - 1) * 0.5;
-    const cy = (d - 1) * 0.5;
-    const voxels = [];
-    for (let z = 0; z < h; z++) {
-      for (let y = 0; y < d; y++) {
-        for (let x = 0; x < w; x++) {
-          const mat = data[(z * d + y) * w + x];
-          if (mat === 0) continue;
-          const xp = x + 1 < w && data[(z * d + y) * w + (x + 1)] !== 0;
-          const xm = x > 0 && data[(z * d + y) * w + (x - 1)] !== 0;
-          const yp = y + 1 < d && data[(z * d + (y + 1)) * w + x] !== 0;
-          const ym = y > 0 && data[(z * d + (y - 1)) * w + x] !== 0;
-          const zp = z + 1 < h && data[((z + 1) * d + y) * w + x] !== 0;
-          const zm = z > 0 && data[((z - 1) * d + y) * w + x] !== 0;
-          if (xp && xm && yp && ym && zp && zm) continue;
-
-          // Normal suavizada desde vecindad 3x3x3 + oclusión en concavidades
-          let nx = 0;
-          let ny = 0;
-          let nz = 0;
-          let occ = 0;
-          for (let oz = -1; oz <= 1; oz++) {
-            const nzIdx = z + oz;
-            for (let oy = -1; oy <= 1; oy++) {
-              const nyIdx = y + oy;
-              for (let ox = -1; ox <= 1; ox++) {
-                if (ox === 0 && oy === 0 && oz === 0) continue;
-                const nxIdx = x + ox;
-                const filled =
-                  nxIdx >= 0 && nxIdx < w &&
-                  nyIdx >= 0 && nyIdx < d &&
-                  nzIdx >= 0 && nzIdx < h &&
-                  data[(nzIdx * d + nyIdx) * w + nxIdx] !== 0;
-                if (filled) {
-                  occ++;
-                } else {
-                  const inv = (ox * ox + oy * oy + oz * oz === 1) ? 1.0 : 0.45;
-                  nx += ox * inv;
-                  ny += oy * inv;
-                  nz += oz * inv;
-                }
-              }
-            }
-          }
-          const mag = Math.hypot(nx, ny, nz) || 1;
-          voxels.push({
-            mx: x - cx,
-            my: y - cy,
-            mz: z,
-            mat,
-            nmx: nx / mag,
-            nmy: ny / mag,
-            nmz: nz / mag,
-            crevice: occ >= 16 ? 1 : 0
-          });
-        }
-      }
-    }
-    this._baked = voxels;
-    return voxels;
-  }
-}
-
-/** Proyecta ortográficamente un VoxelModel con iluminación fija de cámara, contorno #140708 y máscara emisiva. */
-function renderVoxelSprite(model, ramps, yaw, scale, cw, ch) {
-  const canvas = document.createElement('canvas');
-  canvas.width = cw;
-  canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-  const voxels = model.bake();
-  const totalPx = cw * ch;
-  VOXEL_SCRATCH.ensure(totalPx);
-  const { depth, mat: matBuf, tone: toneBuf, emissive: emBuf } = VOXEL_SCRATCH;
-
-  const cosY = Math.cos(yaw);
-  const sinY = Math.sin(yaw);
-  const [lx, ly, lz] = VOXEL_LIGHT;
-  const midX = cw * 0.5;
-  const baseY = ch - 2;
-  const hw = Math.max(1, Math.floor(scale * 0.68));
-  const hh = Math.max(1, Math.floor(scale * 0.62));
-
-  for (let i = 0; i < voxels.length; i++) {
-    const v = voxels[i];
-    const rx = v.mx * cosY - v.my * sinY;
-    const ry = v.mx * sinY + v.my * cosY;
-    const rz = v.mz;
-
-    const nx = v.nmx * cosY - v.nmy * sinY;
-    const ny = v.nmx * sinY + v.nmy * cosY;
-    const nz = v.nmz;
-    const ramp = ramps[v.mat];
-    const isEm = ramp && ramp.emissive ? 1 : 0;
-
-    let tone;
-    if (isEm) {
-      const fdot = nx * lx + ny * ly + nz * lz;
-      tone = fdot > 0.28 ? 3 : (fdot > -0.15 ? 2 : 1);
-    } else {
-      const dot = nx * lx + ny * ly + nz * lz;
-      tone = dot > 0.42 ? 3 : (dot > 0.04 ? 2 : (dot > -0.34 ? 1 : 0));
-      if (v.crevice && tone > 0) tone -= 1;
-    }
-
-    const pxCenter = Math.round(midX + rx * scale);
-    const pyCenter = Math.round(baseY - rz * scale);
-    const x0 = Math.max(1, pxCenter - hw);
-    const x1 = Math.min(cw - 2, pxCenter + hw);
-    const y0 = Math.max(1, pyCenter - hh);
-    const y1 = Math.min(ch - 2, pyCenter + hh);
-    const vDepth = ry + rz * 0.015;
-
-    for (let py = y0; py <= y1; py++) {
-      const row = py * cw;
-      for (let px = x0; px <= x1; px++) {
-        const idx = row + px;
-        if (vDepth > depth[idx]) {
-          depth[idx] = vDepth;
-          matBuf[idx] = v.mat;
-          toneBuf[idx] = tone;
-          emBuf[idx] = isEm;
-        }
-      }
-    }
-  }
-
-  const img = ctx.createImageData(cw, ch);
-  const out = img.data;
-  let hasEmissive = false;
-
-  for (let y = 0; y < ch; y++) {
-    const row = y * cw;
-    for (let x = 0; x < cw; x++) {
-      const idx = row + x;
-      const m = matBuf[idx];
-      const o = idx * 4;
-      if (m === 0) {
-        const touchesBody =
-          (x > 0 && matBuf[idx - 1] !== 0) ||
-          (x + 1 < cw && matBuf[idx + 1] !== 0) ||
-          (y > 0 && matBuf[idx - cw] !== 0) ||
-          (y + 1 < ch && matBuf[idx + cw] !== 0);
-        if (touchesBody) {
-          out[o] = 20;
-          out[o + 1] = 7;
-          out[o + 2] = 8;
-          out[o + 3] = 255;
-        }
-        continue;
-      }
-
-      if (emBuf[idx]) hasEmissive = true;
-      const ramp = ramps[m];
-      let rgb = ramp ? ramp.tones[toneBuf[idx]] : [255, 0, 255];
-
-      // Pliegue selectivo solo en saltos claros de profundidad (brazos/escudos/cuernos delante del torso)
-      if (!emBuf[idx] && x + 1 < cw && y + 1 < ch) {
-        const dCur = depth[idx];
-        const stepR = matBuf[idx + 1] !== 0 && (dCur - depth[idx + 1]) > 2.35;
-        const stepD = matBuf[idx + cw] !== 0 && (dCur - depth[idx + cw]) > 2.35;
-        if (stepR || stepD) {
-          rgb = [
-            Math.round(rgb[0] * 0.45 + 10),
-            Math.round(rgb[1] * 0.4 + 4),
-            Math.round(rgb[2] * 0.45 + 5)
-          ];
-        }
-      }
-      out[o] = rgb[0];
-      out[o + 1] = rgb[1];
-      out[o + 2] = rgb[2];
-      out[o + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-
-  if (hasEmissive) {
-    const emCanvas = document.createElement('canvas');
-    emCanvas.width = cw;
-    emCanvas.height = ch;
-    const ectx = emCanvas.getContext('2d');
-    const emImg = ectx.createImageData(cw, ch);
-    const eout = emImg.data;
-    for (let i = 0; i < totalPx; i++) {
-      if (!emBuf[i]) continue;
-      const o = i * 4;
-      eout[o] = out[o];
-      eout[o + 1] = out[o + 1];
-      eout[o + 2] = out[o + 2];
-      eout[o + 3] = 255;
-    }
-    ectx.putImageData(emImg, 0, 0);
-    canvas._emissive = emCanvas;
-  }
-
-  return canvas;
-}
-
-const VOXEL_SPECIES_SPECS = {
-  IMP: { cw: 68, ch: 92, w: 28, d: 20, h: 38, scale: 2.3, baseHex: '#8a4f2b' },
-  CACODEMON: { cw: 76, ch: 92, w: 30, d: 28, h: 36, scale: 2.28, baseHex: '#d90429' },
-  BARON: { cw: 76, ch: 100, w: 32, d: 22, h: 42, scale: 2.26, baseHex: '#7a2832' },
-  SUMMONER: { cw: 72, ch: 96, w: 30, d: 22, h: 40, scale: 2.25, baseHex: '#4b2d7a' },
-  LOST_SOUL: { cw: 68, ch: 88, w: 26, d: 24, h: 35, scale: 2.25, baseHex: '#ff4d00' },
-  SHIELD: { cw: 80, ch: 96, w: 32, d: 24, h: 40, scale: 2.25, baseHex: '#495057' },
-  PINKY: { cw: 84, ch: 84, w: 36, d: 32, h: 31, scale: 2.18, baseHex: '#b5174b' },
-  REVENANT: { cw: 72, ch: 96, w: 30, d: 20, h: 40, scale: 2.25, baseHex: '#adb5bd' },
-  BOSS_CYBER: { cw: 88, ch: 108, w: 36, d: 26, h: 45, scale: 2.28, baseHex: '#a31621' },
-  BOSS_ABYSS: { cw: 88, ch: 108, w: 36, d: 26, h: 45, scale: 2.28, baseHex: '#5a189a' }
-};
-
-function getPoseOffsets(stepIndex, isCharge, isPain) {
-  const walkSin = stepIndex === 1 ? 1 : (stepIndex === 3 ? -1 : 0);
-  const bob = isPain ? -1.4 : (stepIndex % 2 === 1 ? 1.2 : 0);
-  const armSwing = isPain ? 3.5 : (isCharge ? 4.2 : walkSin * 3.0);
-  return {
-    walkSin,
-    bob,
-    lStride: isCharge ? 2.5 : walkSin * 3.2,
-    rStride: isCharge ? -1.5 : -walkSin * 3.2,
-    armSwing,
-    jawDrop: isCharge || isPain ? 2 : (stepIndex % 2 === 1 ? 1 : 0)
-  };
-}
-
-function buildEnemyRamps(kind, isPain, isCharge) {
-  const fleshHit = isPain ? '#ff4d00' : (isCharge ? '#d9480f' : null);
-  switch (kind) {
-    case 'IMP':
-      return [
-        null,
-        makeColorRamp(isPain ? '#d90429' : '#6e3f23', false),
-        makeColorRamp(isPain ? '#ff4d00' : '#9c5a32', false),
-        makeColorRamp('#fff3b0', false),
-        makeColorRamp('#ffbe0b', true),
-        makeColorRamp('#ff4d00', true),
-        makeColorRamp('#4a2614', false)
-      ];
-    case 'CACODEMON':
-      return [
-        null,
-        makeColorRamp(isPain ? '#ff4d00' : '#a31621', false),
-        makeColorRamp('#d90429', false),
-        makeColorRamp('#d8c5b8', false),
-        makeColorRamp('#70e000', true),
-        makeColorRamp(isCharge ? '#00f5d4' : '#ff4d00', true),
-        makeColorRamp('#590d22', false),
-        makeColorRamp('#140708', false)
-      ];
-    case 'BARON':
-    case 'BOSS_CYBER':
-    case 'BOSS_ABYSS': {
-      const cfg = {
-        BARON: { horns: '#fff3b0', hooves: '#29362a', body: '#7a2832', hi: '#b03e4c', eyes: '#70e000', em: '#70e000', metal: '#5c6b5e' },
-        BOSS_CYBER: { horns: '#ffbe0b', hooves: '#495057', body: '#a31621', hi: '#e63946', eyes: '#ffbe0b', em: '#ff4d00', metal: '#adb5bd' },
-        BOSS_ABYSS: { horns: '#00f5d4', hooves: '#190033', body: '#5a189a', hi: '#9d4edd', eyes: '#ffbe0b', em: '#ff0055', metal: '#240046' }
-      }[kind];
-      return [
-        null,
-        makeColorRamp(fleshHit || cfg.body, false),
-        makeColorRamp(isPain ? '#ff9e00' : cfg.hi, false),
-        makeColorRamp(cfg.horns, kind === 'BOSS_ABYSS'),
-        makeColorRamp(cfg.eyes, true),
-        makeColorRamp(cfg.em, true),
-        makeColorRamp(cfg.metal, false),
-        makeColorRamp(cfg.hooves, false)
-      ];
-    }
-    case 'SUMMONER':
-      return [
-        null,
-        makeColorRamp(isPain ? '#9d4edd' : '#2d1b4e', false),
-        makeColorRamp('#4b2d7a', false),
-        makeColorRamp('#6a3fa0', false),
-        makeColorRamp('#70e000', true),
-        makeColorRamp('#ccff33', true),
-        makeColorRamp('#9c6644', false),
-        makeColorRamp('#d8c5b8', false)
-      ];
-    case 'LOST_SOUL':
-      return [
-        null,
-        makeColorRamp('#e0d6c2', false),
-        makeColorRamp('#b8ab95', false),
-        makeColorRamp('#ff4d00', true),
-        makeColorRamp('#ffbe0b', true),
-        makeColorRamp('#fff3b0', true),
-        makeColorRamp('#d90429', true),
-        makeColorRamp('#2b1216', false)
-      ];
-    case 'SHIELD':
-      return [
-        null,
-        makeColorRamp(isPain ? '#ff4d00' : '#495057', false),
-        makeColorRamp('#7a828a', false),
-        makeColorRamp('#343a40', false),
-        makeColorRamp('#00b4d8', true),
-        makeColorRamp('#ff4d00', true),
-        makeColorRamp('#ffbe0b', true),
-        makeColorRamp('#adb5bd', false)
-      ];
-    case 'PINKY':
-      return [
-        null,
-        makeColorRamp(isPain ? '#ff4d00' : '#b5174b', false),
-        makeColorRamp('#e05780', false),
-        makeColorRamp('#fff3b0', false),
-        makeColorRamp('#ffbe0b', true),
-        makeColorRamp('#ff4d00', true),
-        makeColorRamp('#6e0d2a', false)
-      ];
-    case 'REVENANT':
-    default:
-      return [
-        null,
-        makeColorRamp('#e0d6c2', false),
-        makeColorRamp(isPain ? '#ff4d00' : '#6c757d', false),
-        makeColorRamp('#adb5bd', false),
-        makeColorRamp('#ff4d00', true),
-        makeColorRamp(isCharge ? '#ffbe0b' : '#d90429', true),
-        makeColorRamp('#780000', false),
-        makeColorRamp('#495057', false)
-      ];
-  }
-}
-
-function buildEnemyVoxelModel(kind, stepIndex, isCharge, isPain) {
-  const s = VOXEL_SPECIES_SPECS[kind] || VOXEL_SPECIES_SPECS.IMP;
-  const m = new VoxelModel(s.w, s.d, s.h);
-  const cx = (s.w - 1) * 0.5;
-  const cy = (s.d - 1) * 0.5;
-  const pose = getPoseOffsets(stepIndex, isCharge, isPain);
-  const zOff = pose.bob;
-
-  if (kind === 'IMP') {
-    m.symCapsule(4.5, cy + pose.lStride * 0.35, 1, 5.2, cy - 1.5, 8, 2.3, 1.9, 1);
-    m.capsule(cx - 4.5, cy - 1.5, 8, cx - 4.2, cy + 0.5, 14, 2.2, 2.4, 2);
-    m.capsule(cx + 4.5, cy - 1.5, 8, cx + 4.2, cy + 0.5, 14, 2.2, 2.4, 2);
-    m.symEllipsoid(4.8, cy + 1.8 + pose.lStride * 0.4, 1.0, 1.9, 2.6, 1.3, 6);
-
-    m.ellipsoid(cx, cy, 15 + zOff, 5.5, 3.8, 3.5, 1);
-    m.ellipsoid(cx, cy + 0.8, 21.5 + zOff, 7.2, 4.5, 5.8, 1);
-    m.symEllipsoid(2.6, cy + 3.4, 23 + zOff, 2.6, 1.8, 2.5, 2);
-    m.symEllipsoid(1.8, cy + 3.1, 18.5 + zOff, 1.6, 1.4, 2.4, 2);
-    for (let k = 0; k < 4; k++) {
-      m.box(cx - 0.7, cy - 4.5 - k * 0.4, 18 + k * 2.7 + zOff, cx + 0.7, cy - 3.0, 19.6 + k * 2.7 + zOff, 3);
-    }
-    m.capsule(cx, cy - 3.2, 14 + zOff, cx, cy - 7.8, 7.5 + zOff, 1.6, 0.9, 1);
-    m.set(cx, cy - 8.2, 7.2 + zOff, 3);
-    m.symCapsule(7.2, cy + 0.2, 25.5 + zOff, 10.2, cy - 1.5, 28.5 + zOff, 1.7, 0.7, 3);
-
-    const lArmFwd = isCharge ? 5.5 : pose.armSwing * 0.6;
-    const rArmFwd = isCharge ? 5.5 : -pose.armSwing * 0.6;
-    m.capsule(cx - 7.4, cy + 0.5, 24.5 + zOff, cx - 9.4, cy + 2 + lArmFwd * 0.4, 17.5 + zOff, 2.1, 1.7, 2);
-    m.capsule(cx - 9.4, cy + 2 + lArmFwd * 0.4, 17.5 + zOff, cx - 8.6, cy + 4.5 + lArmFwd, 15.5 + zOff, 1.7, 1.5, 1);
-    m.capsule(cx + 7.4, cy + 0.5, 24.5 + zOff, cx + 9.4, cy + 2 + rArmFwd * 0.4, 17.5 + zOff, 2.1, 1.7, 2);
-    m.capsule(cx + 9.4, cy + 2 + rArmFwd * 0.4, 17.5 + zOff, cx + 8.6, cy + 4.5 + rArmFwd, 15.5 + zOff, 1.7, 1.5, 1);
-    m.ellipsoid(cx - 8.6, cy + 5.6 + lArmFwd, 15 + zOff, 1.8, 1.8, 1.8, 5);
-    m.ellipsoid(cx + 8.6, cy + 5.6 + rArmFwd, 15 + zOff, 1.8, 1.8, 1.8, 5);
-
-    m.ellipsoid(cx, cy + 2.4, 30.5 + zOff, 4.4, 4.2, 4.3, 1);
-    m.ellipsoid(cx, cy + 3.2, 29.2 + zOff, 3.6, 3.0, 2.0, 2);
-    m.symCapsule(3.2, cy + 2.5, 33.5 + zOff, 5.2, cy - 1.5, 36.8 + zOff, 1.4, 0.6, 3);
-    m.symSet(2.1, cy + 6.4, 31.0 + zOff, 4);
-    m.symSet(1.5, cy + 6.5, 31.0 + zOff, 4);
-    m.box(cx - 2, cy + 5.6, 27.6 + zOff, cx + 2, cy + 6.6, 28.4 + zOff, 6);
-    m.symSet(1.5, cy + 6.6, 28.5 + zOff, 3);
-    return m;
-  }
-
-  if (kind === 'CACODEMON') {
-    const fz = stepIndex === 1 ? 2 : (stepIndex === 3 ? -2 : 0);
-    m.ellipsoid(cx, cy, 20 + fz, 11.2, 10.6, 11.0, 1);
-    m.ellipsoid(cx, cy - 1.5, 22 + fz, 9.8, 9.2, 9.5, 2);
-    for (const [dx, dy, dz] of [[0, -2, 31], [-5.2, -1, 30], [5.2, -1, 30], [-9, -3.5, 26], [9, -3.5, 26]]) {
-      m.capsule(cx + dx * 0.78, cy + dy, dz - 2 + fz, cx + dx, cy + dy - 2.2, dz + 3.2 + fz, 1.7, 0.6, 3);
-    }
-    for (let k = 0; k < 4; k++) {
-      m.ellipsoid(cx, cy - 9.8, 25 - k * 3.5 + fz, 1.6, 2.0, 1.4, 3);
-    }
-    m.ellipsoid(cx, cy + 9.4, 24.5 + fz, 4.2, 2.6, 3.6, 4);
-    m.box(cx - 0.8, cy + 11.4, 23 + fz, cx + 0.8, cy + 12.2, 26 + fz, 7);
-    const jaw = isCharge || isPain ? 3.2 : (stepIndex % 2 === 1 ? 2.0 : 0.8);
-    m.ellipsoid(cx, cy + 8.8, 15.5 - jaw * 0.4 + fz, 6.8, 3.5, 2.8 + jaw * 0.6, 5);
-    for (let tx = -5.5; tx <= 5.5; tx += 2.2) {
-      m.box(cx + tx - 0.5, cy + 10.5, 17.5 + fz, cx + tx + 0.5, cy + 11.8, 18.8 + fz, 3);
-      m.box(cx + tx - 0.5, cy + 10.5, 13.0 - jaw + fz, cx + tx + 0.5, cy + 11.8, 14.2 - jaw + fz, 3);
-    }
-    m.symCapsule(4.6, cy + 1.5, 10 + fz, 5.4, cy + pose.walkSin * 1.4, 4 + fz, 1.8, 0.8, 6);
-    m.capsule(cx, cy - 1, 9 + fz, cx + pose.walkSin, cy - 1.5, 2.5 + fz, 2.0, 0.8, 6);
-    return m;
-  }
-
-  if (kind === 'LOST_SOUL') {
-    const fz = stepIndex % 2 === 1 ? 1.5 : 0;
-    m.ellipsoid(cx, cy - 1.2, 20.5 + fz, 9.6, 9.6, 9.8, 6);
-    m.ellipsoid(cx, cy - 2.6, 23.0 + fz, 8.2, 8.4, 9.4, 3);
-    m.ellipsoid(cx, cy - 3.8, 25.5 + fz, 6.2, 6.6, 8.2, 4);
-    m.capsule(cx, cy - 3.5, 23 + fz, cx + pose.walkSin * 1.5, cy - 9.0, 31 + fz, 4.5, 1.3, 4);
-    m.capsule(cx, cy - 3.5, 25 + fz, cx, cy - 8.0, 29 + fz, 2.8, 0.9, 5);
-    m.capsule(cx, cy - 1.5, 12 + fz, cx, cy - 5.5, 5 + fz, 3.2, 1.0, 3);
-    m.ellipsoid(cx, cy + 3.0, 18.5 + fz, 6.4, 6.2, 6.4, 1);
-    m.ellipsoid(cx, cy + 4.4, 15.0 + fz, 4.6, 4.8, 3.0, 2);
-    m.symCapsule(5.6, cy + 2.4, 21.0 + fz, 8.5, cy - 1.2, 24.5 + fz, 1.9, 0.8, 1);
-    m.symEllipsoid(2.3, cy + 8.6, 19.2 + fz, 1.5, 1.3, 1.5, 7);
-    m.symSet(2.2, cy + 9.2, 19.3 + fz, 3);
-    const jaw = isCharge ? 2 : 1;
-    m.box(cx - 3.5, cy + 5.2, 11.5 - jaw + fz, cx + 3.5, cy + 9.0, 14.0 - jaw + fz, 1);
-    for (let tx = -3; tx <= 3; tx += 1.5) {
-      m.set(cx + tx, cy + 8.9, 14.5 + fz, 1);
-    }
-    return m;
-  }
-
-  if (kind === 'SUMMONER') {
-    const sway = pose.walkSin * 0.9;
-    m.cylinder(cx, cy, 0, 12, 8.6, 7.6, 1);
-    m.cylinder(cx, cy, 4, 20, 6.8, 5.8, 2);
-    m.cylinder(cx, cy, 18, 28, 7.6, 5.4, 2);
-    m.box(cx - 2.6, cy + 5.2, 2 + zOff, cx + 2.6, cy + 7.2, 26 + zOff, 3);
-    for (let rz = 7; rz <= 21; rz += 5) {
-      m.box(cx - 1.5, cy - 6.6, rz + zOff, cx + 1.5, cy - 5.2, rz + 2 + zOff, 4);
-    }
-    m.symEllipsoid(7.5, cy, 26.5 + zOff, 2.8, 3.0, 2.6, 7);
-    m.symCapsule(7.8, cy, 28 + zOff, 10.2, cy - 1.2, 31.2 + zOff, 1.3, 0.5, 7);
-    m.ellipsoid(cx, cy + 0.4, 32.5 + zOff, 5.2, 5.0, 5.4, 2);
-    m.capsule(cx, cy - 1.5, 35.5 + zOff, cx, cy - 4.8, 38.2 + zOff, 3.2, 1.0, 1);
-    m.box(cx - 2.8, cy + 3.2, 29.8 + zOff, cx + 2.8, cy + 5.4, 34.0 + zOff, 7);
-    m.symSet(1.4, cy + 5.5, 32.2 + zOff, 4);
-    m.capsule(cx - 7.5, cy + 1, 25 + zOff, cx - 10.2, cy + 5.5 + sway, 22 + zOff, 1.8, 1.5, 2);
-    m.ellipsoid(cx - 10.6, cy + 6.4 + sway, 24.5 + zOff, 2.5, 2.5, 2.5, 4);
-    m.ellipsoid(cx - 10.6, cy + 6.4 + sway, 24.5 + zOff, 1.2, 1.2, 1.2, 5);
-    m.capsule(cx + 7.5, cy + 1, 25 + zOff, cx + 11.0, cy + 4.5 - sway, 21 + zOff, 1.8, 1.5, 2);
-    m.capsule(cx + 11.4, cy + 4.8 - sway, 0, cx + 11.4, cy + 4.8 - sway, 35 + zOff, 1.0, 1.0, 6);
-    m.ellipsoid(cx + 11.4, cy + 4.8 - sway, 37.0 + zOff, 2.7, 2.7, 3.0, 4);
-    m.ellipsoid(cx + 11.4, cy + 4.8 - sway, 37.0 + zOff, 1.3, 1.3, 1.6, 5);
-    return m;
-  }
-
-  if (kind === 'SHIELD') {
-    m.symCapsule(4.6, cy + pose.lStride * 0.35, 1, 4.6, cy - 0.5, 14, 2.7, 2.6, 3);
-    m.symEllipsoid(4.8, cy + 1.5 + pose.lStride * 0.35, 1.2, 2.5, 3.1, 1.5, 3);
-    m.ellipsoid(cx, cy, 22 + zOff, 7.6, 4.8, 8.2, 1);
-    m.box(cx - 5.5, cy + 3.2, 18 + zOff, cx + 5.5, cy + 5.2, 28 + zOff, 2);
-    // Reactor dorsal DESPROTEGIDO por la espalda (-Y) para lectura táctica de flanqueo
-    m.ellipsoid(cx, cy - 5.2, 23 + zOff, 4.2, 2.2, 5.2, 3);
-    m.ellipsoid(cx, cy - 6.4, 23 + zOff, 2.4, 1.6, 3.2, 5);
-    m.ellipsoid(cx, cy - 6.7, 23 + zOff, 1.2, 1.2, 1.6, 6);
-    m.capsule(cx - 4.2, cy - 5.4, 18 + zOff, cx - 2.5, cy - 6.0, 27 + zOff, 1.1, 1.1, 7);
-    m.capsule(cx + 4.2, cy - 5.4, 18 + zOff, cx + 2.5, cy - 6.0, 27 + zOff, 1.1, 1.1, 7);
-
-    m.ellipsoid(cx, cy + 0.5, 33.5 + zOff, 4.8, 4.8, 4.8, 2);
-    m.box(cx - 3.6, cy + 4.2, 32.5 + zOff, cx + 3.6, cy + 5.6, 34.4 + zOff, 5);
-    m.box(cx - 2.4, cy - 4.2, 31.5 + zOff, cx + 2.4, cy - 3.4, 34.0 + zOff, 3);
-    m.capsule(cx + 7.8, cy, 26 + zOff, cx + 10.6, cy + 4.5, 21 + zOff, 2.3, 1.9, 1);
-    m.box(cx + 9.2, cy + 3.5, 19 + zOff, cx + 12.2, cy + 9.5, 22 + zOff, 7);
-
-    // Enorme escudo balístico solo al frente (+Y)
-    m.box(cx - 9.2, cy + 6.4, 6 + zOff, cx + 9.2, cy + 8.4, 30 + zOff, 3);
-    m.box(cx - 7.8, cy + 6.8, 8 + zOff, cx + 7.8, cy + 8.8, 28 + zOff, 1);
-    m.box(cx - 5.6, cy + 7.4, 11 + zOff, cx + 5.6, cy + 9.2, 25 + zOff, 2);
-    m.box(cx - 2.2, cy + 8.6, 14 + zOff, cx + 2.2, cy + 9.8, 23 + zOff, 4);
-    for (const [rx, rz] of [[-7.2, 9.5], [7.2, 9.5], [-7.2, 26.5], [7.2, 26.5]]) {
-      m.box(cx + rx - 0.6, cy + 8.8, rz + zOff, cx + rx + 0.6, cy + 9.5, rz + 1.2 + zOff, 7);
-    }
-    return m;
-  }
-
-  if (kind === 'PINKY') {
-    const leanFwd = isCharge ? 2.2 : 0;
-    m.symCapsule(7.5, cy - 4.0 + pose.lStride * 0.35, 1, 7.2, cy - 3.5, 11, 3.6, 3.0, 6);
-    m.symEllipsoid(7.6, cy - 2.0 + pose.lStride * 0.35, 1.5, 3.4, 3.8, 1.8, 6);
-    m.symCapsule(7.8, cy + 4.5 + pose.rStride * 0.3, 1, 7.6, cy + 3.5, 12, 3.2, 2.8, 1);
-    m.ellipsoid(cx, cy - 1.5, 15.5 + zOff, 10.5, 9.5, 7.8, 1);
-    m.ellipsoid(cx, cy - 2.0 + leanFwd * 0.3, 22.5 + zOff, 8.8, 8.2, 5.2, 2);
-    for (let k = 0; k < 4; k++) {
-      m.box(cx - 1.1, cy - 5.5 - k * 2.2, 25 - k * 2.5 + zOff, cx + 1.1, cy - 4.0 - k * 2.2, 27 - k * 2.3 + zOff, 3);
-    }
-    m.capsule(cx, cy - 9.8, 14 + zOff, cx, cy - 13.5, 10 + zOff, 2.2, 1.0, 6);
-    m.ellipsoid(cx, cy + 7.2 + leanFwd, 17.5 + zOff, 8.4, 6.2, 6.2, 1);
-    m.ellipsoid(cx, cy + 8.4 + leanFwd, 21.0 + zOff, 6.8, 4.6, 3.2, 2);
-    m.symCapsule(7.8, cy + 7.5 + leanFwd, 19.5 + zOff, 12.2, cy + 11.8 + leanFwd, 21.5 + zOff, 2.3, 0.8, 3);
-    m.symBox(4.2, cy + 12.2 + leanFwd, 19.2 + zOff, 5.4, cy + 13.4 + leanFwd, 20.6 + zOff, 4);
-    m.box(cx - 6.0, cy + 10.6 + leanFwd, 11.2 - pose.jawDrop + zOff, cx + 6.0, cy + 13.8 + leanFwd, 15.6 + zOff, 5);
-    for (let tx = -4.8; tx <= 4.8; tx += 2.4) {
-      m.box(cx + tx - 0.5, cy + 13.0 + leanFwd, 15.2 + zOff, cx + tx + 0.5, cy + 14.4 + leanFwd, 16.4 + zOff, 3);
-      m.box(cx + tx - 0.5, cy + 13.0 + leanFwd, 10.8 - pose.jawDrop + zOff, cx + tx + 0.5, cy + 14.4 + leanFwd, 12.2 - pose.jawDrop + zOff, 3);
-    }
-    return m;
-  }
-
-  if (kind === 'REVENANT') {
-    m.symCapsule(4.0, cy + pose.lStride * 0.4, 1, 4.2, cy, 17, 1.9, 1.8, 1);
-    m.symEllipsoid(4.0, cy + 1.5 + pose.lStride * 0.4, 1.0, 2.0, 2.5, 1.2, 1);
-    m.box(cx - 4.2, cy - 2.0, 17 + zOff, cx + 4.2, cy + 2.0, 20 + zOff, 1);
-    m.ellipsoid(cx, cy, 24.5 + zOff, 5.2, 3.6, 5.8, 6);
-    for (let rz = 21; rz <= 26; rz += 2.2) {
-      m.box(cx - 4.5, cy + 2.2, rz + zOff, cx + 4.5, cy + 3.8, rz + 1.0 + zOff, 1);
-    }
-    m.box(cx - 5.8, cy + 1.2, 26.5 + zOff, cx + 5.8, cy + 4.2, 31.5 + zOff, 2);
-    m.box(cx - 4.2, cy + 1.8, 27.5 + zOff, cx + 4.2, cy + 4.6, 30.8 + zOff, 3);
-    m.symCapsule(3.0, cy - 4.4, 23 + zOff, 3.2, cy - 4.6, 31 + zOff, 2.1, 2.1, 7);
-    m.symEllipsoid(3.0, cy - 4.6, 22 + zOff, 1.3, 1.3, 1.2, 4);
-    m.symCapsule(7.8, cy - 1.5, 32.5 + zOff, 7.8, cy + 5.0, 32.5 + zOff, 2.6, 2.6, 7);
-    m.symEllipsoid(7.8, cy + 5.4, 32.5 + zOff, 1.7, 1.4, 1.7, 5);
-    m.ellipsoid(cx, cy + 0.6, 34.8 + zOff, 4.0, 4.0, 4.2, 1);
-    m.symSet(1.6, cy + 4.5, 35.2 + zOff, 4);
-    m.symSet(1.6, cy + 4.5, 34.4 + zOff, 4);
-    m.box(cx - 2.2, cy + 3.2, 30.8 + zOff, cx + 2.2, cy + 4.5, 32.2 + zOff, 1);
-    m.capsule(cx - 6.6, cy, 29 + zOff, cx - 8.6, cy + 2.5 + pose.armSwing * 0.4, 21 + zOff, 1.5, 1.3, 1);
-    m.capsule(cx + 6.6, cy, 29 + zOff, cx + 8.6, cy + 2.5 - pose.armSwing * 0.4, 21 + zOff, 1.5, 1.3, 1);
-    m.ellipsoid(cx - 8.6, cy + 3.2 + pose.armSwing * 0.4, 19.5 + zOff, 1.7, 1.7, 1.8, 6);
-    m.ellipsoid(cx + 8.6, cy + 3.2 - pose.armSwing * 0.4, 19.5 + zOff, 1.7, 1.7, 1.8, 6);
-    return m;
-  }
-
-  // BARON / BOSS_CYBER / BOSS_ABYSS
-  const isBoss = kind === 'BOSS_CYBER' || kind === 'BOSS_ABYSS';
-  const isCyber = kind === 'BOSS_CYBER';
-  const isAbyss = kind === 'BOSS_ABYSS';
-  const legSpread = isBoss ? 6.4 : 5.4;
-
-  m.capsule(cx - legSpread, cy + pose.lStride * 0.4, 1, cx - legSpread, cy - 1.2, 11, 3.2, 2.7, 7);
-  m.capsule(cx - legSpread, cy - 1.2, 11, cx - legSpread * 0.85, cy + 0.5, 19, 3.3, 3.6, 1);
-  m.ellipsoid(cx - legSpread, cy + 1.8 + pose.lStride * 0.4, 1.4, 3.1, 3.5, 1.7, 7);
-
-  const rLegMat = isCyber ? 6 : 7;
-  m.capsule(cx + legSpread, cy + pose.rStride * 0.4, 1, cx + legSpread, cy - 1.2, 11, 3.2, 2.7, rLegMat);
-  m.capsule(cx + legSpread, cy - 1.2, 11, cx + legSpread * 0.85, cy + 0.5, 19, 3.3, 3.6, isCyber ? 6 : 1);
-  m.ellipsoid(cx + legSpread, cy + 1.8 + pose.rStride * 0.4, 1.4, 3.1, 3.5, 1.7, rLegMat);
-
-  const waistZ = isBoss ? 20 + zOff : 19 + zOff;
-  const chestZ = isBoss ? 29 + zOff : 27 + zOff;
-  m.ellipsoid(cx, cy, waistZ, isBoss ? 8.2 : 7.0, 5.2, 4.6, 1);
-  m.ellipsoid(cx, cy + 0.4, chestZ, isBoss ? 10.6 : 9.0, 6.2, isBoss ? 7.8 : 7.0, 1);
-  m.symEllipsoid(isBoss ? 4.4 : 3.6, cy + 4.4, chestZ + 1.2, 3.6, 2.4, 3.4, 2);
-  m.ellipsoid(cx, cy + 5.6, chestZ - 0.5, isBoss ? 2.6 : 2.0, 2.2, 2.6, 5);
-  m.ellipsoid(cx, cy + 6.4, chestZ - 0.5, 1.2, 1.5, 1.4, 4);
-
-  for (let sp = 0; sp < 4; sp++) {
-    m.box(cx - 1.0, cy - 6.8, 22 + sp * 3.2 + zOff, cx + 1.0, cy - 4.8, 23.8 + sp * 3.2 + zOff, isBoss ? 6 : 3);
-  }
-  if (isCyber) {
-    m.box(cx - 4.8, cy - 6.8, chestZ - 3, cx + 4.8, cy - 4.8, chestZ + 4, 6);
-    m.box(cx - 2.2, cy - 7.3, chestZ - 1, cx + 2.2, cy - 6.4, chestZ + 2, 5);
-  } else if (isAbyss) {
-    for (let deg = 0; deg < 8; deg++) {
-      const a = (deg / 8) * Math.PI * 2;
-      m.set(cx + Math.round(Math.cos(a) * 6.5), cy - 6.5, chestZ + 4 + Math.round(Math.sin(a) * 6.5), 3);
-    }
-  }
-
-  const shoulderZ = chestZ + (isBoss ? 5.0 : 4.2);
-  const armSpan = isBoss ? 11.4 : 9.8;
-  m.symEllipsoid(armSpan, cy, shoulderZ, 3.4, 3.4, 3.2, isAbyss ? 6 : 2);
-  if (isBoss) {
-    m.symCapsule(armSpan, cy, shoulderZ + 2, armSpan + 3.2, cy - 1.0, shoulderZ + 5.8, 1.8, 0.7, 3);
-  }
-
-  const lHandFwd = isCharge ? 7.5 : pose.armSwing * 0.7;
-  const rHandFwd = isCharge ? 7.5 : -pose.armSwing * 0.7;
-  m.capsule(cx - armSpan, cy, shoulderZ - 1, cx - (armSpan + 2), cy + 1.8, shoulderZ - 10, 2.8, 2.3, 2);
-  m.capsule(cx - (armSpan + 2), cy + 1.8, shoulderZ - 10, cx - (armSpan + 1), cy + 5.5 + lHandFwd, shoulderZ - 12, 2.3, 2.0, 1);
-  m.ellipsoid(cx - (armSpan + 1), cy + 7.2 + lHandFwd, shoulderZ - 12, 2.5, 2.6, 2.4, 5);
-
-  if (isCyber) {
-    m.capsule(cx + armSpan, cy, shoulderZ - 1, cx + (armSpan + 2), cy + 2.0, shoulderZ - 9, 2.9, 2.6, 6);
-    m.capsule(cx + (armSpan + 2), cy + 2.0, shoulderZ - 9, cx + (armSpan + 1.5), cy + 9.5 + rHandFwd * 0.4, shoulderZ - 10, 2.9, 2.4, 6);
-    m.ellipsoid(cx + (armSpan + 1.5), cy + 10.6 + rHandFwd * 0.4, shoulderZ - 10, 1.9, 1.6, 1.9, 5);
-  } else {
-    m.capsule(cx + armSpan, cy, shoulderZ - 1, cx + (armSpan + 2), cy + 1.8, shoulderZ - 10, 2.8, 2.3, 2);
-    m.capsule(cx + (armSpan + 2), cy + 1.8, shoulderZ - 10, cx + (armSpan + 1), cy + 5.5 + rHandFwd, shoulderZ - 12, 2.3, 2.0, 1);
-    m.ellipsoid(cx + (armSpan + 1), cy + 7.2 + rHandFwd, shoulderZ - 12, 2.5, 2.6, 2.4, 5);
-  }
-
-  const headZ = chestZ + (isBoss ? 8.8 : 8.0);
-  m.ellipsoid(cx, cy + 1.2, headZ, 4.8, 4.6, 4.8, 1);
-  m.ellipsoid(cx, cy + 2.2, headZ - 1.2, 4.0, 3.5, 2.4, 2);
-  m.symCapsule(4.0, cy + 1.0, headZ + 2.5, 8.8, cy - 0.5, headZ + 7.8, 2.0, 0.7, 3);
-  if (isAbyss) {
-    m.capsule(cx, cy + 1.0, headZ + 3.5, cx, cy + 1.5, headZ + 8.5, 1.5, 0.5, 3);
-  }
-  m.symBox(1.8, cy + 5.1, headZ + 0.4, 3.2, cy + 6.0, headZ + 1.6, 4);
-  return m;
-}
-
-function buildGoreVoxelModel(kind, stage) {
-  const s = VOXEL_SPECIES_SPECS[kind] || VOXEL_SPECIES_SPECS.IMP;
-  const m = new VoxelModel(s.w, s.d, s.h);
-  const cx = (s.w - 1) * 0.5;
-  const cy = (s.d - 1) * 0.5;
-  const midZ = Math.round(s.h * 0.42);
-
-  if (stage === 0) {
-    m.symCapsule(4.5, cy, 1, 5.2, cy - 1, Math.round(midZ * 0.65), 2.5, 2.2, 1);
-    m.ellipsoid(cx, cy, midZ, 7.6, 5.0, 6.2, 1);
-    m.ellipsoid(cx, cy + 3.4, midZ, 4.4, 2.6, 3.8, 2);
-    m.symBox(1.6, cy + 4.5, midZ - 2, 3.5, cy + 5.6, midZ + 2, 3);
-    m.ellipsoid(cx + 1.2, cy + 1.2, midZ + 8.5, 4.2, 4.0, 4.0, 1);
-    return m;
-  }
-  if (stage === 1) {
-    m.ellipsoid(cx, cy, 6.5, 9.5, 7.2, 4.8, 2);
-    m.ellipsoid(cx - 2, cy + 1.5, 9.0, 5.5, 4.2, 3.5, 1);
-    m.ellipsoid(cx + 3, cy + 2.5, 10.5, 3.6, 3.6, 3.2, 3);
-    return m;
-  }
-  if (stage === 2) {
-    m.ellipsoid(cx, cy, 2.0, 11.2, 8.6, 2.2, 2);
-    m.ellipsoid(cx, cy + 1.0, 4.0, 7.2, 5.4, 2.4, 1);
-    m.box(cx - 4.5, cy + 1.5, 3.5, cx + 4.5, cy + 4.2, 6.2, 3);
-    return m;
-  }
-  m.ellipsoid(cx, cy, 1.2, 12.2, 9.2, 1.3, 2);
-  m.ellipsoid(cx + 1.5, cy + 1.5, 2.2, 7.0, 5.2, 1.3, 1);
-  m.ellipsoid(cx - 3.0, cy + 3.2, 3.2, 3.0, 3.0, 2.6, 3);
-  m.set(cx + 3.2, cy + 2.5, 2.8, 4);
-  return m;
-}
-
-function getOrBakeVoxelSprite(kind, anim, dir, frame) {
-  const key = `${kind}|${dir}|${anim}|${frame}`;
-  const cached = VOXEL_SPRITE_CACHE.get(key);
-  if (cached) return cached;
-
-  const spec = VOXEL_SPECIES_SPECS[kind] || VOXEL_SPECIES_SPECS.IMP;
-  const isPain = anim === 'pain';
-  const isCharge = anim === 'charge';
-  const isDeath = anim === 'death';
-  const yaw = isDeath ? 0 : dir * (Math.PI * 0.25);
-
-  const model = isDeath
-    ? buildGoreVoxelModel(kind, frame)
-    : buildEnemyVoxelModel(kind, isCharge ? (frame === 0 ? 1 : 3) : frame, isCharge, isPain);
-
-  const ramps = isDeath
-    ? [
-        null,
-        makeColorRamp('#9e0000', false),
-        makeColorRamp('#d90429', false),
-        makeColorRamp('#fff3b0', false),
-        makeColorRamp('#ff4d00', true)
-      ]
-    : buildEnemyRamps(kind, isPain, isCharge);
-
-  const sprite = renderVoxelSprite(model, ramps, yaw, spec.scale, spec.cw, spec.ch);
-  VOXEL_SPRITE_CACHE.set(key, sprite);
-  return sprite;
-}
-
-function makeEnemyAnimationSet(kind, bodyColor) {
-  const walk = Array.from({ length: 8 }, () => [null, null, null, null]);
-  const charge = Array.from({ length: 8 }, () => [null, null]);
-  const pain = new Array(8).fill(null);
-  const death = [null, null, null, null];
-
-  const getWalk = (dir, frame) => {
-    const d = dir & 7;
-    const f = ((frame % 4) + 4) % 4;
-    if (!walk[d][f]) walk[d][f] = getOrBakeVoxelSprite(kind, 'walk', d, f);
-    return walk[d][f];
-  };
-  const getCharge = (dir, frame) => {
-    const d = dir & 7;
-    const f = frame & 1;
-    if (!charge[d][f]) charge[d][f] = getOrBakeVoxelSprite(kind, 'charge', d, f);
-    return charge[d][f];
-  };
-  const getPain = (dir) => {
-    const d = dir & 7;
-    if (!pain[d]) pain[d] = getOrBakeVoxelSprite(kind, 'pain', d, 0);
-    return pain[d];
-  };
-  const getDeath = (stage) => {
-    const f = clamp(Math.floor(stage), 0, 3);
-    if (!death[f]) death[f] = getOrBakeVoxelSprite(kind, 'death', 0, f);
-    return death[f];
-  };
-
-  for (let f = 0; f < 4; f++) getWalk(0, f);
-  getCharge(0, 0);
-  getCharge(0, 1);
-  getPain(0);
-  for (let f = 0; f < 4; f++) getDeath(f);
-
-  return {
-    kind,
-    bodyColor,
-    walk,
-    charge,
-    pain,
-    death,
-    getWalk,
-    getCharge,
-    getPain,
-    getDeath
-  };
-}
-
-/** Genera sprites prerenderizados en alta definición (2x) para puño blindado UAC y las 4 armas. */
-function makeWeaponSprites() {
-  const mk = (w, h, fn) => {
-    const cv = document.createElement('canvas');
-    cv.width = w;
-    cv.height = h;
-    const c = cv.getContext('2d');
-    fn(c, w, h);
-    return cv;
-  };
-  const px = (c, x, y, w, h, col) => {
-    c.fillStyle = col;
-    c.fillRect(x, y, w, h);
-  };
-  const frameRect = (c, x, y, w, h, border, fill) => {
-    px(c, x - 2, y - 2, w + 4, h + 4, border);
-    px(c, x, y, w, h, fill);
-  };
-
-  // --- PUÑOS BLINDADOS UAC (Normal y Potenciado Ígneo) ---
-  const buildFist = (empowered) => mk(140, 160, (c) => {
-    const cx = 70;
-    const fy = 48;
-    // Antebrazo blindado UAC con placas biseladas
-    frameRect(c, cx - 28, fy + 8, 56, 98, '#140708', '#2a4a31');
-    px(c, cx - 24, fy + 16, 48, 86, empowered ? '#4d1924' : '#386641');
-    px(c, cx - 18, fy + 18, 22, 80, empowered ? '#800f2f' : '#6a994e');
-    px(c, cx + 6, fy + 18, 12, 80, empowered ? '#590d22' : '#2d5234');
-    // Muñequera mecánica acero
-    frameRect(c, cx - 30, fy - 2, 60, 16, '#140708', '#495057');
-    px(c, cx - 26, fy, 52, 5, '#adb5bd');
-    px(c, cx - 20, fy + 7, 40, 4, empowered ? '#ffbe0b' : '#6c757d');
-    // Puño cerrado articulado + nudilleras metálicas
-    frameRect(c, cx - 34, fy - 28, 68, 42, '#140708', empowered ? '#d90429' : '#c68b67');
-    px(c, cx - 30, fy - 24, 38, 18, empowered ? '#ff4d00' : '#e0ac8b');
-    px(c, cx - 26, fy - 26, 20, 6, empowered ? '#ffbe0b' : '#f2cbb2');
-    for (let k = -26; k <= 16; k += 14) {
-      px(c, cx + k, fy - 23, 10, 12, '#140708');
-      px(c, cx + k + 1, fy - 22, 8, 9, empowered ? '#ffbe0b' : '#d4a373');
-      px(c, cx + k + 2, fy - 21, 5, 4, empowered ? '#fff3b0' : '#f2cbb2');
-    }
-    // Pulgar doblado en primer plano
-    frameRect(c, cx - 36, fy - 12, 24, 14, '#140708', empowered ? '#a31621' : '#b87d5a');
-  });
-
-  // --- DESTELLOS ESTELARES ---
-  const buildStarFlash = (w, h, coreR) => mk(w, h, (c) => {
-    const cx = w / 2;
-    const cy = h * 0.56;
-    const drawSpikes = (col, rx, ry) => {
-      c.fillStyle = col;
-      c.beginPath();
-      for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * Math.PI * 2;
-        const m = i % 2 === 0 ? 1.0 : 0.42;
-        const vx = cx + Math.cos(a) * rx * m;
-        const vy = cy + Math.sin(a) * ry * m;
-        if (i === 0) c.moveTo(vx, vy);
-        else c.lineTo(vx, vy);
-      }
-      c.closePath();
-      c.fill();
-    };
-    drawSpikes('rgba(217, 4, 41, 0.85)', w * 0.48, h * 0.46);
-    drawSpikes('#ff4d00', w * 0.38, h * 0.36);
-    drawSpikes('#ffbe0b', w * 0.25, h * 0.24);
-    drawSpikes('#fff3b0', coreR, coreR * 0.8);
-  });
-
-  // --- SUPER ESCOPETA DOOM (idle + pump 2 fases) ---
-  const buildShotgun = (pumpStage) => mk(168, 176, (c) => {
-    const cx = 84;
-    const by = 176;
-    const forendY = pumpStage === 0 ? 0 : (pumpStage === 1 ? 14 : 6);
-    const tilt = pumpStage === 0 ? 0 : (pumpStage === 1 ? -12 : -6);
-
-    c.save();
-    if (tilt !== 0) {
-      c.translate(cx, by - 24);
-      c.rotate((tilt * Math.PI) / 180);
-      c.translate(-cx, -(by - 24));
-    }
-
-    // Doble cañón paralelo en acero pavonado y biseles brillantes
-    frameRect(c, cx - 32, by - 110, 64, 62, '#140708', '#1b1d22');
-    for (const bx of [cx - 30, cx + 4]) {
-      px(c, bx, by - 108, 26, 58, '#2b3038');
-      px(c, bx + 4, by - 106, 10, 54, '#6c757d');
-      px(c, bx + 7, by - 106, 4, 52, '#dee2e6');
-      px(c, bx + 18, by - 106, 6, 54, '#1b1d22');
-      // Boca oscura del cañón
-      px(c, bx + 4, by - 110, 18, 5, '#07080a');
-    }
-    // Nervio central y punto de mira dorado
-    px(c, cx - 4, by - 106, 8, 54, '#140708');
-    px(c, cx - 2, by - 104, 4, 50, '#495057');
-    px(c, cx - 2, by - 114, 4, 7, '#ffbe0b');
-    px(c, cx - 1, by - 114, 2, 3, '#fff3b0');
-
-    // Corredera guardamanos acanalada
-    frameRect(c, cx - 40, by - 58 + forendY, 80, 34, '#140708', '#343a40');
-    px(c, cx - 34, by - 55 + forendY, 68, 26, '#6c757d');
-    px(c, cx - 26, by - 55 + forendY, 22, 24, '#adb5bd');
-    for (let ry = by - 52 + forendY; ry < by - 31 + forendY; ry += 6) {
-      px(c, cx - 36, ry, 72, 2, '#140708');
-    }
-    // Remaches laterales
-    px(c, cx - 34, by - 46 + forendY, 4, 4, '#dee2e6');
-    px(c, cx + 30, by - 46 + forendY, 4, 4, '#dee2e6');
-
-    // Culata caoba tallada con vetas + guantes tácticos
-    frameRect(c, cx - 48, by - 34, 96, 34, '#140708', '#4a2511');
-    px(c, cx - 42, by - 30, 84, 28, '#7f4f24');
-    px(c, cx - 32, by - 26, 60, 12, '#9c6644');
-    px(c, cx - 24, by - 24, 34, 5, '#b07d56');
-    // Manos del marine agarrando corredera y culata
-    frameRect(c, cx - 56, by - 22 + forendY, 28, 22, '#140708', '#3d2314');
-    px(c, cx - 50, by - 20 + forendY, 18, 8, '#d4a373');
-    frameRect(c, cx + 28, by - 20, 28, 22, '#140708', '#3d2314');
-    px(c, cx + 32, by - 18, 18, 8, '#d4a373');
-    c.restore();
-  });
-
-  // --- CHAINGUN ROTATIVA (4 frames de rotación + cinta de balas) ---
-  const buildChaingun = (phase) => mk(184, 160, (c) => {
-    const cx = 92;
-    const by = 160;
-    frameRect(c, cx - 40, by - 102, 80, 56, '#140708', '#1f2328');
-    // 6 cañones rotando suavemente según phase 0..3
-    for (let i = 0; i < 6; i++) {
-      const ang = ((i + phase * 0.25) / 6) * Math.PI * 2;
-      const ox = Math.sin(ang) * 32;
-      const depth = Math.cos(ang);
-      if (depth < -0.45) continue;
-      const bw = depth > 0.3 ? 10 : 8;
-      const x = Math.round(cx + ox - bw / 2);
-      px(c, x - 1, by - 100, bw + 2, 52, '#140708');
-      px(c, x, by - 100, bw, 50, depth > 0.2 ? '#6c757d' : '#495057');
-      px(c, x + 2, by - 100, 3, 48, depth > 0.2 ? '#dee2e6' : '#adb5bd');
-    }
-    // Abrazaderas estabilizadoras ventiladas
-    for (const cy of [by - 86, by - 60]) {
-      frameRect(c, cx - 42, cy, 84, 9, '#140708', '#adb5bd');
-      px(c, cx - 38, cy + 2, 76, 3, '#dee2e6');
-      for (let rx = -34; rx <= 30; rx += 16) px(c, cx + rx, cy + 3, 4, 3, '#252930');
-    }
-    // Cajón receptor + selector peligro
-    frameRect(c, cx - 50, by - 44, 100, 44, '#140708', '#252930');
-    px(c, cx - 42, by - 40, 84, 12, '#343a40');
-    px(c, cx - 18, by - 36, 36, 4, '#ff4d00');
-    // Cinta de munición metálica alimentándose por la derecha
-    for (let y = by - 42; y < by - 4; y += 8) {
-      const shift = (phase % 2) * 2;
-      px(c, cx + 44, y + shift, 24, 6, '#140708');
-      px(c, cx + 46, y + 1 + shift, 14, 4, '#ffbe0b');
-      px(c, cx + 60, y + 1 + shift, 7, 4, '#d90429');
-    }
-  });
-
-  // --- LANZALLAMAS INFERNAL (chasis + llamas piloto + ráfagas) ---
-  const flamerBody = mk(176, 176, (c) => {
-    const cx = 88;
-    const by = 176;
-    // Tanque presurizado rojo carmesí con correas y manómetro
-    frameRect(c, cx + 20, by - 72, 34, 56, '#140708', '#9e1919');
-    px(c, cx + 24, by - 68, 14, 48, '#d90429');
-    px(c, cx + 27, by - 64, 5, 42, '#ff6b6b');
-    px(c, cx + 19, by - 58, 36, 6, '#495057');
-    px(c, cx + 19, by - 32, 36, 6, '#495057');
-    // Manómetro
-    px(c, cx + 26, by - 50, 14, 14, '#140708');
-    px(c, cx + 28, by - 48, 10, 10, '#caf0f8');
-    px(c, cx + 32, by - 45, 5, 3, '#d90429');
-    // Caño principal y rejilla refrigeradora incandescente
-    frameRect(c, cx - 24, by - 104, 48, 54, '#140708', '#2b2d33');
-    px(c, cx - 18, by - 100, 16, 46, '#495057');
-    px(c, cx - 12, by - 94, 24, 14, '#ff4d00');
-    px(c, cx - 8, by - 91, 14, 7, '#fff3b0');
-    // Electrodo encendedor en punta
-    px(c, cx - 6, by - 114, 4, 12, '#adb5bd');
-    px(c, cx + 2, by - 114, 4, 12, '#adb5bd');
-    // Culata inferior
-    frameRect(c, cx - 42, by - 52, 76, 52, '#140708', '#343a40');
-    px(c, cx - 36, by - 46, 58, 16, '#495057');
-  });
-
-  const buildPilot = (f) => mk(36, 42, (c) => {
-    const lean = (f - 1) * 3;
-    c.fillStyle = '#00f5d4';
-    c.beginPath();
-    c.arc(18 + lean * 0.5, 28, 8, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#ffbe0b';
-    c.beginPath();
-    c.arc(18 + lean, 18, 6, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#fff3b0';
-    c.beginPath();
-    c.arc(18 + lean * 0.6, 22, 4, 0, Math.PI * 2);
-    c.fill();
-  });
-
-  const buildFlameBlast = (f) => mk(168, 132, (c) => {
-    const lean = (f - 1) * 8;
-    const blob = (col, x, y, r) => {
-      c.fillStyle = col;
-      c.beginPath();
-      c.arc(x, y, r, 0, Math.PI * 2);
-      c.fill();
-    };
-    blob('rgba(217, 4, 41, 0.85)', 84 + lean * 0.7, 56, 56);
-    blob('#ff4d00', 84 - lean * 0.4, 68, 42);
-    blob('#ffbe0b', 84 + lean * 0.3, 82, 30);
-    blob('#fff3b0', 84, 96, 18);
-  });
-
-  // --- MOTOSIERRA INFERNAL (4 fases de dientes animados) ---
-  const buildChainsaw = (phase) => mk(160, 204, (c) => {
-    const cx = 80;
-    const by = 204;
-    // Espada metálica larga con surco central y rueda dentada en punta
-    frameRect(c, cx - 16, by - 154, 32, 74, '#140708', '#adb5bd');
-    px(c, cx - 10, by - 150, 8, 68, '#dee2e6');
-    px(c, cx + 2, by - 150, 8, 68, '#6c757d');
-    px(c, cx - 2, by - 146, 4, 58, '#343a40');
-    // Puntera redondeada
-    frameRect(c, cx - 14, by - 164, 28, 14, '#140708', '#495057');
-    px(c, cx - 6, by - 160, 12, 6, '#ff4d00');
-    // Dientes de cadena animados en ambas aristas
-    for (let i = 0; i < 10; i++) {
-      const ty = by - 152 + ((i * 7 + phase * 1.75) % 70);
-      px(c, cx - 19, Math.floor(ty), 6, 4, (i + phase) % 2 === 0 ? '#fff3b0' : '#adb5bd');
-      px(c, cx + 13, Math.floor(ty), 6, 4, (i + phase + 1) % 2 === 0 ? '#fff3b0' : '#adb5bd');
-    }
-    // Bloque motor industrial y ventilación
-    frameRect(c, cx - 34, by - 84, 68, 52, '#140708', '#343a40');
-    px(c, cx - 28, by - 78, 56, 12, '#6c757d');
-    px(c, cx - 18, by - 62, 36, 14, '#ff4d00');
-    px(c, cx - 12, by - 58, 24, 6, '#ffbe0b');
-    for (let vx = -26; vx <= 22; vx += 12) px(c, cx + vx, by - 44, 7, 8, '#adb5bd');
-    // Manillar ergonómico y guantes blindados
-    frameRect(c, cx - 44, by - 36, 88, 36, '#140708', '#4a2511');
-    px(c, cx - 34, by - 30, 68, 20, '#7f4f24');
-    px(c, cx - 42, by - 28, 16, 18, '#d4a373');
-    px(c, cx + 26, by - 26, 16, 18, '#d4a373');
-  });
-
-  return {
-    fist: { normal: buildFist(false), empowered: buildFist(true) },
-    shotgun: {
-      idle: buildShotgun(0),
-      pump0: buildShotgun(1),
-      pump1: buildShotgun(2),
-      flash: buildStarFlash(136, 88, 16)
-    },
-    chaingun: {
-      spin: [0, 1, 2, 3].map(buildChaingun),
-      flash: buildStarFlash(128, 72, 14)
-    },
-    flamer: {
-      body: flamerBody,
-      pilot: [0, 1, 2].map(buildPilot),
-      blast: [0, 1, 2].map(buildFlameBlast)
-    },
-    chainsaw: {
-      frames: [0, 1, 2, 3].map(buildChainsaw),
-      rev: buildStarFlash(120, 68, 12)
-    }
-  };
-}
-
-/** Devuelve una copia cacheada del sprite teñida exactamente dentro de su silueta opaca. */
-function getTintedSprite(sprite, color) {
-  let byColor = TINTED_SPRITE_CACHE.get(sprite);
-  if (!byColor) {
-    byColor = new Map();
-    TINTED_SPRITE_CACHE.set(sprite, byColor);
-  }
-  let tinted = byColor.get(color);
-  if (tinted) return tinted;
-
-  tinted = document.createElement('canvas');
-  tinted.width = sprite.width;
-  tinted.height = sprite.height;
-  const tctx = tinted.getContext('2d');
-  tctx.drawImage(sprite, 0, 0);
-  tctx.globalCompositeOperation = 'source-atop';
-  tctx.fillStyle = color;
-  tctx.fillRect(0, 0, sprite.width, sprite.height);
-  tctx.globalCompositeOperation = 'source-over';
-  byColor.set(color, tinted);
-  return tinted;
-}
 
 function makeFlameBallSprite(stage) {
   const canvas = document.createElement('canvas');
@@ -2526,15 +1454,26 @@ export class HellfallGame {
 
     this.animSets = {
       IMP: makeEnemyAnimationSet('IMP', '#8a4f2b'),
+      RIFLEMAN: makeEnemyAnimationSet('RIFLEMAN', '#3f5e45'),
+      SNIPER: makeEnemyAnimationSet('SNIPER', '#252936'),
+      TURRET: makeEnemyAnimationSet('TURRET', '#5c6773'),
       CACODEMON: makeEnemyAnimationSet('CACODEMON', '#d90429'),
       BRUTE: makeEnemyAnimationSet('BARON', '#7a2832'),
+      MANCUBUS: makeEnemyAnimationSet('MANCUBUS', '#b87d56'),
+      HELL_KNIGHT: makeEnemyAnimationSet('HELL_KNIGHT', '#9e8c82'),
+      SPECTRE: makeEnemyAnimationSet('SPECTRE', '#3c2a4d'),
+      CYBERDEMON: makeEnemyAnimationSet('CYBERDEMON', '#8a3228'),
       SUMMONER: makeEnemyAnimationSet('SUMMONER', '#4b2d7a'),
       LOST_SOUL: makeEnemyAnimationSet('LOST_SOUL', '#ff4d00'),
       SHIELD: makeEnemyAnimationSet('SHIELD', '#495057'),
       PINKY: makeEnemyAnimationSet('PINKY', '#b5174b'),
       REVENANT: makeEnemyAnimationSet('REVENANT', '#adb5bd'),
+      BOSS_CHAMPION: makeEnemyAnimationSet('BOSS_CHAMPION', '#6c242b'),
+      BOSS_PYRO: makeEnemyAnimationSet('BOSS_PYRO', '#9e1919'),
+      BOSS_NECRO: makeEnemyAnimationSet('BOSS_NECRO', '#2c1654'),
       BOSS_CYBER: makeEnemyAnimationSet('BOSS_CYBER', '#a31621'),
-      BOSS_ABYSS: makeEnemyAnimationSet('BOSS_ABYSS', '#5a189a')
+      BOSS_VOID: makeEnemyAnimationSet('BOSS_VOID', '#3d0c59'),
+      BOSS_ICON: makeEnemyAnimationSet('BOSS_ICON', '#6e1423')
     };
 
     if (CONFIG.DEBUG_SPRITES && typeof document !== 'undefined') {
@@ -2555,16 +1494,58 @@ export class HellfallGame {
     this.medkitSprites = [makeMedkitSprite(0), makeMedkitSprite(1)];
     this.armorSprites = [makeArmorSprite(0), makeArmorSprite(1)];
     this.soulsphereSprites = [makeSoulsphereSprite(0), makeSoulsphereSprite(1)];
+    this.rocketSprites = [makeRocketProjectileSprite(0), makeRocketProjectileSprite(1)];
+    this.plasmaSprites = [makePlasmaBoltSprite(0), makePlasmaBoltSprite(1)];
+    this.bfgSprites = [makeBfgOrbSprite(0), makeBfgOrbSprite(1)];
+    this.weaponPickupSprites = {
+      2: [makeWeaponPickupSprite(2, 0), makeWeaponPickupSprite(2, 1)],
+      3: [makeWeaponPickupSprite(3, 0), makeWeaponPickupSprite(3, 1)],
+      4: [makeWeaponPickupSprite(4, 0), makeWeaponPickupSprite(4, 1)],
+      5: [makeWeaponPickupSprite(5, 0), makeWeaponPickupSprite(5, 1)],
+      6: [makeWeaponPickupSprite(6, 0), makeWeaponPickupSprite(6, 1)],
+      7: [makeWeaponPickupSprite(7, 0), makeWeaponPickupSprite(7, 1)]
+    };
+    this.generatorSprites = {
+      alive: [makeGeneratorSprite(true, 0), makeGeneratorSprite(true, 1)],
+      dead: makeGeneratorSprite(false, 0)
+    };
+    this.pylonSprites = {
+      active: [makePylonSprite(true, 0), makePylonSprite(true, 1)],
+      inactive: makePylonSprite(false, 0)
+    };
+    this.vipSprites = {
+      trapped: [makeVipSprite(false, 0), makeVipSprite(false, 1)],
+      rescued: [makeVipSprite(true, 0), makeVipSprite(true, 1)]
+    };
+    this.coloredKeySprites = {
+      RED: [makeColoredKeySprite('RED', 0), makeColoredKeySprite('RED', 1)],
+      BLUE: [makeColoredKeySprite('BLUE', 0), makeColoredKeySprite('BLUE', 1)],
+      YELLOW: [makeColoredKeySprite('YELLOW', 0), makeColoredKeySprite('YELLOW', 1)]
+    };
+    this.coreSprites = {
+      idle: [makeCoreSprite(false, 0), makeCoreSprite(false, 1)],
+      active: [makeCoreSprite(true, 0), makeCoreSprite(true, 1)]
+    };
     this.orbSprites = {
       IMP: makeDemonOrbSprite('#ff4d00', '#ffbe0b'),
       CACODEMON: makeDemonOrbSprite('#00b4d8', '#caf0f8'),
       BRUTE: makeDemonOrbSprite('#38b000', '#ccff33'),
+      HELL_KNIGHT: makeDemonOrbSprite('#00f5d4', '#70e000'),
+      MANCUBUS: makeDemonOrbSprite('#ff4d00', '#fff3b0'),
+      TURRET: makeDemonOrbSprite('#ff003c', '#ffbe0b'),
+      CYBERDEMON: makeRocketProjectileSprite(0),
       SUMMONER: makeDemonOrbSprite('#70e000', '#ccff33'),
       SHIELD: makeDemonOrbSprite('#00b4d8', '#caf0f8'),
       REVENANT: makeDemonOrbSprite('#ff9e00', '#fff3b0'),
-      BOSS: makeDemonOrbSprite('#ff0055', '#ffbe0b')
+      BOSS: makeDemonOrbSprite('#ff0055', '#ffbe0b'),
+      BOSS_NECRO: makeDemonOrbSprite('#70e000', '#ccff33'),
+      BOSS_VOID: makeDemonOrbSprite('#9d4edd', '#00f5d4'),
+      BOSS_ICON: makeDemonOrbSprite('#ff003c', '#ffbe0b')
     };
     this.weaponSprites = makeWeaponSprites();
+
+    this.characterGender = 'male';
+    this.characterProfile = getCharacterProfile('male');
 
     this.keys = new Set();
     this.zBuffer = new Float32Array(this.worldW);
@@ -2582,9 +1563,22 @@ export class HellfallGame {
     this.chests = [];
     this.armorPickups = [];
     this.powerups = [];
+    this.weaponPickups = [];
     this.coins = [];
     this.barrels = [];
     this.teleporters = [];
+    this.teleportPortals = [];
+    this.monsterClosets = [];
+    this.generators = [];
+    this.arenaPylons = [];
+    this.coloredKeys = [];
+    this.vip = null;
+    this.escapeCore = null;
+    this.survivalState = null;
+    this.sectorObjective = { type: 'BOSS_KEY', complete: false, label: 'BOSS + LLAVE' };
+    this.runPlan = [];
+    this.nextRouteChoice = null;
+    this.director = { intensity: 0.2, state: 'BUILD', nextWaveAt: 0, reservePool: [], ambushesTriggered: 0, lastCombatAt: 0 };
     this.meteorStrikes = [];
     this.meteorTimer = 4.0;
     this.flowDist = [];
@@ -2592,12 +1586,15 @@ export class HellfallGame {
     this.merchant = null;
     this.shockwaves = [];
     this.floorCracks = [];
+    this.bloodPools = [];
     this.keyItem = null;
     this.fireProps = [];
     this.ammoPacks = [];
     this.medkits = [];
     this.flameProjectiles = [];
+    this.playerProjectiles = [];
     this.enemyProjectiles = [];
+    this.hitscanTracers = [];
     this.bloodParticles = [];
     this.wallSparks = [];
     this.ambientEmbers = [];
@@ -2717,7 +1714,25 @@ export class HellfallGame {
         return;
       }
       if (this.intermission) {
-        const choices = this.intermission.upgradeChoices || [];
+        const im = this.intermission;
+        if (im.stage === 'ROUTE') {
+          const routes = im.routeChoices || [];
+          if (routes.length > 0 && cy >= 56 && cy <= 138) {
+            const count = routes.length;
+            const totalW = WIDTH - 24;
+            const gap = 6;
+            const cardW = Math.floor((totalW - gap * (count - 1)) / count);
+            for (let i = 0; i < count; i++) {
+              const x0 = 12 + i * (cardW + gap);
+              if (cx >= x0 && cx <= x0 + cardW) {
+                this.selectRouteChoice(i);
+                return;
+              }
+            }
+          }
+          return;
+        }
+        const choices = im.upgradeChoices || [];
         if (choices.length > 0 && cy >= 62 && cy <= 132) {
           const cardCount = choices.length;
           const totalW = WIDTH - 24;
@@ -2731,7 +1746,7 @@ export class HellfallGame {
             }
           }
         }
-        if (!this.intermission.upgradeSelected && cy >= 48 && cy <= 61 && cx >= 216 && cx <= 308) {
+        if (!im.upgradeSelected && cy >= 48 && cy <= 61 && cx >= 216 && cx <= 308) {
           this.rerollIntermissionUpgrades();
           return;
         }
@@ -2743,13 +1758,27 @@ export class HellfallGame {
         this.lastTime = performance.now();
         return;
       }
-      if (this.shopOpen) return;
+      if (this.shopOpen) {
+        if (event.button === 0 && cx >= 24 && cx <= WIDTH - 24) {
+          if (cy >= 27 && cy < 146) {
+            const idx = Math.floor((cy - 27) / 17);
+            if (idx >= 0 && idx < 7) {
+              this.buyMerchantItem(idx + 1);
+            }
+          } else if (cy >= 146) {
+            this.closeShop();
+          }
+        } else if (event.button === 2) {
+          this.closeShop();
+        }
+        return;
+      }
 
       if (this.paused) {
         if (cx >= 46 && cx <= 274) {
           if (cy >= 46 && cy <= 65) {
             this.resume();
-            if (this.canvas.requestPointerLock) this.canvas.requestPointerLock();
+            this.safeRequestPointerLock();
             return;
           }
           if (cy >= 68 && cy <= 87) {
@@ -2773,12 +1802,13 @@ export class HellfallGame {
           }
         }
         this.resume();
-        if (this.canvas.requestPointerLock) this.canvas.requestPointerLock();
+        this.safeRequestPointerLock();
         return;
       }
-      if (document.pointerLockElement !== this.canvas && this.canvas.requestPointerLock) {
-        this.canvas.requestPointerLock();
-      } else if (event.button === 2) {
+
+      const wasLocked = document.pointerLockElement === this.canvas;
+      if (!wasLocked) this.safeRequestPointerLock();
+      if (event.button === 2) {
         this.triggerPunch(false);
       } else if (event.button === 0) {
         this.mouseDown = true;
@@ -2789,15 +1819,27 @@ export class HellfallGame {
     this.onMouseUp = (event) => {
       if (!event || event.button === 0) this.mouseDown = false;
     };
+    this.onWindowBlur = () => {
+      this.keys.clear();
+      this.mouseDown = false;
+    };
     this.onWheel = (e) => {
       if (!this.running || this.paused || this.finished || this.intermission || this.shopOpen || this.mapOpen || this.deathSequence) return;
       const dir = Math.sign(e.deltaY);
-      if (dir !== 0) this.selectWeapon(((this.player.weapon - 1 + dir + 4) % 4) + 1);
+      if (dir !== 0 && this.player) {
+        const owned = [1, 2, 3, 4, 5, 6, 7].filter((w) => this.isWeaponOwned(w));
+        if (owned.length > 1) {
+          const curIdx = Math.max(0, owned.indexOf(this.player.weapon));
+          const nextW = owned[(curIdx + dir + owned.length) % owned.length];
+          this.selectWeapon(nextW);
+        }
+      }
     };
 
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('mouseup', this.onMouseUp);
+    window.addEventListener('blur', this.onWindowBlur);
     window.addEventListener('wheel', this.onWheel);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
@@ -2806,50 +1848,24 @@ export class HellfallGame {
     this.renderAttractScreen();
   }
 
-  setupFullscreenSupport() {
-    if (!document.getElementById('hellfall-fs-style')) {
-      const style = document.createElement('style');
-      style.id = 'hellfall-fs-style';
-      style.textContent = `
-        .game-screen-wrap:fullscreen,
-        .game-screen-wrap:-webkit-full-screen {
-          position: fixed !important;
-          inset: 0 !important;
-          width: 100vw !important;
-          height: 100vh !important;
-          max-width: 100vw !important;
-          max-height: 100vh !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          background: #000000 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: hidden !important;
-          box-sizing: border-box !important;
-        }
-        .game-screen-wrap:fullscreen > #game-canvas,
-        .game-screen-wrap:-webkit-full-screen > #game-canvas,
-        #game-canvas:fullscreen,
-        #game-canvas:-webkit-full-screen {
-          width: min(100vw, calc(100vh * 1.6)) !important;
-          height: min(100vh, calc(100vw / 1.6)) !important;
-          max-width: 100vw !important;
-          max-height: 100vh !important;
-          aspect-ratio: 16 / 10 !important;
-          margin: auto !important;
-          padding: 0 !important;
-          border: none !important;
-          box-sizing: border-box !important;
-          object-fit: contain !important;
-          background: #000000 !important;
-          image-rendering: pixelated !important;
-          display: block !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
+  safeRequestPointerLock() {
+    try {
+      if (this.canvas && this.canvas.requestPointerLock && document.pointerLockElement !== this.canvas) {
+        const res = this.canvas.requestPointerLock();
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      }
+    } catch (_) {}
+  }
 
+  safeExitPointerLock() {
+    try {
+      if (document.pointerLockElement === this.canvas && document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+    } catch (_) {}
+  }
+
+  setupFullscreenSupport() {
     this.updateFullscreenLayout = () => {
       const isFs = Boolean(document.fullscreenElement);
       if (isFs && typeof window !== 'undefined' && window.innerWidth && window.innerHeight && this.canvas?.style?.setProperty) {
@@ -3039,7 +2055,8 @@ export class HellfallGame {
       fromCanvas,
       colWidth,
       cols,
-      elapsed: 0
+      elapsed: 0,
+      startedAt: performance.now()
     };
     this.audio.playMelt(type === 'DEATH');
   }
@@ -3047,7 +2064,8 @@ export class HellfallGame {
   updateAndDrawMelt(dt) {
     if (!this.melt) return false;
     const m = this.melt;
-    m.elapsed += dt;
+    const effDt = Math.max(dt || 0, 0.008);
+    m.elapsed += effDt;
     this.setLogicalTransform();
     const c = this.ctx;
     const s = m.fromCanvas.width / WIDTH;
@@ -3059,7 +2077,7 @@ export class HellfallGame {
       let y = m.cols[i];
       if (y < HEIGHT) {
         allDone = false;
-        const step = y < 0 ? speed * 0.52 * dt : (speed + Math.min(180, y * 1.45)) * dt;
+        const step = y < 0 ? speed * 0.52 * effDt : (speed + Math.min(180, y * 1.45)) * effDt;
         y += step;
         m.cols[i] = y;
       }
@@ -3079,51 +2097,156 @@ export class HellfallGame {
       }
     }
 
-    if (allDone || m.elapsed > 1.75) {
+    if (allDone || m.elapsed > 1.75 || (m.startedAt && performance.now() - m.startedAt > 2000)) {
       this.melt = null;
       return false;
     }
     return true;
   }
 
+  setCharacter(gender) {
+    this.characterGender = gender === 'female' ? 'female' : 'male';
+    this.characterProfile = getCharacterProfile(this.characterGender);
+  }
+
+  isWeaponOwned(num) {
+    if (!this.player) return num === 1;
+    if (num === 4) {
+      return this.player.kills >= CONFIG.CHAINSAW_UNLOCK_KILLS || this.player.unlockedWeapons?.has(4);
+    }
+    return this.player.unlockedWeapons ? this.player.unlockedWeapons.has(num) : num === 1;
+  }
+
+  unlockWeapon(num, viaPickup = true) {
+    if (!this.player) return;
+    if (!this.player.unlockedWeapons) this.player.unlockedWeapons = new Set([1]);
+    const already = this.player.unlockedWeapons.has(num);
+    this.player.unlockedWeapons.add(num);
+
+    const ammoBonuses = {
+      2: () => { this.player.reserve = Math.min(this.getMaxReserve(), this.player.reserve + (already ? 18 : 24)); },
+      3: () => { this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + (already ? 35 : 45)); },
+      4: () => { this.chainsawAnnounced = true; },
+      5: () => { this.player.rockets = Math.min(MAX_ROCKETS, (this.player.rockets || 0) + (already ? 5 : 8)); },
+      6: () => { this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + (already ? 40 : 60)); },
+      7: () => { this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + (already ? 45 : 75)); }
+    };
+    if (ammoBonuses[num]) ammoBonuses[num]();
+
+    const meta = {
+      2: { title: 'AMETRALLADORA CHAINGUN [2]', sub: '+24 CARTUCHOS · ALTA CADENCIA', col: '#ffbe0b' },
+      3: { title: 'LANZALLAMAS INFERNAL [3]', sub: '+45% GASOLINA · IGNICIÓN CONTINUA', col: '#ff4d00' },
+      4: { title: 'MOTOSIERRA INFERNAL [4]', sub: 'DESMIEMBRA Y COSECHA MUNICIÓN', col: '#d90429' },
+      5: { title: 'LANZACOHETES PESADO [5]', sub: '+8 COHETES EXPLOSIVOS DE ÁREA', col: '#70e000' },
+      6: { title: 'RIFLE DE PLASMA UAC [6]', sub: '+60 CELDAS DE PLASMA DE ALTA VELOCIDAD', col: '#00f5d4' },
+      7: { title: 'BFG-9000 ABISAL [7]', sub: '+75 CELDAS · CAÑÓN DE ENERGÍA DEVASTADOR', col: '#ccff33' }
+    }[num];
+
+    if (viaPickup && meta) {
+      this.audio.playWeaponPickup();
+      this.pickupFlashTime = performance.now();
+      this.evilGrinUntil = performance.now() + 1800;
+      if (!already) {
+        this.player.weapon = num;
+        this.pushLootNotification(`🔫 NUEVA ARMA: ${meta.title}`, [meta.sub], meta.col);
+        this.onStatus(`🔫 ¡ARMA ENCONTRADA! ${meta.title} (${meta.sub})`);
+      } else {
+        this.pushLootNotification(`📦 MUNICIÓN DE ${meta.title}`, [meta.sub], meta.col);
+        this.onStatus(`📦 Munición extra recogida para ${meta.title}`);
+      }
+    }
+  }
+
   selectWeapon(num) {
     if (!this.player) return;
-    if (num === 4 && this.player.kills < CONFIG.CHAINSAW_UNLOCK_KILLS) {
+    if (!this.isWeaponOwned(num)) {
       this.audio.playEmptyClip();
-      const faltan = CONFIG.CHAINSAW_UNLOCK_KILLS - this.player.kills;
-      this.onStatus(`MOTOSIERRA BLOQUEADA: elimina ${faltan} demonio${faltan === 1 ? '' : 's'} más para desbloquearla`);
+      if (num === 4) {
+        const faltan = Math.max(0, CONFIG.CHAINSAW_UNLOCK_KILLS - this.player.kills);
+        this.onStatus(`MOTOSIERRA [4] BLOQUEADA: ${faltan} bajas más o encuéntrala en una cámara`);
+      } else {
+        const missingNames = {
+          2: 'CHAINGUN [2]',
+          3: 'LANZALLAMAS [3]',
+          5: 'LANZACOHETES [5]',
+          6: 'RIFLE DE PLASMA [6]',
+          7: 'BFG-9000 [7]'
+        };
+        this.onStatus(`${missingNames[num] || `ARMA [${num}]`} NO ENCONTRADA AÚN: explora salas y cofres del sector`);
+      }
       return;
     }
     this.player.weapon = num;
     const names = {
       1: 'Arma [1]: SUPER ESCOPETA DOOM (7 perdigones reales en abanico)',
       2: 'Arma [2]: AMETRALLADORA CHAINGUN (Alta cadencia)',
-      3: 'Arma [3]: LANZALLAMAS INFERNAL (Chorro ígneo eficiente con ignición)',
-      4: 'Arma [4]: MOTOSIERRA INFERNAL (Genera cartuchos y gasolina al desmembrar)'
+      3: 'Arma [3]: LANZALLAMAS INFERNAL (Chorro ígneo con ignición)',
+      4: 'Arma [4]: MOTOSIERRA INFERNAL (Cosecha munición y celdas al desmembrar)',
+      5: 'Arma [5]: LANZACOHETES PESADO (Explosión de área y derribo)',
+      6: 'Arma [6]: RIFLE DE PLASMA UAC (Proyectiles rápidos, bonus vs escudos/torretas)',
+      7: 'Arma [7]: BFG-9000 ABISAL (Rayos en cadena + detonación masiva)'
     };
     this.onStatus(names[num] || names[1]);
   }
 
-  spawnBlood(x, y, count = 12, colorOverride = null) {
-    for (let i = 0; i < count; i++) {
+  spawnBloodPool(x, y, radius = 0.45, colorOverride = null) {
+    if (this.isWall(x, y)) return;
+    if (this.bloodPools.length >= 90) this.bloodPools.shift();
+    this.bloodPools.push({
+      x,
+      y,
+      radius: clamp(radius, 0.2, 1.05),
+      seed: Math.random() * 12,
+      dark: colorOverride ? colorOverride : '#4a0006',
+      mid: colorOverride ? colorOverride : '#8f0310',
+      bright: colorOverride ? '#ffffff' : '#d90429',
+      custom: Boolean(colorOverride)
+    });
+  }
+
+  spawnBlood(x, y, count = 12, colorOverride = null, createPool = true) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (this.bloodParticles.length > 220) {
+      this.bloodParticles.splice(0, this.bloodParticles.length - 180);
+    }
+    const palette = colorOverride
+      ? [colorOverride]
+      : ['#4a0006', '#780009', '#b80c09', '#d90429', '#ff2a2a'];
+    const capped = Math.min(count, 28);
+    for (let i = 0; i < capped; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 0.6 + Math.random() * 2.5;
+      const speed = 0.7 + Math.random() * 2.9;
       this.bloodParticles.push({
-        x,
-        y,
-        z: (Math.random() - 0.3) * 0.4,
+        x: x + (Math.random() - 0.5) * 0.16,
+        y: y + (Math.random() - 0.5) * 0.16,
+        z: (Math.random() - 0.35) * 0.45,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        vz: 0.8 + Math.random() * 1.5,
-        life: 0.35 + Math.random() * 0.35,
-        size: 2 + Math.floor(Math.random() * 2),
-        color: colorOverride || (Math.random() < 0.65 ? '#d90429' : '#780000')
+        vz: -0.9 - Math.random() * 1.4,
+        life: 0.36 + Math.random() * 0.38,
+        size: 1 + Math.floor(Math.random() * 3),
+        color: palette[Math.floor(Math.random() * palette.length)],
+        poolColor: colorOverride || null,
+        spawnedPool: false
       });
+    }
+    if (createPool && count >= 10) {
+      this.spawnBloodPool(
+        x + (Math.random() - 0.5) * 0.3,
+        y + (Math.random() - 0.5) * 0.3,
+        0.32 + Math.min(0.55, count * 0.02),
+        colorOverride
+      );
     }
   }
 
   spawnWallSparks(x, y, count = 6, colorOverride = null) {
-    for (let i = 0; i < count; i++) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (this.wallSparks.length > 220) {
+      this.wallSparks.splice(0, this.wallSparks.length - 180);
+    }
+    const capped = Math.min(count, 24);
+    for (let i = 0; i < capped; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 0.4 + Math.random() * 1.6;
       this.wallSparks.push({
@@ -3140,7 +2263,101 @@ export class HellfallGame {
   }
 
   // ============================================================================
-  // GENERADOR DE SECTORES CON PLANTILLAS VARIADAS, TEMAS Y OBJETOS INTERACTIVOS
+  // PLANIFICACIÓN ALEATORIA DE PARTIDA, EVENTOS Y RUTAS (ESTILO HADES / SLAY)
+  // ============================================================================
+  initRunPlan() {
+    const shuffle = (arr) => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    const layouts = ['GRID', 'RING', 'CORRIDORS', 'CROSS', 'CITADEL'];
+    const eventsPool = shuffle(CONFIG.SECTOR_EVENTS_POOL);
+    const themeOrder = [0, ...shuffle([1, 2, 3, 4, 5, 6, 7, 8]), 9];
+    const objectivePool = ['GENERATORS', 'SURVIVAL_WAVES', 'ESCORT_RESCUE', 'ESCAPE_COUNTDOWN', 'THREE_KEYS', 'BOSS_KEY'];
+
+    this.runPlan = [];
+    for (let lvl = 1; lvl <= MAX_LEVELS; lvl++) {
+      const themeIdx = themeOrder[lvl - 1] ?? ((lvl - 1) % CONFIG.SECTOR_THEMES.length);
+      const layout = lvl === 1 ? 'GRID' : (lvl === 10 ? 'CITADEL' : layouts[Math.floor(Math.random() * layouts.length)]);
+      const event = lvl === 10
+        ? { type: 'APOCALYPSE', label: 'CATACLISMO ABISAL', short: 'ABISMO', detail: 'Tormenta de fuego y energía en el trono del Icon of Sin' }
+        : (lvl === 1
+          ? { ...eventsPool.find((e) => e.type === 'PATROL' || e.type === 'AMBUSH') || eventsPool[0] }
+          : { ...eventsPool[(lvl - 1 + Math.floor(Math.random() * 2)) % eventsPool.length] });
+      const objectiveType = lvl === 1
+        ? 'BOSS_KEY'
+        : (lvl === 10 ? 'FINAL_ICON' : objectivePool[(lvl + Math.floor(Math.random() * objectivePool.length)) % objectivePool.length]);
+
+      this.runPlan.push({
+        level: lvl,
+        themeIndex: themeIdx,
+        layout,
+        event,
+        objectiveType,
+        routeMod: null
+      });
+    }
+    this.nextRouteChoice = null;
+  }
+
+  generateRouteChoices(nextLevel) {
+    if (nextLevel >= MAX_LEVELS) {
+      return [{
+        routeMod: CONFIG.ROUTE_MODIFIERS.ELITE,
+        themeIndex: 9,
+        themeName: CONFIG.SECTOR_THEMES[9].name,
+        layout: 'CITADEL',
+        objectiveType: 'FINAL_ICON',
+        event: { type: 'APOCALYPSE', label: 'CATACLISMO ABISAL', short: 'ABISMO', detail: 'Combate final multi-fase contra Icon of Sin' },
+        isFinal: true
+      }];
+    }
+    const modKeys = ['TREASURE', 'MERCHANT', 'ELITE', 'ARCANE'];
+    for (let i = modKeys.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [modKeys[i], modKeys[j]] = [modKeys[j], modKeys[i]];
+    }
+    const layouts = ['GRID', 'RING', 'CORRIDORS', 'CROSS', 'CITADEL'];
+    const objPool = ['BOSS_KEY', 'GENERATORS', 'SURVIVAL_WAVES', 'ESCORT_RESCUE', 'ESCAPE_COUNTDOWN', 'THREE_KEYS'];
+    for (let i = objPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [objPool[i], objPool[j]] = [objPool[j], objPool[i]];
+    }
+    const evPool = [...CONFIG.SECTOR_EVENTS_POOL].sort(() => Math.random() - 0.5);
+    const themePool = [1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5);
+
+    const doorCount = 3;
+    const choices = [];
+    for (let i = 0; i < doorCount; i++) {
+      const modKey = modKeys[i];
+      const themeIndex = themePool[i % themePool.length];
+      choices.push({
+        routeMod: CONFIG.ROUTE_MODIFIERS[modKey],
+        themeIndex,
+        themeName: CONFIG.SECTOR_THEMES[themeIndex].name,
+        layout: layouts[(nextLevel + i + Math.floor(Math.random() * 3)) % layouts.length],
+        objectiveType: objPool[i % objPool.length],
+        event: { ...evPool[i % evPool.length] },
+        isFinal: false
+      });
+    }
+    return choices;
+  }
+
+  getSectorEventForLevel(level) {
+    if (this.nextRouteChoice?.event) return this.nextRouteChoice.event;
+    if (this.runPlan && this.runPlan[level - 1]?.event) return this.runPlan[level - 1].event;
+    const pool = CONFIG.SECTOR_EVENTS_POOL;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // ============================================================================
+  // GENERADOR DE SECTORES CON PLANTILLAS VARIADAS, MONSTER CLOSETS Y OBJETIVOS
   // ============================================================================
   generateProceduralMap(level) {
     const size = CONFIG.MAP_SIZE;
@@ -3149,17 +2366,31 @@ export class HellfallGame {
     this.chests = [];
     this.armorPickups = [];
     this.powerups = [];
+    this.weaponPickups = [];
     this.coins = [];
     this.barrels = [];
     this.teleporters = [];
+    this.teleportPortals = [];
+    this.monsterClosets = [];
+    this.generators = [];
+    this.arenaPylons = [];
+    this.coloredKeys = [];
+    this.vip = null;
+    this.escapeCore = null;
+    this.survivalState = null;
     this.meteors = [];
     this.merchant = null;
     this.shockwaves = [];
     this.floorCracks = [];
+    this.bloodPools = [];
 
-    this.applySectorTheme(level);
+    const plan = this.nextRouteChoice || this.runPlan?.[level - 1] || {};
+    const themeIdx = plan.themeIndex !== undefined ? plan.themeIndex : ((level - 1) % CONFIG.SECTOR_THEMES.length);
+    const routeMod = plan.routeMod || null;
+    this.activeRouteMod = routeMod;
+    this.applySectorTheme(themeIdx + 1);
     const theme = this.currentTheme || CONFIG.SECTOR_THEMES[0];
-    const layoutType = theme.layout || 'GRID';
+    const layoutType = plan.layout || theme.layout || 'GRID';
     this.currentLayoutName = layoutType;
 
     const grid = Array.from({ length: size }, (_, y) =>
@@ -3206,12 +2437,10 @@ export class HellfallGame {
       }
     }
 
-    // Plantillas arquitectónicas distintas según el sector
     if (layoutType === 'RING') {
-      // Anillo perimetral exterior + puentes hacia el santuario central
       const ringPairs = [[0, 1], [1, 2], [2, 5], [5, 8], [8, 7], [7, 6], [6, 3], [3, 0]];
       for (const [a, b] of ringPairs) carveTunnel(nodes[a].cx, nodes[a].cy, nodes[b].cx, nodes[b].cy, 1);
-      if (level % 2 === 0) {
+      if (Math.random() < 0.5) {
         carveTunnel(nodes[1].cx, nodes[1].cy, nodes[4].cx, nodes[4].cy, 1);
         carveTunnel(nodes[7].cx, nodes[7].cy, nodes[4].cx, nodes[4].cy, 1);
       } else {
@@ -3219,14 +2448,12 @@ export class HellfallGame {
         carveTunnel(nodes[5].cx, nodes[5].cy, nodes[4].cx, nodes[4].cy, 1);
       }
     } else if (layoutType === 'CROSS') {
-      // Gran nave cruciforme central con avenidas anchas
       carveTunnel(nodes[1].cx, nodes[1].cy, nodes[7].cx, nodes[7].cy, 2);
       carveTunnel(nodes[3].cx, nodes[3].cy, nodes[5].cx, nodes[5].cy, 2);
       for (const [a, b] of [[0, 1], [2, 1], [6, 3], [8, 5], [0, 3], [2, 5]]) {
         carveTunnel(nodes[a].cx, nodes[a].cy, nodes[b].cx, nodes[b].cy, 1);
       }
     } else if (layoutType === 'CORRIDORS') {
-      // Búnker de galerías horizontales paralelas con esclusas verticales
       for (let r = 0; r < 3; r++) {
         carveTunnel(nodes[r * 3].cx, nodes[r * 3].cy, nodes[r * 3 + 2].cx, nodes[r * 3 + 2].cy, 1);
       }
@@ -3236,7 +2463,6 @@ export class HellfallGame {
       carveTunnel(nodes[3].cx, nodes[3].cy, nodes[6].cx, nodes[6].cy, 1);
       carveTunnel(nodes[5].cx, nodes[5].cy, nodes[8].cx, nodes[8].cy, 1);
     } else {
-      // GRID y CITADEL: red completa con diagonales tácticas en CITADEL
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           if (Math.abs(nodes[i].r - nodes[j].r) + Math.abs(nodes[i].c - nodes[j].c) === 1) {
@@ -3246,17 +2472,18 @@ export class HellfallGame {
       }
     }
 
-    // Cámaras de suministros, Mercader y 2 Salas Secretas con ubicación rotatoria por sector
     const secretPool = [
       { roomX: 8, roomY: 2, w: 5, h: 4, doorX: 10, doorY: 6, orient: 'H', secret: true },
       { roomX: 35, roomY: 2, w: 5, h: 4, doorX: 38, doorY: 6, orient: 'H', secret: true },
       { roomX: 2, roomY: 8, w: 4, h: 5, doorX: 6, doorY: 10, orient: 'V', secret: true },
       { roomX: 16, roomY: 43, w: 5, h: 3, doorX: 18, doorY: 42, orient: 'H', secret: true }
     ];
-    const secA = secretPool[(level - 1) % secretPool.length];
-    const secB = secretPool[(level + 1) % secretPool.length];
+    const secStart = Math.floor(Math.random() * secretPool.length);
+    const secA = secretPool[secStart % secretPool.length];
+    const secB = secretPool[(secStart + 1) % secretPool.length];
+    const secC = secretPool[(secStart + 2) % secretPool.length];
 
-    const merchantAtNorth = level % 2 === 0;
+    const merchantAtNorth = Math.random() < 0.5;
     const vaultSpecs = [
       { roomX: 22, roomY: 2, w: 5, h: 4, doorX: 24, doorY: 6, orient: 'H', secret: false, merchant: merchantAtNorth },
       { roomX: 2, roomY: 22, w: 4, h: 5, doorX: 6, doorY: 24, orient: 'V', secret: false },
@@ -3265,9 +2492,11 @@ export class HellfallGame {
       secA,
       secB
     ];
+    if (routeMod?.id === 'ARCANE') vaultSpecs.push(secC);
 
     const mandatoryTargets = [];
     const regularVaultCenters = [];
+    const secretVaultCenters = [];
 
     for (const v of vaultSpecs) {
       for (let y = v.roomY - 1; y <= v.roomY + v.h; y++) {
@@ -3312,15 +2541,62 @@ export class HellfallGame {
         this.merchant = { x: cx, y: cy, name: 'MERCADER DE ALMAS' };
       } else if (v.secret) {
         this.powerups.push({ x: cx, y: cy, active: true });
+        secretVaultCenters.push({ x: cx, y: cy });
       } else {
         regularVaultCenters.push({ x: cx, y: cy });
       }
     }
 
+    // Monster Closets: 2-3 compartimentos sellados ocultos en muros que se abren en emboscadas
+    const closetCandidates = [
+      { roomX: 16, roomY: 16, w: 3, h: 3, doorX: 17, doorY: 19, orient: 'H', triggerX: 17.5, triggerY: 24.5 },
+      { roomX: 29, roomY: 16, w: 3, h: 3, doorX: 30, doorY: 19, orient: 'H', triggerX: 24.5, triggerY: 24.5 },
+      { roomX: 16, roomY: 29, w: 3, h: 3, doorX: 17, doorY: 28, orient: 'H', triggerX: 24.5, triggerY: 24.5 }
+    ];
+    for (const cl of closetCandidates) {
+      for (let y = cl.roomY - 1; y <= cl.roomY + cl.h; y++) {
+        for (let x = cl.roomX - 1; x <= cl.roomX + cl.w; x++) {
+          if (y > 2 && y < size - 3 && x > 2 && x < size - 3) grid[y][x] = '8';
+        }
+      }
+      carveRect(cl.roomX, cl.roomY, cl.w, cl.h);
+      grid[cl.doorY][cl.doorX] = '7';
+      const outsideY = cl.doorY === 19 ? 20 : 27;
+      grid[outsideY][cl.doorX] = '0';
+      this.doors.set(`${cl.doorX},${cl.doorY}`, {
+        open: 0,
+        target: 0,
+        x: cl.doorX,
+        y: cl.doorY,
+        orient: cl.orient,
+        isSecret: true,
+        isCloset: true,
+        discovered: false
+      });
+      this.monsterClosets.push({
+        doorKey: `${cl.doorX},${cl.doorY}`,
+        doorX: cl.doorX,
+        doorY: cl.doorY,
+        spawnX: cl.roomX + 1.5,
+        spawnY: cl.roomY + 1.5,
+        triggerX: cl.triggerX,
+        triggerY: cl.triggerY,
+        opened: false
+      });
+    }
+
+    const chestLimit = CONFIG.CHEST_COUNT + (routeMod?.id === 'TREASURE' ? 2 : 0);
     regularVaultCenters.sort(() => Math.random() - 0.5);
-    const activeChests = regularVaultCenters.slice(0, CONFIG.CHEST_COUNT);
-    for (const vc of activeChests) {
-      this.chests.push({ x: vc.x, y: vc.y, opened: false });
+    for (let i = 0; i < Math.min(chestLimit, regularVaultCenters.length); i++) {
+      const vc = regularVaultCenters[i];
+      this.chests.push({ x: vc.x, y: vc.y, opened: false, trapped: i % 2 === 1 });
+    }
+    if (routeMod?.id === 'TREASURE' || routeMod?.id === 'ARCANE') {
+      // Cofres adicionales en salas laterales del 3x3
+      this.chests.push({ x: nodes[2].cx + 1.5, y: nodes[2].cy + 0.5, opened: false, trapped: true });
+      if (routeMod?.id === 'TREASURE') {
+        this.chests.push({ x: nodes[5].cx + 0.5, y: nodes[5].cy + 1.5, opened: false, trapped: false });
+      }
     }
 
     for (let i = 0; i < size; i++) {
@@ -3334,12 +2610,7 @@ export class HellfallGame {
       const visited = Array.from({ length: size }, () => Array(size).fill(false));
       const queue = [{ x: nodes[0].cx, y: nodes[0].cy }];
       visited[nodes[0].cy][nodes[0].cx] = true;
-      const dirs = [
-        { dx: 0, dy: -1 },
-        { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 },
-        { dx: 1, dy: 0 }
-      ];
+      const dirs = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
       while (queue.length > 0) {
         const curr = queue.shift();
         if (curr.x === targetGX && curr.y === targetGY) return;
@@ -3365,8 +2636,8 @@ export class HellfallGame {
       if (i % 2 === 0 && i !== 6 && i !== 4) grid[nodes[i].cy][nodes[i].cx] = '3';
     }
 
-    // Arenas de Campeón y Boss: rotan de posición entre Suroeste (nodes[6]) y Sureste (nodes[8]) según el sector
-    const swapArenas = level % 2 === 0;
+    const isFinalLevel = level === MAX_LEVELS;
+    const swapArenas = !isFinalLevel && level % 2 === 0;
 
     // Arena Suroeste (x: 5..15, y: 33..43)
     for (let y = 33; y <= 43; y++) {
@@ -3379,16 +2650,17 @@ export class HellfallGame {
     this.doors.set('10,33', { open: 0, target: 0, x: 10, y: 33, orient: 'H', isSecret: false, isBossGate: true });
     this.doors.set('15,38', { open: 0, target: 0, x: 15, y: 38, orient: 'V', isSecret: false, isBossGate: true });
 
-    // Arena Sureste (x: 32..45, y: 32..45)
-    for (let y = 32; y <= 45; y++) {
-      for (let x = 32; x <= 45; x++) {
-        grid[y][x] = (y === 32 || y === 45 || x === 32 || x === 45) ? (swapArenas ? '2' : '1') : '0';
+    // Arena Sureste (en Sector 10 aún más imponente x: 30..45, y: 30..45)
+    const seMin = isFinalLevel ? 30 : 32;
+    for (let y = seMin; y <= 45; y++) {
+      for (let x = seMin; x <= 45; x++) {
+        grid[y][x] = (y === seMin || y === 45 || x === seMin || x === 45) ? (swapArenas ? '2' : '1') : '0';
       }
     }
-    grid[32][37] = '9'; grid[32][38] = '6'; grid[32][39] = '9';
-    grid[37][32] = '9'; grid[38][32] = '6'; grid[39][32] = '9';
-    this.doors.set('38,32', { open: 0, target: 0, x: 38, y: 32, orient: 'H', isSecret: false, isBossGate: true });
-    this.doors.set('32,38', { open: 0, target: 0, x: 32, y: 38, orient: 'V', isSecret: false, isBossGate: true });
+    grid[seMin][37] = '9'; grid[seMin][38] = '6'; grid[seMin][39] = '9';
+    grid[37][seMin] = '9'; grid[38][seMin] = '6'; grid[39][seMin] = '9';
+    this.doors.set(`38,${seMin}`, { open: 0, target: 0, x: 38, y: seMin, orient: 'H', isSecret: false, isBossGate: true });
+    this.doors.set(`${seMin},38`, { open: 0, target: 0, x: seMin, y: 38, orient: 'V', isSecret: false, isBossGate: true });
 
     const swArena = {
       cx: nodes[6].cx + 0.5,
@@ -3396,15 +2668,15 @@ export class HellfallGame {
       bounds: { minX: 5.7, maxX: 14.3, minY: 33.7, maxY: 42.3 }
     };
     const seArena = {
-      cx: nodes[8].cx + 0.5,
-      cy: nodes[8].cy + 0.5,
-      bounds: { minX: 32.7, maxX: 44.3, minY: 32.7, maxY: 44.3 }
+      cx: isFinalLevel ? 38.0 : (nodes[8].cx + 0.5),
+      cy: isFinalLevel ? 38.0 : (nodes[8].cy + 0.5),
+      bounds: { minX: seMin + 0.7, maxX: 44.3, minY: seMin + 0.7, maxY: 44.3 }
     };
 
     this.championArena = swapArenas ? seArena : swArena;
     this.bossArena = swapArenas ? swArena : seArena;
 
-    const doorTileChar = level === MAX_LEVELS ? '5' : '4';
+    const doorTileChar = isFinalLevel ? '5' : '4';
     let exitDoor;
     if (swapArenas) {
       grid[43][9] = '9';
@@ -3445,82 +2717,16 @@ export class HellfallGame {
       this.fireProps.push({ x: n.cx + 2.5, y: n.cy - 2.5, phase: (idx + 1) % 3 });
     }
 
-    // Sin círculos de teletransporte en el suelo para evitar bloqueos al pisarlos
     this.teleporters = [];
-
     this.map = grid.map((row) => row.join(''));
     return {
       startPos: { x: nodes[0].cx + 0.5, y: nodes[0].cy + 0.5 },
       emptyCells,
       exitDoor,
-      nodes
+      nodes,
+      secretVaultCenters,
+      regularVaultCenters
     };
-  }
-
-  getSectorEventForLevel(level) {
-    const eventsByLevel = {
-      1: {
-        type: 'PATROL',
-        label: 'GUARDIA EN ALERTA',
-        short: 'ALERTA',
-        detail: 'Los demonios vigilan sus sectores y despiertan al verte o escuchar disparos'
-      },
-      2: {
-        type: 'DARKNESS',
-        label: 'APAGÓN TOTAL',
-        short: 'APAGÓN',
-        detail: 'La luz se extingue: solo los fogonazos y el fuego iluminan el sector'
-      },
-      3: {
-        type: 'LAVA',
-        label: 'FUGA DE MAGMA',
-        short: 'MAGMA',
-        detail: 'Las grietas de lava queman a los demonios y al jugador al pisarlas'
-      },
-      4: {
-        type: 'TOXIC',
-        label: 'SUELO TÓXICO',
-        short: 'TÓXICO',
-        detail: 'Las charcas ácidas quitan 1 HP/s si te quedas quieto sobre ellas'
-      },
-      5: {
-        type: 'AMBUSH',
-        label: 'ESCUADRÓN DE CHOQUE',
-        short: 'CHOQUE',
-        detail: 'Mayor presencia de demonios blindados y embistidores Pinky'
-      },
-      6: {
-        type: 'DARKNESS',
-        label: 'ECLIPSE DE DEIMOS',
-        short: 'APAGÓN',
-        detail: 'Oscuridad abisal: usa tus fogonazos y barriles explosivos para iluminar'
-      },
-      7: {
-        type: 'METEORS',
-        label: 'LLUVIA ÍGNEA',
-        short: 'METEOROS',
-        detail: 'Caen meteoros periódicos sobre el sector dañando a demonios y jugador'
-      },
-      8: {
-        type: 'TOXIC',
-        label: 'MIASMA CORROSIVO',
-        short: 'TÓXICO',
-        detail: 'Charcas radiactivas y nigromantes acechando en los pasillos'
-      },
-      9: {
-        type: 'BLOOD_FOG',
-        label: 'NIEBLA SANGRIENTA',
-        short: 'NIEBLA',
-        detail: 'Bruma carmesí densa que embrutece y acelera a la legión infernal'
-      },
-      10: {
-        type: 'APOCALYPSE',
-        label: 'CATACLISMO ABISAL',
-        short: 'ABISMO',
-        detail: 'Oscuridad y tormenta de fuego en el trono del Señor del Abismo'
-      }
-    };
-    return eventsByLevel[((level - 1) % 10) + 1] || eventsByLevel[1];
   }
 
   generateSectorHazards(emptyCells, exitDoor) {
@@ -3629,13 +2835,18 @@ export class HellfallGame {
       ammo: CONFIG.START_AMMO,
       reserve: CONFIG.START_RESERVE,
       fuel: CONFIG.START_FUEL,
+      rockets: CONFIG.START_ROCKETS,
+      cells: CONFIG.START_CELLS,
       weapon: 1,
+      unlockedWeapons: new Set([1]),
       kills: 0,
       coins: 0,
       hasKey: false,
+      coloredKeys: { RED: false, BLUE: false, YELLOW: false },
       berserkUntil: 0,
       invulnerableUntil: 0
     };
+    this.initRunPlan();
     this.startTime = performance.now();
     this.level = 1;
     this.startLevel();
@@ -3654,6 +2865,94 @@ export class HellfallGame {
     return false;
   }
 
+  openMonsterCloset(closet, reason = 'EMBOSCADA') {
+    if (!closet || closet.opened) return false;
+    closet.opened = true;
+    const door = this.doors.get(closet.doorKey);
+    if (door) {
+      door.target = 1;
+      door.discovered = true;
+    }
+    let released = 0;
+    for (const e of this.enemies) {
+      if (e.closetKey === closet.doorKey && e.alive) {
+        e.dormantCloset = false;
+        e.alerted = true;
+        released++;
+      }
+    }
+    if (released > 0) {
+      this.audio.playAlarm();
+      this.audio.playDoorSlide();
+      this.spawnWallSparks(closet.spawnX, closet.spawnY, 14, '#ff4d00');
+      this.pushLootNotification(`🚨 ¡${reason}!`, ['MURO TRAMPA ABIERTO · REFUERZOS EN CAMINO'], '#ff0055');
+      this.onStatus(`🚨 ¡EMBOSCADA! Se ha abierto un compartimento oculto con ${released} hostiles`);
+    }
+    return released > 0;
+  }
+
+  spawnTeleportWave(cx, cy, count = 2, speciesList = null, label = 'TELETRANSPORTE DEMONÍACO') {
+    const valid = [];
+    for (let attempt = 0; attempt < 40 && valid.length < count; attempt++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 3.2 + Math.random() * 6.5;
+      const tx = cx + Math.cos(ang) * dist;
+      const ty = cy + Math.sin(ang) * dist;
+      if (
+        !this.isWall(tx, ty) &&
+        this.canEnemyMoveTo(tx, ty, 0.34) &&
+        distance(tx, ty, this.player.x, this.player.y) > 4.2 &&
+        !this.isCellInsideArena(tx, ty)
+      ) {
+        valid.push({ x: tx, y: ty });
+      }
+    }
+    if (valid.length === 0) return 0;
+
+    const pool = speciesList || this.getSectorEnemyPool(this.level);
+    for (const pos of valid) {
+      const spec = pool[Math.floor(Math.random() * pool.length)] || 'IMP';
+      this.teleportPortals.push({
+        x: pos.x,
+        y: pos.y,
+        timer: 1.05,
+        maxTimer: 1.05,
+        specKey: spec,
+        isElite: this.level >= 4 && Math.random() < 0.22
+      });
+    }
+    this.audio.playTeleport();
+    if (label) {
+      this.pushLootNotification(`🌀 ${label}`, [`+${valid.length} HOSTILES TELETRANSPORTÁNDOSE`], '#9d4edd');
+    }
+    return valid.length;
+  }
+
+  getSectorEnemyPool(level) {
+    const theme = this.currentTheme || CONFIG.SECTOR_THEMES[0];
+    const base = [...(theme.commons || ['IMP']), ...(theme.signature || ['IMP'])];
+    return base.filter((k) => {
+      if (k === 'CYBERDEMON') return level >= 6;
+      if (k === 'HELL_KNIGHT' || k === 'MANCUBUS') return level >= 2;
+      if (k === 'SNIPER' || k === 'SPECTRE') return level >= 2;
+      if (k === 'SUMMONER' || k === 'REVENANT') return level >= 3;
+      return true;
+    });
+  }
+
+  prebakeSectorSprites() {
+    const seen = new Set();
+    for (let i = 0; i < this.enemies.length; i++) {
+      const anim = this.enemies[i]?.anims;
+      if (!anim || seen.has(anim)) continue;
+      seen.add(anim);
+      for (let d = 0; d < 8; d++) {
+        for (let f = 0; f < 4; f++) anim.getWalk(d, f);
+        anim.getPain(d);
+      }
+    }
+  }
+
   startLevel() {
     this.recoil = 0;
     this.muzzleFlash = 0;
@@ -3665,8 +2964,11 @@ export class HellfallGame {
     this.bossAwakenBanner = null;
     this.sectorDamageTaken = 0;
     this.flameProjectiles = [];
+    this.playerProjectiles = [];
     this.enemyProjectiles = [];
+    this.hitscanTracers = [];
     this.bloodParticles = [];
+    this.bloodPools = [];
     this.wallSparks = [];
     this.lootNotifications = [];
     this.shockwaves = [];
@@ -3697,19 +2999,24 @@ export class HellfallGame {
     this.punchAnimUntil = 0;
     this.punchSide = 1;
     this.player.hasKey = false;
+    this.player.coloredKeys = { RED: false, BLUE: false, YELLOW: false };
     this.player.invulnerableUntil = 0;
     this.levelStartTime = performance.now();
     this.sectorEvent = this.getSectorEventForLevel(this.level);
 
-    const { startPos, emptyCells, exitDoor } = this.generateProceduralMap(this.level);
+    const plan = this.nextRouteChoice || this.runPlan?.[this.level - 1] || {};
+    const objectiveType = this.level === MAX_LEVELS ? 'FINAL_ICON' : (plan.objectiveType || plan.objective || 'BOSS_KEY');
+    this.nextRouteChoice = null;
+
+    const mapData = this.generateProceduralMap(this.level);
+    const { startPos, emptyCells, exitDoor, nodes, secretVaultCenters, regularVaultCenters } = mapData;
     this.player.x = startPos.x;
     this.player.y = startPos.y;
     this.exitDoor = exitDoor;
     this.initAutomap();
     this.generateSectorHazards(emptyCells, exitDoor);
-    this.runStats.secretsTotal += 2;
+    this.runStats.secretsTotal += 2 + (this.activeRouteMod?.id === 'ARCANE' ? 1 : 0);
 
-    // Suministros repartidos por el sector: más munición que antes, sin inundar el mapa
     this.medkits = [];
     this.ammoPacks = [];
     this.coins = [];
@@ -3723,7 +3030,7 @@ export class HellfallGame {
       return farFloorCells.splice(Math.floor(Math.random() * farFloorCells.length), 1)[0];
     };
 
-    const ammoPacksCount = 1 + Math.floor((this.level - 1) / 3);
+    const ammoPacksCount = 1 + Math.floor((this.level - 1) / 3) + (this.activeRouteMod?.id === 'TREASURE' ? 1 : 0);
     for (let i = 0; i < ammoPacksCount; i++) {
       const cell = takeCell();
       if (!cell) break;
@@ -3732,11 +3039,13 @@ export class HellfallGame {
         y: cell.y,
         amount: CONFIG.FLOOR_AMMO_AMOUNT + Math.floor(this.level / 2),
         fuelAmount: CONFIG.FLOOR_FUEL_AMOUNT,
+        rocketAmount: this.level >= 2 ? 2 : 0,
+        cellAmount: this.level >= 3 ? 18 : 0,
         active: true
       });
     }
 
-    const medkitCount = this.level >= 5 && Math.random() < CONFIG.FLOOR_MEDKIT_CHANCE ? 2 : 1;
+    const medkitCount = this.level >= 4 && Math.random() < CONFIG.FLOOR_MEDKIT_CHANCE ? 2 : 1;
     for (let i = 0; i < medkitCount; i++) {
       if (i > 0 && Math.random() > CONFIG.FLOOR_MEDKIT_CHANCE) break;
       const cell = takeCell();
@@ -3746,10 +3055,45 @@ export class HellfallGame {
 
     if (this.player.ammo === 0 && this.player.reserve === 0) this.player.ammo = 6;
 
-    // Escalado dinámico de dificultad: combina el sector actual + la presión por mejoras acumuladas
+    // Colocar armas encontrables en el mapa
+    const weaponQueue = [];
+    if (!this.isWeaponOwned(2) && this.level >= 1) weaponQueue.push(2);
+    if (!this.isWeaponOwned(3) && this.level >= 1) weaponQueue.push(3);
+    if (!this.isWeaponOwned(5) && this.level >= 2) weaponQueue.push(5);
+    if (!this.isWeaponOwned(6) && this.level >= 3) weaponQueue.push(6);
+    if (!this.isWeaponOwned(7) && this.level >= 5) weaponQueue.push(7);
+    if (!this.isWeaponOwned(4) && this.level >= 4) weaponQueue.push(4);
+
+    if (weaponQueue.length === 0) {
+      const bonusChoices = [5, 6, 7].filter((w) => this.isWeaponOwned(w));
+      if (bonusChoices.length > 0) {
+        weaponQueue.push(bonusChoices[Math.floor(Math.random() * bonusChoices.length)]);
+      }
+    }
+
+    const weaponSpots = [];
+    if (regularVaultCenters?.length) weaponSpots.push(...regularVaultCenters);
+    if (secretVaultCenters?.length) weaponSpots.push(...secretVaultCenters);
+    if (nodes?.[1]) weaponSpots.push({ x: nodes[1].cx + 0.5, y: nodes[1].cy + 0.5 });
+    if (nodes?.[3]) weaponSpots.push({ x: nodes[3].cx + 0.5, y: nodes[3].cy + 0.5 });
+
+    const maxWeaponsHere = this.level === 1 ? 2 : (this.activeRouteMod?.id === 'TREASURE' ? 2 : 1);
+    for (let wi = 0; wi < Math.min(maxWeaponsHere, weaponQueue.length); wi++) {
+      const spot = weaponSpots[wi] || takeCell();
+      if (spot) {
+        this.weaponPickups.push({
+          x: spot.x + (wi === 0 ? 0.45 : -0.45),
+          y: spot.y,
+          weaponId: weaponQueue[wi],
+          active: true
+        });
+      }
+    }
+
     const totalUpgrades = this.getTotalUpgradeRanks();
     const upgP = CONFIG.UPGRADE_PRESSURE;
-    const extraEnemies = Math.floor(totalUpgrades * upgP.EXTRA_ENEMIES) + (this.sectorEvent?.type === 'AMBUSH' ? 3 : 0);
+    const isEliteRoute = this.activeRouteMod?.id === 'ELITE';
+    const extraEnemies = Math.floor(totalUpgrades * upgP.EXTRA_ENEMIES) + (this.sectorEvent?.type === 'AMBUSH' ? 3 : 0) + (isEliteRoute ? 3 : 0);
 
     this.enemies = [];
     const spawns = emptyCells.filter(
@@ -3757,50 +3101,65 @@ export class HellfallGame {
         distance(c.x, c.y, this.player.x, this.player.y) > 7.5 &&
         !this.isCellInsideArena(c.x, c.y)
     );
-    const count = Math.min(
-      CONFIG.MAX_REGULAR_ENEMIES + 7,
+    const totalBudget = Math.min(
+      CONFIG.MAX_REGULAR_ENEMIES + 6,
       CONFIG.BASE_ENEMIES + Math.floor(this.level * CONFIG.ENEMIES_PER_LEVEL) + extraEnemies
     );
+    const initialCount = Math.max(6, Math.round(totalBudget * 0.58));
+    const reserveCount = Math.max(3, totalBudget - initialCount);
+
     const hpScale = 1 + (this.level - 1) * CONFIG.LEVEL_HP_SCALE + totalUpgrades * upgP.HP;
     const dmgScale = 1 + (this.level - 1) * CONFIG.LEVEL_DMG_SCALE + totalUpgrades * upgP.DAMAGE;
     const spdScale = 1 + (this.level - 1) * CONFIG.LEVEL_SPEED_SCALE + totalUpgrades * upgP.SPEED;
     this.pressurePct = Math.round((hpScale - 1) * 100);
 
-    const maxSummoners = this.level >= 6 ? 2 : 1;
-    let summonersSpawned = 0;
-    let lostSoulPackSpawned = false;
     let nextEnemyId = 1;
-
     const buildRegularEnemy = (specKey, pos, isElite = false) => {
       const cfg = CONFIG.ENEMIES[specKey] || CONFIG.ENEMIES.IMP;
       const eliteHpMult = isElite ? 1.7 : 1;
       const eliteDmgMult = isElite ? 1.3 : 1;
       const eliteSpeedMult = isElite ? 1.08 : 1;
+      const overchargeSpd = this.sectorEvent?.type === 'OVERCHARGE' ? 1.22 : 1.0;
       return {
         id: nextEnemyId++,
         x: pos.x,
         y: pos.y,
         kind: specKey,
         elite: isElite,
-        movePattern: specKey === 'IMP' || specKey === 'REVENANT' ? 'STRAFE'
+        movePattern: (specKey === 'IMP' || specKey === 'REVENANT' || specKey === 'RIFLEMAN') ? 'STRAFE'
           : (specKey === 'CACODEMON' ? 'HOVER'
-            : (specKey === 'LOST_SOUL' || specKey === 'PINKY' ? 'RUSH' : (specKey === 'SUMMONER' ? 'FLEE' : 'MARCH'))),
+            : (specKey === 'LOST_SOUL' || specKey === 'PINKY' || specKey === 'SPECTRE' ? 'RUSH'
+              : (specKey === 'SUMMONER' || specKey === 'SNIPER' ? 'FLEE' : (specKey === 'TURRET' ? 'STATIC' : 'MARCH')))),
         anims: this.animSets[specKey] || this.animSets.IMP,
         health: cfg.hp * hpScale * eliteHpMult,
         maxHealth: cfg.hp * hpScale * eliteHpMult,
         speedMultiplier: cfg.speed * spdScale * eliteSpeedMult,
         damage: Math.round(cfg.meleeDmg * dmgScale * eliteDmgMult),
-        projSpeed: (cfg.projSpeed || 0) * (1 + totalUpgrades * 0.015),
+        projSpeed: (cfg.projSpeed || 0) * (1 + totalUpgrades * 0.015) * overchargeSpd,
         projDamage: Math.round((cfg.projDmg || 0) * dmgScale * eliteDmgMult),
-        painChance: Math.max(0.12, cfg.painChance - (isElite ? 0.12 : 0)),
+        painChance: Math.max(0.05, cfg.painChance - (isElite ? 0.12 : 0)),
         scale: cfg.scale * (isElite ? 1.16 : 1),
         zOffset: (specKey === 'CACODEMON' || specKey === 'LOST_SOUL') ? -0.14 : 0,
         isBoss: false,
         holdsKey: false,
         holdsArsenal: false,
+        invisible: Boolean(cfg.invisible),
+        isTurret: Boolean(cfg.turret),
+        isHitscan: Boolean(cfg.hitscan),
+        isSniper: Boolean(cfg.sniper),
+        isMancubus: Boolean(cfg.mancubus),
+        isHellKnight: Boolean(cfg.hellKnight),
+        isCyberRocket: Boolean(cfg.cyberRocket),
+        aimTimer: 0,
+        aimDirX: 0,
+        aimDirY: 0,
+        burstLeft: 0,
+        burstCd: 0,
         alive: true,
         state: 'ALIVE',
         alerted: this.sectorEvent?.type !== 'PATROL',
+        dormantCloset: false,
+        closetKey: null,
         wasRevived: false,
         targetEnemy: null,
         burnTimer: 0,
@@ -3836,11 +3195,17 @@ export class HellfallGame {
     const eliteChance =
       CONFIG.ELITE_CHANCE +
       Math.max(0, this.level - CONFIG.ELITE_START_LEVEL) * 0.025 +
-      totalUpgrades * upgP.ELITE;
+      totalUpgrades * upgP.ELITE +
+      (isEliteRoute ? 0.16 : 0);
 
-    for (let i = 0; i < count && spawns.length > 0; i++) {
+    const sectorPool = this.getSectorEnemyPool(this.level);
+    const sigPool = (this.currentTheme?.signature || ['IMP']).filter((k) => sectorPool.includes(k));
+    const maxSummoners = this.level >= 6 ? 2 : 1;
+    let summonersSpawned = 0;
+
+    for (let i = 0; i < initialCount && spawns.length > 0; i++) {
       let chosenIdx = Math.floor(Math.random() * spawns.length);
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < 25; attempt++) {
         const testIdx = Math.floor(Math.random() * spawns.length);
         if (!this.enemies.some((e) => distance(e.x, e.y, spawns[testIdx].x, spawns[testIdx].y) < CONFIG.MIN_ENEMY_SPACING)) {
           chosenIdx = testIdx;
@@ -3848,36 +3213,28 @@ export class HellfallGame {
         }
       }
       const pos = spawns.splice(chosenIdx, 1)[0];
-      const isElite = (this.level >= CONFIG.ELITE_START_LEVEL || totalUpgrades >= 2) && Math.random() < eliteChance;
+      const isElite = (this.level >= CONFIG.ELITE_START_LEVEL || totalUpgrades >= 2 || isEliteRoute) && Math.random() < eliteChance;
 
       let specKey;
-      if (this.level >= 3 && i === 1 && summonersSpawned < maxSummoners) {
-        specKey = 'SUMMONER';
-        summonersSpawned++;
-      } else if (this.level >= 3 && i === 0 && !lostSoulPackSpawned) {
-        specKey = 'LOST_SOUL';
-        lostSoulPackSpawned = true;
-      } else if (this.level >= 3 && summonersSpawned < maxSummoners && Math.random() < 0.08) {
-        specKey = 'SUMMONER';
-        summonersSpawned++;
-      } else if (this.level >= 4 && Math.random() < 0.16) {
-        specKey = 'REVENANT';
-      } else if (this.level >= 2 && Math.random() < 0.18) {
-        specKey = 'PINKY';
-      } else if ((this.level >= 3 || totalUpgrades >= 2) && Math.random() < 0.16 + totalUpgrades * 0.01) {
-        specKey = 'SHIELD';
+      if (i % 3 === 0 && sigPool.length > 0) {
+        specKey = sigPool[Math.floor(Math.random() * sigPool.length)];
       } else {
-        const roll = Math.random();
-        specKey = isElite ? 'BRUTE' : (roll < 0.44 ? 'IMP' : (roll < 0.78 ? 'CACODEMON' : 'BRUTE'));
+        specKey = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'IMP';
+      }
+      if (specKey === 'SUMMONER') {
+        if (summonersSpawned >= maxSummoners) specKey = sigPool[0] || 'IMP';
+        else summonersSpawned++;
+      }
+      if (specKey === 'CYBERDEMON' && this.enemies.some((e) => e.kind === 'CYBERDEMON')) {
+        specKey = 'MANCUBUS';
       }
 
-      const allowElite = isElite && !['SUMMONER', 'LOST_SOUL', 'SHIELD'].includes(specKey);
+      const allowElite = isElite && !['SUMMONER', 'LOST_SOUL', 'TURRET', 'CYBERDEMON'].includes(specKey);
       this.enemies.push(buildRegularEnemy(specKey, pos, allowElite));
 
       if (specKey === 'LOST_SOUL') {
-        const offsets = [[0.55, 0.2], [-0.5, 0.4], [0.2, -0.5]];
-        for (let pack = 1; pack < CONFIG.LOST_SOUL_PACK; pack++) {
-          const offset = offsets[(pack - 1) % offsets.length];
+        const offsets = [[0.55, 0.2], [-0.5, 0.4]];
+        for (const offset of offsets) {
           const px = pos.x + offset[0];
           const py = pos.y + offset[1];
           this.enemies.push(buildRegularEnemy('LOST_SOUL', this.isWall(px, py) ? pos : { x: px, y: py }, false));
@@ -3885,156 +3242,61 @@ export class HellfallGame {
       }
     }
 
-    // Curva progresiva de Bosses: 0.0 en el Sector 1 -> 1.0 en el Sector 10 + presión por mejoras
+    // Monster Closets sellados
+    for (const closet of this.monsterClosets) {
+      const closetSpecA = sigPool[0] || sectorPool[0] || 'IMP';
+      const closetSpecB = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'PINKY';
+      const e1 = buildRegularEnemy(closetSpecA === 'TURRET' ? 'PINKY' : closetSpecA, { x: closet.spawnX - 0.35, y: closet.spawnY }, false);
+      const e2 = buildRegularEnemy(closetSpecB === 'TURRET' ? 'RIFLEMAN' : closetSpecB, { x: closet.spawnX + 0.35, y: closet.spawnY }, false);
+      for (const ce of [e1, e2]) {
+        ce.dormantCloset = true;
+        ce.closetKey = closet.doorKey;
+        ce.alerted = false;
+        this.enemies.push(ce);
+      }
+    }
+
+    const reserveSpecs = [];
+    for (let r = 0; r < reserveCount; r++) {
+      const sp = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'IMP';
+      reserveSpecs.push(sp === 'TURRET' ? 'RIFLEMAN' : sp);
+    }
+    this.director = {
+      intensity: 0.2,
+      state: 'BUILD',
+      nextWaveAt: performance.now() + 9000,
+      reservePool: reserveSpecs,
+      ambushesTriggered: 0,
+      lastCombatAt: performance.now()
+    };
+
     const tier = (this.level - 1) / Math.max(1, MAX_LEVELS - 1);
     const bossUpgradeMult = 1 + totalUpgrades * upgP.BOSS_HP;
     const bossHpMult = (1 + tier * 1.55) * bossUpgradeMult;
     const bossSpdMult = 1 + tier * 0.62 + totalUpgrades * 0.015;
     const bossDmgMult = 1 + tier * 0.75 + totalUpgrades * 0.03;
 
-    const archetypes = ['PYROMANCER', 'SUMMONER_LORD', 'CYBER_ARTILLERY', 'VOID_STALKER'];
-    const champArch = archetypes[(this.level + 1) % archetypes.length];
-    const bossArch = archetypes[(this.level - 1) % archetypes.length];
-
-    const bossRoster = [
-      'INFERNAL PYROMANCER [KEY]',
-      'NECRO-ARCHON [KEY]',
-      'CYBER-TYRANT [KEY]',
-      'VOID STALKER [KEY]',
-      'MAGMA COLOSSUS [KEY]',
-      'SOUL HARVESTER [KEY]',
-      'MECHA-BEHEMOTH [KEY]',
-      'ABYSS PHANTOM [KEY]',
-      'HELLFIRE MONARCH [KEY]',
-      'ICON OF SIN [KEY]'
-    ];
-
-    // 1. CAMPEÓN ABISAL (Parado en el centro exacto de su sala hasta que el jugador entra)
-    const chCfg = CONFIG.ENEMIES.CHAMPION;
-    const champHp = Math.round(chCfg.hp * bossHpMult);
-    const chArena = this.championArena || { cx: 10.5, cy: 38.5, bounds: { minX: 5.7, maxX: 14.3, minY: 33.7, maxY: 42.3 } };
-    this.enemies.push({
-      id: 998,
-      x: chArena.cx,
-      y: chArena.cy,
-      arenaBounds: chArena.bounds,
-      kind: 'ARCH-CHAMPION',
-      bossArchetype: champArch,
-      movePattern: 'BOSS_ADVANCED',
-      anims: this.animSets.BOSS_ABYSS,
-      dormant: true,
-      alerted: true,
-      wakeFlash: 0,
-      health: champHp,
-      maxHealth: champHp,
-      speedMultiplier: chCfg.speed * bossSpdMult,
-      damage: Math.round(chCfg.meleeDmg * bossDmgMult),
-      projSpeed: chCfg.projSpeed + tier * 2.8,
-      projDamage: Math.round(chCfg.projDmg * bossDmgMult),
-      painChance: Math.max(0.08, chCfg.painChance - tier * 0.16),
-      scale: chCfg.scale,
-      isBoss: true,
-      holdsKey: false,
-      holdsArsenal: true,
-      alive: true,
-      state: 'ALIVE',
-      targetEnemy: null,
-      burnTimer: 0,
-      burnTick: 0,
-      bossState: 'CHASE',
-      bossTimer: 2.8 - tier * 1.1,
-      dashCooldown: 3.4 - tier * 1.8,
-      stompCd: 4.5 - tier * 1.5,
-      specialCd: 4.8,
-      reactDashCd: 0,
-      rangedCooldown: 2.6 - tier * 1.0,
-      chargeDirX: 0,
-      chargeDirY: 0,
-      dashDirX: 0,
-      dashDirY: 0,
-      strafeDir: 1,
-      enraged: false,
-      deathTimer: 0,
-      hitFlash: 0,
-      painTimer: 0,
-      stunTimer: 0,
-      knockVx: 0,
-      knockVy: 0,
-      wallSlammed: false,
-      facingAngle: 0,
-      walkCycle: 0,
-      growlTimer: 1.8,
-      cooldown: 0
-    });
-
-    // 2. BOSS GUARDIÁN DE LA LLAVE (Parado en el centro exacto de su sala hasta que el jugador entra)
-    const bCfg = CONFIG.ENEMIES.BOSS;
-    const bossHp = Math.round(bCfg.hp * bossHpMult);
-    const bArena = this.bossArena || { cx: 38.5, cy: 38.5, bounds: { minX: 32.7, maxX: 44.3, minY: 32.7, maxY: 44.3 } };
-    this.enemies.push({
-      id: 999,
-      x: bArena.cx,
-      y: bArena.cy,
-      arenaBounds: bArena.bounds,
-      kind: bossRoster[(this.level - 1) % bossRoster.length],
-      bossArchetype: bossArch,
-      movePattern: 'BOSS_ADVANCED',
-      anims: this.level % 2 === 1 ? this.animSets.BOSS_CYBER : this.animSets.BOSS_ABYSS,
-      dormant: true,
-      alerted: true,
-      wakeFlash: 0,
-      health: bossHp,
-      maxHealth: bossHp,
-      speedMultiplier: bCfg.speed * bossSpdMult,
-      damage: Math.round(bCfg.meleeDmg * bossDmgMult),
-      projSpeed: bCfg.projSpeed + tier * 3.0,
-      projDamage: Math.round(bCfg.projDmg * bossDmgMult),
-      painChance: Math.max(0.06, bCfg.painChance - tier * 0.14),
-      scale: bCfg.scale,
-      isBoss: true,
-      holdsKey: true,
-      holdsArsenal: false,
-      alive: true,
-      state: 'ALIVE',
-      targetEnemy: null,
-      burnTimer: 0,
-      burnTick: 0,
-      bossState: 'CHASE',
-      bossTimer: 2.6 - tier * 1.0,
-      dashCooldown: 3.2 - tier * 1.8,
-      stompCd: 4.0 - tier * 1.4,
-      specialCd: 4.2,
-      reactDashCd: 0,
-      rangedCooldown: 2.4 - tier * 0.9,
-      chargeDirX: 0,
-      chargeDirY: 0,
-      dashDirX: 0,
-      dashDirY: 0,
-      strafeDir: -1,
-      enraged: false,
-      deathTimer: 0,
-      hitFlash: 0,
-      painTimer: 0,
-      stunTimer: 0,
-      knockVx: 0,
-      knockVy: 0,
-      wallSlammed: false,
-      facingAngle: 0,
-      walkCycle: 0,
-      growlTimer: 1.5,
-      cooldown: 0
+    this.setupSectorObjective(objectiveType, {
+      emptyCells,
+      nodes,
+      exitDoor,
+      bossHpMult,
+      bossSpdMult,
+      bossDmgMult,
+      tier
     });
 
     this.sectorStats = {
       kills: 0,
-      totalKills: this.enemies.length,
+      totalKills: this.enemies.length + reserveCount,
       items: 0,
       totalItems: this.chests.length + 1,
       secrets: 0,
-      totalSecrets: 2
+      totalSecrets: 2 + (this.activeRouteMod?.id === 'ARCANE' ? 1 : 0)
     };
 
     this.updateFlowField();
+    this.prebakeSectorSprites();
 
     this.ambientEmbers = Array.from({ length: 18 }, () => ({
       x: this.player.x + (Math.random() - 0.5) * 10,
@@ -4043,41 +3305,220 @@ export class HellfallGame {
       vz: -0.15 - Math.random() * 0.25
     }));
 
-    const sectorName = CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
-    const sectorEventTxt = this.sectorEvent ? ` // EVENTO: ${this.sectorEvent.label}` : '';
-    const pressureTxt = totalUpgrades > 0 ? ` // PRESIÓN +${this.pressurePct}%` : '';
-    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} (${this.currentLayoutName || 'GRID'})${sectorEventTxt}${pressureTxt}`);
-    if (this.sectorEvent) {
-      this.pushLootNotification(
-        `⚠️ EVENTO DE SECTOR: ${this.sectorEvent.label}`,
-        [this.sectorEvent.detail],
-        this.sectorEvent.type === 'DARKNESS' ? '#00b4d8' : '#70e000'
-      );
-    } else if (this.level === 1) {
-      this.pushLootNotification('👊 COMBATE DINÁMICO ACTIVO', ['[V] o Clic Derecho: Puñetazo · [4] Motosierra (40 bajas)'], '#ff4d00');
-    } else if (totalUpgrades > 0) {
-      this.pushLootNotification(
-        `🔥 SECTOR ${this.level}: ${sectorName}`,
-        [`PRESIÓN INFERNAL +${this.pressurePct}% POR TUS MEJORAS`],
-        '#ffbe0b'
-      );
+    const sectorName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
+    const objMeta = CONFIG.OBJECTIVE_LABELS[objectiveType] || CONFIG.OBJECTIVE_LABELS.BOSS_KEY;
+    const sigTxt = (this.currentTheme?.signature || []).join(' · ');
+    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} // ${objMeta.short} // ${this.sectorEvent?.label || ''}`);
+    this.pushLootNotification(
+      `SECTOR ${this.level}: ${objMeta.name}`,
+      [objMeta.desc, `AMENAZAS EXCLUSIVAS: ${sigTxt}`],
+      '#ffbe0b'
+    );
+  }
+
+  setupSectorObjective(objectiveType, ctx) {
+    const { nodes, bossHpMult, bossSpdMult, bossDmgMult, tier } = ctx;
+    const objMeta = CONFIG.OBJECTIVE_LABELS[objectiveType] || CONFIG.OBJECTIVE_LABELS.BOSS_KEY;
+    this.sectorObjective = {
+      type: objectiveType,
+      complete: false,
+      label: objMeta.short,
+      escapeTimer: 0,
+      escapeStarted: false
+    };
+
+    const makeBossEntity = (id, arena, name, arch, animKey, holdsKey, holdsArsenal, cfgOverride = null) => {
+      const bCfg = cfgOverride || (holdsKey ? CONFIG.ENEMIES.BOSS : CONFIG.ENEMIES.CHAMPION);
+      const hp = Math.round(bCfg.hp * (cfgOverride ? (1 + this.getTotalUpgradeRanks() * CONFIG.UPGRADE_PRESSURE.BOSS_HP) : bossHpMult));
+      return {
+        id,
+        x: arena.cx,
+        y: arena.cy,
+        arenaBounds: arena.bounds,
+        kind: name,
+        bossArchetype: arch,
+        bossSpriteKey: animKey,
+        movePattern: 'BOSS_ADVANCED',
+        anims: this.animSets[animKey] || this.animSets.BOSS_CYBER,
+        dormant: true,
+        alerted: true,
+        wakeFlash: 0,
+        health: hp,
+        maxHealth: hp,
+        speedMultiplier: bCfg.speed * bossSpdMult,
+        damage: Math.round(bCfg.meleeDmg * bossDmgMult),
+        projSpeed: bCfg.projSpeed + tier * 3.0,
+        projDamage: Math.round(bCfg.projDmg * bossDmgMult),
+        painChance: Math.max(0.06, bCfg.painChance - tier * 0.14),
+        scale: bCfg.scale,
+        isBoss: true,
+        isFinalIcon: animKey === 'BOSS_ICON',
+        phase: 1,
+        shieldActive: false,
+        holdsKey,
+        holdsArsenal,
+        alive: true,
+        state: 'ALIVE',
+        targetEnemy: null,
+        burnTimer: 0,
+        burnTick: 0,
+        bossState: 'CHASE',
+        bossTimer: 2.6 - tier * 1.0,
+        dashCooldown: 3.2 - tier * 1.8,
+        stompCd: 4.0 - tier * 1.4,
+        specialCd: 4.2,
+        reactDashCd: 0,
+        rangedCooldown: 2.4 - tier * 0.9,
+        chargeDirX: 0,
+        chargeDirY: 0,
+        dashDirX: 0,
+        dashDirY: 0,
+        strafeDir: holdsKey ? -1 : 1,
+        enraged: false,
+        deathTimer: 0,
+        hitFlash: 0,
+        painTimer: 0,
+        stunTimer: 0,
+        knockVx: 0,
+        knockVy: 0,
+        wallSlammed: false,
+        facingAngle: 0,
+        walkCycle: 0,
+        growlTimer: 1.5,
+        cooldown: 0
+      };
+    };
+
+    const chArena = this.championArena || { cx: 10.5, cy: 38.5, bounds: { minX: 5.7, maxX: 14.3, minY: 33.7, maxY: 42.3 } };
+    this.enemies.push(makeBossEntity(998, chArena, 'ARCH-CHAMPION', 'GLADIATOR', 'BOSS_CHAMPION', false, true));
+
+    const bArena = this.bossArena || { cx: 38.5, cy: 38.5, bounds: { minX: 32.7, maxX: 44.3, minY: 32.7, maxY: 44.3 } };
+
+    if (objectiveType === 'FINAL_ICON') {
+      this.enemies.push(makeBossEntity(999, bArena, 'ICON OF SIN [FINAL]', 'ICON_OF_SIN', 'BOSS_ICON', true, false, CONFIG.ENEMIES.ICON_OF_SIN));
+      const b = bArena.bounds;
+      const pylonOffsets = [
+        { x: b.minX + 1.8, y: b.minY + 1.8 },
+        { x: b.maxX - 1.8, y: b.minY + 1.8 },
+        { x: b.minX + 1.8, y: b.maxY - 1.8 },
+        { x: b.maxX - 1.8, y: b.maxY - 1.8 }
+      ];
+      this.arenaPylons = pylonOffsets.map((p, idx) => ({
+        id: idx + 1,
+        x: p.x,
+        y: p.y,
+        hp: 7,
+        maxHp: 7,
+        active: false,
+        destroyed: false
+      }));
+      return;
+    }
+
+    if (objectiveType === 'BOSS_KEY') {
+      const bossSpecs = [
+        { name: 'INFERNAL PYROMANCER [KEY]', arch: 'PYROMANCER', anim: 'BOSS_PYRO' },
+        { name: 'NECRO-ARCHON [KEY]', arch: 'SUMMONER_LORD', anim: 'BOSS_NECRO' },
+        { name: 'CYBER-TYRANT [KEY]', arch: 'CYBER_ARTILLERY', anim: 'BOSS_CYBER' },
+        { name: 'VOID STALKER [KEY]', arch: 'VOID_STALKER', anim: 'BOSS_VOID' },
+        { name: 'MAGMA COLOSSUS [KEY]', arch: 'PYROMANCER', anim: 'BOSS_PYRO' },
+        { name: 'SOUL HARVESTER [KEY]', arch: 'SUMMONER_LORD', anim: 'BOSS_NECRO' },
+        { name: 'MECHA-BEHEMOTH [KEY]', arch: 'CYBER_ARTILLERY', anim: 'BOSS_CYBER' },
+        { name: 'ABYSS PHANTOM [KEY]', arch: 'VOID_STALKER', anim: 'BOSS_VOID' },
+        { name: 'HELLFIRE MONARCH [KEY]', arch: 'PYROMANCER', anim: 'BOSS_PYRO' }
+      ];
+      const spec = bossSpecs[(this.level - 1) % bossSpecs.length];
+      this.enemies.push(makeBossEntity(999, bArena, spec.name, spec.arch, spec.anim, true, false));
+      return;
+    }
+
+    if (objectiveType === 'GENERATORS') {
+      const genSpots = [nodes[2], nodes[4], nodes[5]];
+      if (this.level >= 5 && nodes[7]) genSpots.push(nodes[7]);
+      this.generators = genSpots.map((n, idx) => ({
+        id: idx + 1,
+        x: n.cx + 0.5,
+        y: n.cy + 0.5,
+        hp: 10 + this.level * 1.4,
+        maxHp: 10 + this.level * 1.4,
+        alive: true,
+        hitFlash: 0
+      }));
+      this.keyItem.active = false;
+      return;
+    }
+
+    if (objectiveType === 'SURVIVAL_WAVES') {
+      const hub = nodes[4] || { cx: 24, cy: 24 };
+      this.survivalState = {
+        cx: hub.cx + 0.5,
+        cy: hub.cy + 0.5,
+        started: false,
+        wave: 0,
+        maxWaves: 3,
+        waveTimer: 0,
+        completed: false
+      };
+      this.keyItem.active = false;
+      return;
+    }
+
+    if (objectiveType === 'ESCORT_RESCUE') {
+      const vipNode = nodes[2] || { cx: 38, cy: 10 };
+      this.vip = {
+        x: vipNode.cx + 0.5,
+        y: vipNode.cy + 0.5,
+        hp: 85,
+        maxHp: 85,
+        rescued: false,
+        alive: true,
+        walkCycle: 0,
+        hitFlash: 0
+      };
+      this.keyItem.active = false;
+      return;
+    }
+
+    if (objectiveType === 'ESCAPE_COUNTDOWN') {
+      this.escapeCore = {
+        x: bArena.cx,
+        y: bArena.cy,
+        triggered: false,
+        hp: 8
+      };
+      this.sectorObjective.escapeTimer = 68;
+      this.keyItem.active = false;
+      return;
+    }
+
+    if (objectiveType === 'THREE_KEYS') {
+      const spots = [nodes[2], nodes[5], { cx: Math.floor(bArena.cx), cy: Math.floor(bArena.cy) }];
+      const colors = ['RED', 'BLUE', 'YELLOW'];
+      this.coloredKeys = colors.map((col, idx) => ({
+        color: col,
+        x: spots[idx].cx + 0.5,
+        y: spots[idx].cy + 0.5,
+        active: true
+      }));
+      this.keyItem.active = false;
     }
   }
 
-  start({ showBriefing = false } = {}) {
+  start({ showBriefing = false, character = null } = {}) {
     if (this.frameId) cancelAnimationFrame(this.frameId);
+    if (character) this.setCharacter(character);
     const snap = this.captureCurrentScreen();
     this.reset();
     this.running = true;
     this.paused = false;
     this.briefingOpen = Boolean(showBriefing);
     this.lastTime = performance.now();
-    globalDoomMusic.ensurePlaying();
+    globalDoomMusic.startMatch();
     this.audio.startAmbience();
     if (!this.briefingOpen) {
       this.startScreenMelt('SECTOR', snap);
     } else {
-      this.onStatus('MANUAL TÁCTICO DE COMBATE // Pulsa [ESPACIO], [ENTER] o haz clic para desplegarte');
+      this.onStatus(`${this.characterProfile.name} listo // Pulsa [ESPACIO], [ENTER] o haz clic para desplegarte`);
     }
     this.enterFullscreenOnStart();
     this.frameId = requestAnimationFrame(this.boundLoop);
@@ -4087,16 +3528,16 @@ export class HellfallGame {
     if (!this.briefingOpen) return;
     this.downloadBriefingSnap = this.captureCurrentScreen();
     this.briefingOpen = false;
+    this.keys.clear();
+    this.mouseDown = false;
     this.lastTime = performance.now();
     this.startTime = this.lastTime;
     this.levelStartTime = this.lastTime;
     this.audio.playShotgun();
     this.startScreenMelt('SECTOR', this.downloadBriefingSnap);
-    if (this.canvas.requestPointerLock) {
-      this.canvas.requestPointerLock();
-    }
-    const sectorName = CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
-    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} (${this.currentLayoutName || 'GRID'}) // ¡COMBATE ACTIVO!`);
+    this.safeRequestPointerLock();
+    const sectorName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
+    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} // ¡COMBATE ACTIVO!`);
   }
 
   enterFullscreenOnStart() {
@@ -4106,17 +3547,17 @@ export class HellfallGame {
       reqTarget.requestFullscreen()
         .then(() => {
           this.updateFullscreenLayout();
-          if (this.running && !this.paused && !this.briefingOpen && !this.intermission && !this.deathSequence && !this.victorySequence && this.canvas.requestPointerLock) {
-            this.canvas.requestPointerLock();
+          if (this.running && !this.paused && !this.briefingOpen && !this.intermission && !this.deathSequence && !this.victorySequence) {
+            this.safeRequestPointerLock();
           }
         })
         .catch(() => {
-          if (this.running && !this.paused && !this.briefingOpen && !this.intermission && this.canvas.requestPointerLock) {
-            this.canvas.requestPointerLock();
+          if (this.running && !this.paused && !this.briefingOpen && !this.intermission) {
+            this.safeRequestPointerLock();
           }
         });
-    } else if (this.running && !this.paused && !this.briefingOpen && !this.intermission && this.canvas.requestPointerLock) {
-      this.canvas.requestPointerLock();
+    } else if (this.running && !this.paused && !this.briefingOpen && !this.intermission) {
+      this.safeRequestPointerLock();
     }
   }
 
@@ -4130,9 +3571,11 @@ export class HellfallGame {
     this.victorySequence = null;
     this.melt = null;
     this.mouseDown = false;
+    this.keys.clear();
     this.audio.stopAmbience();
+    globalDoomMusic.stopMatch();
     if (this.frameId) cancelAnimationFrame(this.frameId);
-    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.safeExitPointerLock();
     if (document.fullscreenElement && document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     }
@@ -4149,11 +3592,14 @@ export class HellfallGame {
     this.melt = null;
     this.deathSequence = null;
     this.victorySequence = null;
+    this.keys.clear();
     this.audio.stopAmbience();
+    globalDoomMusic.stopMatch();
     if (this.frameId) cancelAnimationFrame(this.frameId);
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('mouseup', this.onMouseUp);
+    window.removeEventListener('blur', this.onWindowBlur);
     window.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
@@ -4163,7 +3609,7 @@ export class HellfallGame {
       document.removeEventListener('fullscreenchange', this.updateFullscreenLayout);
       window.removeEventListener('resize', this.updateFullscreenLayout);
     }
-    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.safeExitPointerLock();
   }
 
   cycleMouseSensitivity(dir = 1) {
@@ -4195,6 +3641,9 @@ export class HellfallGame {
     if (e.code === 'KeyH' && !e.repeat && this.running && !this.paused && !this.intermission && !this.shopOpen && !this.deathSequence && !this.victorySequence) {
       this.briefingOpen = true;
       this.mouseDown = false;
+      this.keys.clear();
+      this.wasPointerLocked = false;
+      this.safeExitPointerLock();
       this.onStatus('MANUAL TÁCTICO DE COMBATE // Pulsa [ESPACIO], [ENTER] o haz clic para volver');
       return;
     }
@@ -4219,7 +3668,7 @@ export class HellfallGame {
         this.closeShop();
         return;
       }
-      if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) {
+      if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].includes(e.code)) {
         this.buyMerchantItem(Number(e.code.slice(-1)));
         return;
       }
@@ -4228,6 +3677,19 @@ export class HellfallGame {
     }
 
     if (this.intermission) {
+      const im = this.intermission;
+      if (im.stage === 'ROUTE') {
+        if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
+          this.selectRouteChoice(Number(e.code.slice(-1)) - 1);
+          return;
+        }
+        if ((e.code === 'Space' || e.code === 'Enter') && im.routeChoices?.length === 1) {
+          e.preventDefault();
+          this.selectRouteChoice(0);
+          return;
+        }
+        return;
+      }
       if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
         this.selectUpgrade(Number(e.code.slice(-1)) - 1);
         return;
@@ -4238,10 +3700,9 @@ export class HellfallGame {
       }
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') {
         e.preventDefault();
-        const im = this.intermission;
         if (im.upgradeChoices?.length > 0 && !im.upgradeSelected) {
           this.audio.playEmptyClip();
-          this.onStatus(`ALTAR DE MEJORA: elige [1]${im.upgradeChoices.length >= 3 ? ', [2] o [3]' : ' o [2]'} antes de desplegarte`);
+          this.onStatus(`ALTAR DE MEJORA: elige [1]${im.upgradeChoices.length >= 3 ? ', [2] o [3]' : ' o [2]'} antes de continuar`);
           return;
         }
         this.advanceFromIntermission();
@@ -4263,8 +3724,13 @@ export class HellfallGame {
     if (this.mapOpen) return;
 
     if (e.code === 'Escape' && this.running && !this.finished && !this.intermission) {
-      if (!this.paused) this.pause();
-      else this.resume();
+      if (this.paused) {
+        if (performance.now() - (this._lastPointerUnlockAt || 0) > 150) {
+          this.resume();
+        }
+      } else {
+        this.pause();
+      }
       return;
     }
     if (this.paused) {
@@ -4295,7 +3761,7 @@ export class HellfallGame {
       if (e.code === 'Enter' || e.code === 'Space') {
         if (this.pauseMenuIndex === 0) {
           this.resume();
-          if (this.canvas.requestPointerLock) this.canvas.requestPointerLock();
+          this.safeRequestPointerLock();
         } else if (this.pauseMenuIndex === 1) {
           this.toggleFullscreen();
         } else if (this.pauseMenuIndex === 2) {
@@ -4322,6 +3788,9 @@ export class HellfallGame {
       if (e.code === 'Digit2') this.selectWeapon(2);
       if (e.code === 'Digit3') this.selectWeapon(3);
       if (e.code === 'Digit4') this.selectWeapon(4);
+      if (e.code === 'Digit5') this.selectWeapon(5);
+      if (e.code === 'Digit6') this.selectWeapon(6);
+      if (e.code === 'Digit7') this.selectWeapon(7);
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if ((e.code === 'KeyV' || e.code === 'KeyB') && !e.repeat) this.triggerPunch(false);
       if ((e.code === 'KeyC' || e.code === 'AltLeft') && !e.repeat) this.triggerPlayerDash(performance.now());
@@ -4335,19 +3804,24 @@ export class HellfallGame {
   }
 
   handleMouseMove(e) {
-    if (this.running && !this.paused && !this.intermission && !this.mapOpen && !this.deathSequence && !this.victorySequence && document.pointerLockElement === this.canvas) {
-      this.player.angle += e.movementX * 0.0023 * (this.mouseSens || 1.0);
+    if (this.running && !this.paused && !this.intermission && !this.shopOpen && !this.mapOpen && !this.deathSequence && !this.victorySequence && document.pointerLockElement === this.canvas) {
+      const mx = clamp(Number(e.movementX) || 0, -240, 240);
+      this.player.angle += mx * 0.0023 * (this.mouseSens || 1.0);
     }
   }
 
   handlePointerLockChange() {
     const locked = document.pointerLockElement === this.canvas;
+    if (!locked && this.wasPointerLocked) {
+      this._lastPointerUnlockAt = performance.now();
+    }
     if (
       this.wasPointerLocked &&
       !locked &&
       this.running &&
       !this.finished &&
       !this.paused &&
+      !this.briefingOpen &&
       !this.intermission &&
       !this.shopOpen &&
       !this.mapOpen &&
@@ -4363,10 +3837,12 @@ export class HellfallGame {
     this.paused = true;
     this.pauseMenuIndex = 0;
     this.mouseDown = false;
+    this.keys.clear();
     this.mapOpen = false;
     this.audio.setAmbiencePaused(true);
+    globalDoomMusic.setPaused(true);
     this.onStatus('Pausado (ESC/Enter: Seguir | F: Pantalla Completa / Minimizar | Q: Salir)');
-    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.safeExitPointerLock();
     this.drawPauseScreen();
   }
 
@@ -4374,6 +3850,7 @@ export class HellfallGame {
     if (!this.running || this.finished) return;
     this.paused = false;
     this.audio.setAmbiencePaused(false);
+    globalDoomMusic.setPaused(false);
     this.lastTime = performance.now();
     this.frameId = requestAnimationFrame(this.boundLoop);
   }
@@ -4416,12 +3893,61 @@ export class HellfallGame {
     return true;
   }
 
+  triggerEscapeCountdown(now = performance.now()) {
+    if (!this.escapeCore || this.escapeCore.triggered) return;
+    this.escapeCore.triggered = true;
+    this.sectorObjective.escapeStarted = true;
+    this.sectorObjective.escapeTimer = 65.0;
+    this.player.hasKey = true;
+    this.audio.playAlarm();
+    this.screenShake = Math.max(this.screenShake, 0.5);
+    this.pushLootNotification('☢️ ¡NÚCLEO EN FUSIÓN! (65s)', ['EXIT DESBLOQUEADO · CORRE HACIA LA SALIDA'], '#ff003c');
+    this.onStatus('☢️ ¡CUENTA ATRÁS INICIADA! Escapa por EXIT antes de que detone el sector');
+    this.spawnTeleportWave(this.player.x, this.player.y, 3, null, 'INTERCEPTORES EN CAMINO');
+  }
+
+  startNextSurvivalWave(now = performance.now()) {
+    const sv = this.survivalState;
+    if (!sv || sv.completed) return;
+    sv.started = true;
+    sv.wave++;
+    sv.waveTimer = 18.0 + sv.wave * 3;
+    const count = 3 + sv.wave;
+    this.audio.playAlarm();
+    this.spawnTeleportWave(sv.cx, sv.cy, count, null, `OLEADA ${sv.wave}/${sv.maxWaves}`);
+    this.onStatus(`⚔️ OLEADA ${sv.wave}/${sv.maxWaves} INICIADA · ¡RESISTE!`);
+    // Suministro de emergencia entre oleadas
+    if (sv.wave > 1) {
+      this.ammoPacks.push({ x: sv.cx + 0.6, y: sv.cy, amount: 8, fuelAmount: 16, rocketAmount: 2, cellAmount: 15, active: true });
+      this.medkits.push({ x: sv.cx - 0.6, y: sv.cy, active: true });
+    }
+  }
+
   interact() {
     if (!this.player) return;
 
     const gloryTarget = this.findGloryTarget();
     if (gloryTarget) {
       this.executeGloryKill(gloryTarget, false);
+      return;
+    }
+
+    if (this.vip && this.vip.alive && !this.vip.rescued && distance(this.player.x, this.player.y, this.vip.x, this.vip.y) < 2.5) {
+      this.vip.rescued = true;
+      this.audio.playKeyPickup();
+      this.pushLootNotification('🧬 ¡CIENTÍFICO RESCATADO!', ['ESCOLTALO VIVO HASTA LA PUERTA EXIT'], '#00f5d4');
+      this.onStatus('🧬 VIP rescatado: ¡guíalo hasta la compuerta EXIT!');
+      this.spawnTeleportWave(this.vip.x, this.vip.y, 2, null, 'EMBOSCADA AL RESCATE');
+      return;
+    }
+
+    if (this.escapeCore && !this.escapeCore.triggered && distance(this.player.x, this.player.y, this.escapeCore.x, this.escapeCore.y) < 2.6) {
+      this.triggerEscapeCountdown();
+      return;
+    }
+
+    if (this.survivalState && !this.survivalState.started && distance(this.player.x, this.player.y, this.survivalState.cx, this.survivalState.cy) < 2.8) {
+      this.startNextSurvivalWave();
       return;
     }
 
@@ -4433,7 +3959,10 @@ export class HellfallGame {
     for (const door of this.doors.values()) {
       if (distance(this.player.x, this.player.y, door.x + 0.5, door.y + 0.5) < 2.8 && door.target === 0) {
         door.target = 1;
-        if (door.isSecret && !door.discovered) {
+        if (door.isCloset) {
+          const cl = this.monsterClosets.find((c) => c.doorKey === `${door.x},${door.y}`);
+          if (cl) this.openMonsterCloset(cl, 'MURO TRAMPA DESCUBIERTO');
+        } else if (door.isSecret && !door.discovered) {
           door.discovered = true;
           this.sectorStats.secrets++;
           this.runStats.secretsFound = (this.runStats.secretsFound || 0) + 1;
@@ -4442,7 +3971,7 @@ export class HellfallGame {
           this.onStatus('🔥 ¡SECRETO DESCUBIERTO! Muro oculto deslizado');
         } else if (door.isBossGate) {
           this.audio.playDoorSlide();
-          this.onStatus('👁️ COMPUERTA DE ARENA ABIERTA: El Boss aguarda inmóvil en el centro. Entra para combatir');
+          this.onStatus('👁️ COMPUERTA DE ARENA ABIERTA: El Boss aguarda en el centro. Entra para combatir');
         } else {
           this.audio.playDoorSlide();
           this.onStatus('Compuerta blindada UAC abierta');
@@ -4467,6 +3996,18 @@ export class HellfallGame {
     );
   }
 
+  activateIconPylons(count = 2) {
+    if (!this.arenaPylons || this.arenaPylons.length === 0) return false;
+    const avail = this.arenaPylons.filter((p) => !p.destroyed && !p.active);
+    if (avail.length === 0) return false;
+    for (let i = 0; i < Math.min(count, avail.length); i++) {
+      avail[i].active = true;
+      avail[i].hp = avail[i].maxHp;
+      this.spawnWallSparks(avail[i].x, avail[i].y, 14, '#00f5d4');
+    }
+    return true;
+  }
+
   awakenBoss(enemy, now = performance.now()) {
     if (!enemy || !enemy.alive || !enemy.dormant) return;
     enemy.dormant = false;
@@ -4487,23 +4028,23 @@ export class HellfallGame {
     this.spawnWallSparks(enemy.x, enemy.y, 18, '#ffbe0b');
     this.bossAwakenBanner = {
       name: enemy.kind,
-      sub: enemy.holdsKey ? '¡GUARDIÁN DE LA LLAVE ACTIVADO!' : '¡SEÑOR DE LA ARENA DESPIERTA!',
+      sub: enemy.isFinalIcon ? '¡FASE 1: EL TITÁN DEL ABISMO DESPIERTA!' : (enemy.holdsKey ? '¡GUARDIÁN DE LA LLAVE ACTIVADO!' : '¡SEÑOR DE LA ARENA DESPIERTA!'),
       until: now + 2400
     };
     this.pushLootNotification(
       `👁️ ¡${enemy.kind} DESPIERTA!`,
-      ['HAS ENTRADO EN LA ARENA · EL BOSS PASA AL ATAQUE'],
+      [enemy.isFinalIcon ? 'DESTRUYE LOS PILONES SI ACTIVA SU ESCUDO' : 'HAS ENTRADO EN LA ARENA · EL BOSS PASA AL ATAQUE'],
       '#d90429'
     );
     this.onStatus(`⚠️ ¡${enemy.kind} SE HA ACTIVADO Y TE ATACA!`);
   }
 
   applyKnockback(enemy, dirX, dirY, force, stunSec = 0.45) {
-    if (!enemy || !enemy.alive) return;
+    if (!enemy || !enemy.alive || enemy.isTurret) return;
     const len = Math.hypot(dirX, dirY) || 1;
     const nx = dirX / len;
     const ny = dirY / len;
-    const mult = enemy.isBoss ? 0.36 : (enemy.kind === 'SHIELD' ? 0.72 : 1.0);
+    const mult = enemy.isBoss ? 0.34 : (enemy.kind === 'SHIELD' || enemy.kind === 'MANCUBUS' || enemy.kind === 'CYBERDEMON' ? 0.58 : 1.0);
     enemy.knockVx = (enemy.knockVx || 0) + nx * force * mult;
     enemy.knockVy = (enemy.knockVy || 0) + ny * force * mult;
     enemy.wallSlammed = false;
@@ -4543,7 +4084,7 @@ export class HellfallGame {
 
     const candidates = [];
     for (const enemy of this.enemies) {
-      if (!enemy.alive) continue;
+      if (!enemy.alive || enemy.dormantCloset) continue;
       const d = distance(this.player.x, this.player.y, enemy.x, enemy.y);
       if (d > range) continue;
       const ang = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
@@ -4565,11 +4106,12 @@ export class HellfallGame {
       this.audio.playHitmarker();
       for (const { enemy, ang } of targets) {
         if (enemy.isBoss && enemy.dormant) this.awakenBoss(enemy, now);
-        enemy.health -= baseDmg * dmgMult;
+        const effDmg = enemy.shieldActive ? baseDmg * dmgMult * 0.25 : baseDmg * dmgMult;
+        enemy.health -= effDmg;
         enemy.hitFlash = 0.22;
         enemy.shieldFlash = 0;
         this.applyKnockback(enemy, Math.cos(ang), Math.sin(ang), force, empowered ? 0.9 : 0.45);
-        this.spawnBlood(enemy.x, enemy.y, empowered ? 18 : 10);
+        this.spawnBlood(enemy.x, enemy.y, empowered ? 18 : 10, enemy.isTurret ? '#ffbe0b' : null);
         this.spawnWallSparks(enemy.x, enemy.y, empowered ? 10 : 5, empowered ? '#ff4d00' : '#ffbe0b');
         if (enemy.health <= 0) {
           this.killEnemy(enemy, 'PUNCH');
@@ -4614,7 +4156,6 @@ export class HellfallGame {
     this.screenShake = Math.max(this.screenShake, 0.45);
     this.audio.playKineticBurst();
 
-    // SINERGIA: PULSO CINÉTICO + BLINDAJE REACTIVO = regenera +8% de blindaje al detonar
     if (this.hasUpgrade('REACTIVE_ARMOR')) {
       this.player.armor = Math.min(100, (this.player.armor || 0) + 8);
     }
@@ -4635,7 +4176,7 @@ export class HellfallGame {
 
     let hitCount = 0;
     for (const enemy of this.enemies) {
-      if (!enemy.alive) continue;
+      if (!enemy.alive || enemy.dormantCloset) continue;
       const d = distance(this.player.x, this.player.y, enemy.x, enemy.y);
       if (d <= radius) {
         if (enemy.isBoss && enemy.dormant) this.awakenBoss(enemy, now);
@@ -4689,7 +4230,6 @@ export class HellfallGame {
     return true;
   }
 
-  // Cofres de suministros con munición, gasolina, monedas y curación aleatoria
   openChest(chest) {
     chest.opened = true;
     this.sectorStats.items++;
@@ -4702,11 +4242,15 @@ export class HellfallGame {
     const ammoAdd = randInt(CONFIG.CHEST_AMMO_RANGE[0], CONFIG.CHEST_AMMO_RANGE[1]);
     const fuelAdd = randInt(CONFIG.CHEST_FUEL_RANGE[0], CONFIG.CHEST_FUEL_RANGE[1]);
     const coinAdd = randInt(CONFIG.CHEST_COIN_RANGE[0], CONFIG.CHEST_COIN_RANGE[1]);
+    const rocketAdd = this.level >= 2 || this.isWeaponOwned(5) ? randInt(2, 3) : 0;
+    const cellAdd = this.level >= 3 || this.isWeaponOwned(6) || this.isWeaponOwned(7) ? randInt(15, 25) : 0;
 
     this.player.reserve = Math.min(this.getMaxReserve(), this.player.reserve + ammoAdd);
     this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + fuelAdd);
     this.player.coins = (this.player.coins || 0) + coinAdd;
-    gainedItems.push(`+${ammoAdd} CARTUCHOS · +${fuelAdd}% GASOLINA · +${coinAdd} MONEDAS`);
+    if (rocketAdd > 0) this.player.rockets = Math.min(MAX_ROCKETS, (this.player.rockets || 0) + rocketAdd);
+    if (cellAdd > 0) this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + cellAdd);
+    gainedItems.push(`+${ammoAdd} CART · +${fuelAdd}% GAS · +${coinAdd} MONEDAS${rocketAdd ? ` · +${rocketAdd} COH` : ''}${cellAdd ? ` · +${cellAdd} CEL` : ''}`);
 
     if (Math.random() < CONFIG.CHEST_HEALTH_CHANCE) {
       this.player.health = Math.min(100, this.player.health + CONFIG.CHEST_HEALTH_AMOUNT);
@@ -4718,8 +4262,18 @@ export class HellfallGame {
     }
 
     this.pushLootNotification('📦 ¡COFRE UAC ABIERTO!', gainedItems, '#ffbe0b');
-    this.spawnBlood(chest.x, chest.y, 12, '#ffbe0b');
+    this.spawnBlood(chest.x, chest.y, 12, '#ffbe0b', false);
     this.onStatus(`¡COFRE UAC! ${gainedItems.join(' · ')}`);
+
+    // Emboscada al abrir cofres trampa o activar un Monster Closet cercano
+    if (chest.trapped) {
+      const closedCloset = this.monsterClosets.find((c) => !c.opened);
+      if (closedCloset) {
+        this.openMonsterCloset(closedCloset, 'TRAMPA DE COFRE');
+      } else {
+        this.spawnTeleportWave(chest.x, chest.y, 2, null, 'EMBOSCADA DE SUMINISTROS');
+      }
+    }
   }
 
   merchantItems() {
@@ -4756,6 +4310,16 @@ export class HellfallGame {
           this.weaponDamageBonus = (this.weaponDamageBonus || 0) + 0.12;
           this.runStats.weaponMods = (this.runStats.weaponMods || 0) + 1;
         }
+      },
+      {
+        ...m.ROCKETS,
+        canBuy: () => (this.player.rockets || 0) < MAX_ROCKETS,
+        apply: () => { this.player.rockets = Math.min(MAX_ROCKETS, (this.player.rockets || 0) + m.ROCKETS.amount); }
+      },
+      {
+        ...m.CELLS,
+        canBuy: () => (this.player.cells || 0) < MAX_CELLS,
+        apply: () => { this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + m.CELLS.amount); }
       }
     ];
   }
@@ -4764,11 +4328,12 @@ export class HellfallGame {
     if (this.shopOpen) return;
     this.shopOpen = true;
     this.mouseDown = false;
+    this.keys.clear();
     this.wasPointerLocked = false;
-    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
-    this.shopNotice = 'ELIGE CON [1]-[5] · [E] O [ESC] PARA SALIR';
+    this.safeExitPointerLock();
+    this.shopNotice = 'ELIGE CON [1]-[7] O CLIC · [E] O [ESC] PARA SALIR';
     this.audio.playChestOpen();
-    this.onStatus('MERCADER DE ALMAS: compra suministros o templa tu arsenal con [1]-[5]');
+    this.onStatus('MERCADER DE ALMAS: compra munición, cohetes, celdas o mejoras [1]-[7]');
   }
 
   closeShop() {
@@ -4815,6 +4380,7 @@ export class HellfallGame {
     this.runStats.damageTaken = (this.runStats.damageTaken || 0) + dmg;
     this.lastDamageTime = now;
     this.screenShake = this.reducedEffects ? 0.1 : 0.28;
+    if (this.director) this.director.intensity = Math.min(1, this.director.intensity + 0.12);
 
     if (sourceX !== null && sourceY !== null) {
       const angleToSource = Math.atan2(sourceY - this.player.y, sourceX - this.player.x);
@@ -4825,7 +4391,7 @@ export class HellfallGame {
       this.damageAngle = 0;
       this.damageDir = 0;
     }
-    this.audio.playHurt();
+    this.audio.playHurt(this.characterProfile?.hurtPitch || 1.0);
 
     if (this.player.health > 0 && this.hasUpgrade('KINETIC_BURST') && now >= this.kineticCooldownUntil) {
       this.triggerKineticBurst(now, true);
@@ -4882,6 +4448,7 @@ export class HellfallGame {
   }
 
   isWall(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !this.map || this.map.length === 0) return true;
     const mx = Math.floor(x), my = Math.floor(y);
     if (my < 0 || mx < 0 || my >= this.map.length || mx >= this.map[0].length) return true;
     const tile = this.map[my][mx];
@@ -4894,6 +4461,7 @@ export class HellfallGame {
   }
 
   moveWithCollision(dx, dy) {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || !this.player) return;
     const r = 0.22;
     const free = (nx, ny) =>
       !this.isWall(nx - r, ny - r) &&
@@ -4915,6 +4483,7 @@ export class HellfallGame {
   }
 
   moveEnemyWithCollision(enemy, dx, dy, r = 0.28) {
+    if (!enemy || !Number.isFinite(dx) || !Number.isFinite(dy)) return { movedX: false, movedY: false, hitWall: false };
     let movedX = false;
     let movedY = false;
     if (dx !== 0 && this.canEnemyMoveTo(enemy.x + dx, enemy.y, r)) {
@@ -5126,12 +4695,24 @@ export class HellfallGame {
     this.player.reserve = Math.min(maxReserve, before + shells);
     const gainedShells = this.player.reserve - before;
     this.player.fuel = Math.min(MAX_FUEL, this.player.fuel + fuel);
+    const extras = [`+${gainedShells} CARTUCHOS`, `+${fuel}% GASOLINA`];
+    if (this.isWeaponOwned(5) && this.player.rockets < this.getMaxRockets()) {
+      const rGain = Math.min(this.getMaxRockets() - this.player.rockets, 1);
+      this.player.rockets += rGain;
+      if (rGain > 0) extras.push(`+${rGain} COHETE`);
+    }
+    if ((this.isWeaponOwned(6) || this.isWeaponOwned(7)) && this.player.cells < this.getMaxCells()) {
+      const cBefore = this.player.cells;
+      this.player.cells = Math.min(this.getMaxCells(), this.player.cells + 14);
+      const cGain = this.player.cells - cBefore;
+      if (cGain > 0) extras.push(`+${cGain} CÉLULAS`);
+    }
     this.pushLootNotification(
-      '🪚 MOTOSIERRA: COSECHA DE CARTUCHOS',
-      [`+${gainedShells} CARTUCHOS · +${fuel}% GASOLINA`, 'EL DEMONIO HA SIDO DESMEMBRADO'],
+      '🪚 MOTOSIERRA: COSECHA DE MUNICIÓN',
+      [extras.join(' · '), 'EL DEMONIO HA SIDO DESMEMBRADO'],
       '#ff4d00'
     );
-    this.onStatus(`🪚 MOTOSIERRA: +${gainedShells} cartuchos y +${fuel}% gasolina extraídos del cadáver`);
+    this.onStatus(`🪚 MOTOSIERRA: ${extras.join(' / ')} extraídos del cadáver`);
   }
 
   destroyLostSoul(enemy, now) {
@@ -5158,18 +4739,20 @@ export class HellfallGame {
     enemy.gloryUntil = 0;
     enemy.knockVx = 0;
     enemy.knockVy = 0;
+    enemy.shieldActive = false;
+    enemy.aimTimer = 0;
     this.lastKillSource = source;
 
     // Hit-stop al matar de cerca y cámara lenta al abatir a un Jefe
     if (enemy.isBoss) {
-      this.slowMoUntil = now + 900;
+      this.slowMoUntil = now + (enemy.isFinalIcon ? 1400 : 900);
     } else if (['PUNCH', 'GLORY', 'CHAINSAW', 'DASH'].includes(source)) {
       this.hitStopUntil = now + 38;
     }
 
     // Evita farmear bajas duplicadas cuando un Invocador revive un cadáver
     if (byPlayer && !enemy.wasRevived) {
-      this.player.kills += enemy.isBoss ? 5 : 1;
+      this.player.kills += enemy.isFinalIcon ? 10 : (enemy.isBoss ? 5 : 1);
       this.sectorStats.kills++;
       if (source === 'CHAINSAW') this.runStats.chainsawKills = (this.runStats.chainsawKills || 0) + 1;
       if (source === 'FLAME' || source === 'BURN') this.runStats.flamerKills = (this.runStats.flamerKills || 0) + 1;
@@ -5177,18 +4760,17 @@ export class HellfallGame {
       if (source === 'PUNCH' || source === 'KINETIC' || source === 'DASH') {
         this.runStats.meleeKills = (this.runStats.meleeKills || 0) + 1;
       }
-      if (source === 'EXPLOSION') this.runStats.explosionKills = (this.runStats.explosionKills || 0) + 1;
+      if (source === 'EXPLOSION' || source === 'ROCKET') {
+        this.runStats.explosionKills = (this.runStats.explosionKills || 0) + 1;
+      }
+      if (source === 'PLASMA' || source === 'BFG') {
+        this.runStats.energyKills = (this.runStats.energyKills || 0) + 1;
+      }
       if (enemy.isBoss) this.runStats.bossKills = (this.runStats.bossKills || 0) + 1;
 
       if (!this.chainsawAnnounced && this.player.kills >= CONFIG.CHAINSAW_UNLOCK_KILLS) {
         this.chainsawAnnounced = true;
-        this.audio.playKeyPickup();
-        this.pushLootNotification(
-          '🪚 MOTOSIERRA DESBLOQUEADA',
-          ['PULSA [4] PARA DESMEMBRAR DEMONIOS', 'SIN MUNICIÓN · GENERA CARTUCHOS Y GASOLINA'],
-          '#ff4d00'
-        );
-        this.onStatus('🪚 ¡MOTOSIERRA DESBLOQUEADA! Pulsa [4] para usarla');
+        this.unlockWeapon(4, true);
       }
       this.registerKillCombo(now);
     }
@@ -5202,7 +4784,7 @@ export class HellfallGame {
       }
     }
     this.audio.playMonsterDeath(enemy.isBoss);
-    this.spawnBlood(enemy.x, enemy.y, enemy.isBoss ? 32 : 18);
+    this.spawnBlood(enemy.x, enemy.y, enemy.isBoss ? 36 : 18);
 
     if (source === 'SHOT' && this.hasUpgrade('EXPLOSIVE_SHELLS')) {
       const expRank = this.getUpgradeRank('EXPLOSIVE_SHELLS');
@@ -5242,27 +4824,66 @@ export class HellfallGame {
       this.grantChainsawReward(enemy);
     }
 
+    const coinMult =
+      this.activeRouteMod?.id === 'MERCHANT' ||
+      this.activeRouteMod?.id === 'ELITE' ||
+      this.sectorEvent?.type === 'OVERCHARGE'
+        ? 1.5
+        : 1.0;
+
     if (enemy.isBoss) {
+      const baseCoins = randInt(CONFIG.BOSS_COIN_RANGE[0], CONFIG.BOSS_COIN_RANGE[1]);
       this.coins.push({
         x: enemy.x,
         y: enemy.y,
-        amount: randInt(CONFIG.BOSS_COIN_RANGE[0], CONFIG.BOSS_COIN_RANGE[1]),
+        amount: Math.round(baseCoins * coinMult * (enemy.isFinalIcon ? 2.5 : 1)),
         active: true
       });
     } else if (!enemy.wasRevived && Math.random() < (enemy.elite ? 1 : CONFIG.ENEMY_COIN_CHANCE + this.level * 0.01)) {
+      const amt = randInt(CONFIG.ENEMY_COIN_RANGE[0], CONFIG.ENEMY_COIN_RANGE[1]);
       this.coins.push({
         x: enemy.x + (Math.random() - 0.5) * 0.4,
         y: enemy.y + (Math.random() - 0.5) * 0.4,
-        amount: randInt(CONFIG.ENEMY_COIN_RANGE[0], CONFIG.ENEMY_COIN_RANGE[1]),
+        amount: Math.max(1, Math.round(amt * coinMult)),
         active: true
       });
     }
 
+    if (enemy.isFinalIcon) {
+      for (const pylon of this.arenaPylons) {
+        if (!pylon.destroyed) {
+          pylon.destroyed = true;
+          pylon.active = false;
+          this.spawnWallSparks(pylon.x, pylon.y, 16, '#9d4edd');
+          this.shockwaves.push({ x: pylon.x, y: pylon.y, radius: 0.4, maxRadius: 2.8, life: 0.45, maxLife: 0.45, color: '#00f5d4' });
+        }
+      }
+      this.shockwaves.push({ x: enemy.x, y: enemy.y, radius: 0.5, maxRadius: 6.5, life: 0.85, maxLife: 0.85, color: '#ffbe0b' });
+      this.audio.playExplosion();
+    }
+
     if (enemy.holdsKey) {
-      this.keyItem = { x: enemy.x, y: enemy.y, active: true };
-      this.audio.playKeyPickup();
-      this.pushLootNotification('💀 ¡BOSS GUARDIÁN DERROTADO!', ['🔑 HA SOLTADO LA LLAVE CALAVERA DORADA'], '#ffbe0b');
-      this.onStatus('🔑 ¡BOSS ABATIDO! Recoge la LLAVE CALAVERA Dorada que ha dejado caer');
+      if (this.sectorObjective?.type === 'THREE_KEYS') {
+        const missingKey = this.coloredKeys.find((k) => k.active);
+        if (missingKey) {
+          missingKey.x = enemy.x;
+          missingKey.y = enemy.y;
+        } else {
+          this.player.hasKey = true;
+        }
+        this.audio.playKeyPickup();
+        this.pushLootNotification('💀 ¡GUARDIÁN ABATIDO!', ['🔑 LLAVE DE ACCESO ASEGURADA'], '#ffbe0b');
+        this.onStatus('🔑 ¡GUARDIÁN ABATIDO! Recoge las LLAVES DE COLORES y ve a EXIT');
+      } else {
+        this.keyItem = { x: enemy.x, y: enemy.y, active: true };
+        this.audio.playKeyPickup();
+        this.pushLootNotification(
+          enemy.isFinalIcon ? '👑 ¡ICON OF SIN EXTERMINADO!' : '💀 ¡BOSS GUARDIÁN DERROTADO!',
+          ['🔑 HA SOLTADO LA LLAVE CALAVERA DORADA'],
+          '#ffbe0b'
+        );
+        this.onStatus('🔑 ¡BOSS ABATIDO! Recoge la LLAVE CALAVERA Dorada que ha dejado caer');
+      }
     } else if (enemy.holdsArsenal) {
       this.armorPickups.push({ x: enemy.x, y: enemy.y, active: true });
       this.pushLootNotification('⚔️ ¡CAMPEÓN ABISAL ABATIDO!', ['🛡️ HA SOLTADO INSIGNIA DE BLINDAJE'], '#70e000');
@@ -5301,7 +4922,109 @@ export class HellfallGame {
   // Habilidad única según el arquetipo del Jefe del sector
   triggerBossSpecial(enemy, toX, toY, dist, now) {
     const arch = enemy.bossArchetype || 'PYROMANCER';
-    enemy.specialCd = enemy.enraged ? 5.2 : 7.2;
+    enemy.specialCd = enemy.enraged ? 4.8 : 6.8;
+
+    if (arch === 'ICON_OF_SIN') {
+      const phase = enemy.phase || 1;
+      const orbSprite = this.orbSprites.BOSS_ICON || this.orbSprites.BOSS;
+      if (phase === 1) {
+        // Fase 1: Onda en espiral + invocación de almas errantes
+        const count = 6;
+        for (let i = 0; i < count; i++) {
+          const ang = Math.atan2(toY, toX) + (i - (count - 1) / 2) * 0.22;
+          const spd = 6.2;
+          this.enemyProjectiles.push({
+            ownerId: enemy.id,
+            ownerKind: enemy.kind,
+            ownerRef: enemy,
+            x: enemy.x + Math.cos(ang) * 0.55,
+            y: enemy.y + Math.sin(ang) * 0.55,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            life: 3.1,
+            damage: enemy.projDamage || 13,
+            sprite: orbSprite
+          });
+        }
+        if (this.buildRegularEnemy && this.enemies.filter((e) => e.alive && !e.isBoss).length < 5) {
+          for (const ox of [-1.4, 1.4]) {
+            if (this.canEnemyMoveTo(enemy.x + ox, enemy.y, 0.28)) {
+              const minion = this.buildRegularEnemy('LOST_SOUL', { x: enemy.x + ox, y: enemy.y }, false);
+              minion.wasRevived = true;
+              minion.alerted = true;
+              this.enemies.push(minion);
+            }
+          }
+          this.audio.playSummon();
+        }
+        this.onStatus('👹 ¡ICON OF SIN FASE I: OLEADA DE FUEGO Y ALMAS ERRANTES!');
+      } else if (phase === 2) {
+        // Fase 2: Lluvia de meteoros + cohetes del abismo + Caballero del Infierno
+        for (let m = 0; m < 3; m++) {
+          const ang = Math.random() * Math.PI * 2;
+          const d = 1.2 + Math.random() * 4.2;
+          const mx = this.player.x + Math.cos(ang) * d;
+          const my = this.player.y + Math.sin(ang) * d;
+          if (!this.isWall(mx, my)) {
+            this.meteorStrikes.push({ x: mx, y: my, radius: 2.3, timer: 1.15 + m * 0.25, maxTimer: 1.4 });
+          }
+        }
+        const baseA = Math.atan2(toY, toX);
+        for (const off of [-0.22, 0.22]) {
+          const a = baseA + off;
+          this.enemyProjectiles.push({
+            ownerId: enemy.id,
+            ownerKind: enemy.kind,
+            ownerRef: enemy,
+            x: enemy.x + Math.cos(a) * 0.55,
+            y: enemy.y + Math.sin(a) * 0.55,
+            vx: Math.cos(a) * 6.8,
+            vy: Math.sin(a) * 6.8,
+            explosive: true,
+            explodeRadius: 2.1,
+            life: 2.9,
+            damage: 14,
+            sprite: this.orbSprites.CYBERDEMON || this.orbSprites.BOSS_CYBER || orbSprite
+          });
+        }
+        if (this.buildRegularEnemy && this.enemies.filter((e) => e.alive && !e.isBoss).length < 4) {
+          if (this.canEnemyMoveTo(enemy.x, enemy.y + 1.5, 0.3)) {
+            const knight = this.buildRegularEnemy('HELL_KNIGHT', { x: enemy.x, y: enemy.y + 1.5 }, false);
+            knight.wasRevived = true;
+            knight.alerted = true;
+            this.enemies.push(knight);
+            this.spawnWallSparks(knight.x, knight.y, 12, '#70e000');
+          }
+        }
+        this.audio.playDemonFireball(dist);
+        this.onStatus('☄️ ¡ICON OF SIN FASE II: LLUVIA DE METEOROS Y COHETES ABISALES!');
+      } else {
+        // Fase 3: Espiral apocalíptica + grietas de lava + teletransporte táctico
+        enemy.specialCd = 4.2;
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2 + (now * 0.002);
+          this.enemyProjectiles.push({
+            ownerId: enemy.id,
+            ownerKind: enemy.kind,
+            ownerRef: enemy,
+            x: enemy.x + Math.cos(ang) * 0.55,
+            y: enemy.y + Math.sin(ang) * 0.55,
+            vx: Math.cos(ang) * 6.4,
+            vy: Math.sin(ang) * 6.4,
+            life: 2.7,
+            damage: enemy.projDamage || 14,
+            sprite: orbSprite
+          });
+        }
+        if (!this.isWall(this.player.x, this.player.y) && this.hazards.length < 18) {
+          this.hazards.push({ x: this.player.x, y: this.player.y, radius: 1.5, kind: 'LAVA', tempUntil: now + 9000 });
+        }
+        this.shockwaves.push({ x: enemy.x, y: enemy.y, radius: 0.4, maxRadius: 4.5, life: 0.45, maxLife: 0.45, color: '#ff0055' });
+        this.audio.playExplosion();
+        this.onStatus('💀 ¡ICON OF SIN FASE III: APOCALIPSIS INFERNAL!');
+      }
+      return;
+    }
 
     if (arch === 'SUMMONER_LORD') {
       if (this.buildRegularEnemy) {
@@ -5311,7 +5034,8 @@ export class HellfallGame {
           const sx = enemy.x + ox;
           const sy = enemy.y + oy;
           if (this.canEnemyMoveTo(sx, sy, 0.28)) {
-            const minion = this.buildRegularEnemy(spawned === 0 ? 'IMP' : 'LOST_SOUL', { x: sx, y: sy }, false);
+            const minionKind = spawned === 0 ? (this.level >= 5 ? 'SPECTRE' : 'IMP') : 'LOST_SOUL';
+            const minion = this.buildRegularEnemy(minionKind, { x: sx, y: sy }, false);
             minion.wasRevived = true;
             minion.alerted = true;
             this.enemies.push(minion);
@@ -5319,14 +5043,16 @@ export class HellfallGame {
             spawned++;
           }
         }
+        const corpse = this.findRevivableCorpse(enemy);
+        if (corpse) this.reviveCorpse(corpse, enemy);
         if (spawned > 0) {
           this.audio.playSummon();
-          this.onStatus(`☠️ ¡${enemy.kind} INVOCA ESBIRROS DEL ABISMO!`);
+          this.onStatus(`☠️ ¡${enemy.kind} INVOCA ESBIRROS Y ALZA MUERTOS!`);
         }
       }
     } else if (arch === 'CYBER_ARTILLERY') {
       const baseAngle = Math.atan2(toY, toX);
-      for (const offset of [-0.18, 0.18]) {
+      for (const offset of [-0.16, 0, 0.16]) {
         const ang = baseAngle + offset;
         this.enemyProjectiles.push({
           ownerId: enemy.id,
@@ -5334,18 +5060,18 @@ export class HellfallGame {
           ownerRef: enemy,
           x: enemy.x + Math.cos(ang) * 0.5,
           y: enemy.y + Math.sin(ang) * 0.5,
-          vx: Math.cos(ang) * 5.8,
-          vy: Math.sin(ang) * 5.8,
-          speed: 5.8,
-          homing: true,
-          turnRate: 1.55,
-          life: 3.1,
-          damage: enemy.projDamage || 12,
-          sprite: this.orbSprites.REVENANT || this.orbSprites.BOSS
+          vx: Math.cos(ang) * 6.4,
+          vy: Math.sin(ang) * 6.4,
+          speed: 6.4,
+          explosive: true,
+          explodeRadius: 1.9,
+          life: 3.0,
+          damage: enemy.projDamage || 13,
+          sprite: this.orbSprites.CYBERDEMON || this.orbSprites.BOSS_CYBER || this.orbSprites.BOSS
         });
       }
-      this.audio.playDemonFireball(dist);
-      this.onStatus(`🚀 ¡${enemy.kind} DISPARA MISILES GUIADOS!`);
+      this.audio.playRocketLauncher();
+      this.onStatus(`🚀 ¡${enemy.kind} DESCARGA ANDANADA DE COHETES EXPLOSIVOS!`);
     } else if (arch === 'VOID_STALKER') {
       const b = enemy.arenaBounds;
       if (b) {
@@ -5359,17 +5085,53 @@ export class HellfallGame {
             enemy.wakeFlash = 0.45;
             this.shockwaves.push({ x: tx, y: ty, radius: 0.3, maxRadius: 2.6, life: 0.4, maxLife: 0.4, color: '#00f5d4' });
             this.spawnWallSparks(tx, ty, 14, '#9d4edd');
-            this.audio.playBossDash(dist);
-            this.onStatus(`🌀 ¡${enemy.kind} SE TELETRANSPORTA POR LA ARENA!`);
+            this.audio.playTeleport();
+            for (let k = 0; k < 4; k++) {
+              const va = (k / 4) * Math.PI * 2 + Math.PI / 4;
+              this.enemyProjectiles.push({
+                ownerId: enemy.id,
+                ownerKind: enemy.kind,
+                ownerRef: enemy,
+                x: tx + Math.cos(va) * 0.45,
+                y: ty + Math.sin(va) * 0.45,
+                vx: Math.cos(va) * 5.8,
+                vy: Math.sin(va) * 5.8,
+                life: 2.4,
+                damage: enemy.projDamage || 10,
+                sprite: this.orbSprites.BOSS_VOID || this.orbSprites.BOSS
+              });
+            }
+            this.onStatus(`🌀 ¡${enemy.kind} SE TELETRANSPORTA CON DESCARGA DEL VACÍO!`);
             break;
           }
         }
       }
+    } else if (arch === 'GLADIATOR') {
+      // Campeón: onda expansiva de acero + ráfaga triple + carga inmediata
+      this.shockwaves.push({ x: enemy.x, y: enemy.y, radius: 0.4, maxRadius: 3.4, life: 0.4, maxLife: 0.4, color: '#ffbe0b' });
+      const baseA = Math.atan2(toY, toX);
+      for (const off of [-0.2, 0, 0.2]) {
+        const a = baseA + off;
+        this.enemyProjectiles.push({
+          ownerId: enemy.id,
+          ownerKind: enemy.kind,
+          ownerRef: enemy,
+          x: enemy.x + Math.cos(a) * 0.45,
+          y: enemy.y + Math.sin(a) * 0.45,
+          vx: Math.cos(a) * 6.8,
+          vy: Math.sin(a) * 6.8,
+          life: 2.3,
+          damage: enemy.projDamage || 10,
+          sprite: this.orbSprites.BOSS_CHAMPION || this.orbSprites.BOSS
+        });
+      }
+      this.audio.playBossDash(dist);
+      this.onStatus(`⚔️ ¡${enemy.kind} EJECUTA ARREMETIDA DE GLADIADOR!`);
     } else {
-      // PYROMANCER: Anillo de 8 orbes de fuego + grieta ígnea
+      // PYROMANCER: Anillo de 8 orbes de fuego + grieta de lava bajo el jugador
       for (let i = 0; i < 8; i++) {
         const ang = (i / 8) * Math.PI * 2 + (now * 0.001);
-        const spd = (enemy.projSpeed || 6.2) * 0.82;
+        const spd = (enemy.projSpeed || 6.2) * 0.84;
         this.enemyProjectiles.push({
           ownerId: enemy.id,
           ownerKind: enemy.kind,
@@ -5380,22 +5142,27 @@ export class HellfallGame {
           vy: Math.sin(ang) * spd,
           life: 2.4,
           damage: Math.max(7, Math.round((enemy.projDamage || 10) * 0.85)),
-          sprite: this.orbSprites.IMP
+          sprite: this.orbSprites.BOSS_PYRO || this.orbSprites.IMP
         });
+      }
+      if (!this.isWall(this.player.x, this.player.y) && this.hazards.length < 18) {
+        this.hazards.push({ x: this.player.x, y: this.player.y, radius: 1.35, kind: 'LAVA', tempUntil: now + 8000 });
       }
       this.shockwaves.push({ x: enemy.x, y: enemy.y, radius: 0.4, maxRadius: 3.4, life: 0.45, maxLife: 0.45, color: '#ff4d00' });
       this.audio.playDemonFireball(dist);
-      this.onStatus(`🔥 ¡${enemy.kind} DESATA UNA NOVA DE FUEGO EN 360°!`);
+      this.onStatus(`🔥 ¡${enemy.kind} DESATA UNA NOVA DE FUEGO Y GRIETA DE LAVA!`);
     }
   }
 
-  // Disparo del Boss escalado por sector: 1 orbe en Sector 1-2, 2 en Sector 3-5, 3 en Sector 6-8 y ráfaga total en Sector 9-10
+  // Disparo del Boss escalado por sector y arquetipo único
   fireBossSpreadBarrage(enemy, toPlayerX, toPlayerY, dist) {
     const baseAngle = Math.atan2(toPlayerY, toPlayerX);
     const pSpeed = enemy.projSpeed || 6.5;
     let spreadAngles;
 
-    if (this.level <= 2) {
+    if (enemy.isFinalIcon && (enemy.phase || 1) >= 2) {
+      spreadAngles = enemy.phase >= 3 ? [-0.36, -0.18, 0, 0.18, 0.36] : [-0.26, -0.09, 0.09, 0.26];
+    } else if (this.level <= 2) {
       spreadAngles = (this.level === 2 && enemy.enraged) ? [-0.14, 0.14] : [0];
     } else if (this.level <= 5) {
       spreadAngles = enemy.enraged ? [-0.2, 0, 0.2] : [-0.12, 0.12];
@@ -5405,6 +5172,8 @@ export class HellfallGame {
       spreadAngles = enemy.enraged ? [-0.3, -0.15, 0, 0.15, 0.3] : [-0.24, -0.08, 0.08, 0.24];
     }
 
+    const orbSprite = this.orbSprites[enemy.bossSpriteKey] || this.orbSprites.BOSS;
+    const isCyber = enemy.bossArchetype === 'CYBER_ARTILLERY';
     for (const offset of spreadAngles) {
       const ang = baseAngle + offset;
       this.enemyProjectiles.push({
@@ -5415,9 +5184,11 @@ export class HellfallGame {
         y: enemy.y + Math.sin(ang) * 0.45,
         vx: Math.cos(ang) * pSpeed,
         vy: Math.sin(ang) * pSpeed,
+        explosive: isCyber && offset === 0,
+        explodeRadius: isCyber ? 1.6 : 0,
         life: 2.8,
         damage: enemy.projDamage || 11,
-        sprite: this.orbSprites.BOSS
+        sprite: orbSprite
       });
     }
     this.audio.playDemonFireball(dist);
@@ -5468,8 +5239,12 @@ export class HellfallGame {
     if ((this.sectorDamageTaken || 0) === 0) {
       this.runStats.perfectSectors = (this.runStats.perfectSectors || 0) + 1;
     }
+    if (this.activeRouteMod?.id === 'ELITE') {
+      this.bonusPoints += 300;
+    }
     const sec = Math.max(1, Math.round((now - this.levelStartTime) / 1000));
     const choices = this.rollUpgradeChoices();
+    const routeChoices = this.generateRouteChoices(this.level + 1);
 
     this.intermission = {
       startTime: now,
@@ -5480,16 +5255,22 @@ export class HellfallGame {
       secretsPct: Math.min(100, Math.round((this.sectorStats.secrets / Math.max(1, this.sectorStats.totalSecrets)) * 100)),
       timeSec: sec,
       lastTick: 0,
+      stage: choices.length > 0 ? 'UPGRADE' : 'ROUTE',
       upgradeChoices: choices,
-      upgradeSelected: null
+      upgradeSelected: null,
+      routeChoices,
+      selectedRouteIdx: null
     };
     this.mapOpen = false;
     this.mouseDown = false;
+    this.keys.clear();
+    this.wasPointerLocked = false;
+    this.safeExitPointerLock();
     this.audio.playSectorPortal();
     this.onStatus(
-      this.intermission.upgradeChoices.length > 0
+      this.intermission.stage === 'UPGRADE'
         ? `SECTOR ${this.level} COMPLETADO // Elige 1 mejora con [1]-[3] o [R] Reroll (${CONFIG.REROLL_COST} monedas)`
-        : `SECTOR ${this.level} COMPLETADO // Todas las mejoras al máximo. Pulsa [ESPACIO]`
+        : `SECTOR ${this.level} COMPLETADO // Elige la puerta al Sector ${this.level + 1} con [1]-[3]`
     );
   }
 
@@ -5507,16 +5288,41 @@ export class HellfallGame {
       this.player.reserve = Math.min(this.getMaxReserve(), this.player.reserve + 8);
     }
     im.upgradeSelected = { ...upgrade, installedRank: nextRank };
+    im.stage = 'ROUTE';
     this.audio.playUpgrade();
-    this.onStatus(`ALTAR DE MEJORA: ${upgrade.label} (NV.${nextRank}) instalada. Pulsa [ESPACIO] para desplegar`);
+    this.onStatus(`⚡ ${upgrade.label} (NV.${nextRank}) instalada // ELIGE TU PRÓXIMA PUERTA DE SECTOR [1]-[3]`);
+  }
+
+  selectRouteChoice(index) {
+    const im = this.intermission;
+    if (!im || im.stage !== 'ROUTE') return;
+    const chosen = im.routeChoices?.[index];
+    if (!chosen) {
+      this.audio.playEmptyClip();
+      return;
+    }
+    this.nextRouteChoice = chosen;
+    im.selectedRouteIdx = index;
+    const snap = this.captureCurrentScreen();
+    this.audio.playDoorSlide();
+    this.intermission = null;
+    this.level++;
+    this.player.health = Math.min(100, this.player.health + 15);
+    this.player.invulnerableUntil = 0;
+    this.startLevel();
+    this.startScreenMelt('SECTOR', snap);
   }
 
   advanceFromIntermission() {
     if (!this.intermission) return;
     const im = this.intermission;
-    if (im.upgradeChoices?.length > 0 && !im.upgradeSelected) {
+    if (im.stage === 'UPGRADE' && im.upgradeChoices?.length > 0 && !im.upgradeSelected) {
       this.audio.playEmptyClip();
-      this.onStatus(`ALTAR DE MEJORA: elige [1]${im.upgradeChoices.length >= 3 ? ', [2] o [3]' : ' o [2]'} antes de desplegarte`);
+      this.onStatus(`ALTAR DE MEJORA: elige [1]${im.upgradeChoices.length >= 3 ? ', [2] o [3]' : ' o [2]'} antes de cruzar`);
+      return;
+    }
+    if (im.stage === 'ROUTE') {
+      this.selectRouteChoice(0);
       return;
     }
     const snap = this.captureCurrentScreen();
@@ -5527,6 +5333,296 @@ export class HellfallGame {
     this.player.invulnerableUntil = 0;
     this.startLevel();
     this.startScreenMelt('SECTOR', snap);
+  }
+
+  applyEnemyDamage(enemy, rawDmg, source = 'SHOT', now = performance.now()) {
+    if (!enemy || !enemy.alive) return false;
+    if (enemy.isBoss && enemy.dormant) this.awakenBoss(enemy, now);
+    enemy.alerted = true;
+    enemy.targetEnemy = null;
+
+    let effDmg = rawDmg;
+    if (enemy.shieldActive) {
+      effDmg *= 0.1;
+      enemy.shieldFlash = 0.25;
+      if (now - (this.lastShieldStatusAt || 0) > 1200) {
+        this.lastShieldStatusAt = now;
+        this.onStatus('🛡️ ¡ESCUDO DEL ICON OF SIN ACTIVO! Destruye los PILONES DE ALMA de las esquinas');
+      }
+    }
+
+    enemy.health -= effDmg;
+    enemy.hitFlash = 0.18;
+    if (this.director) {
+      this.director.lastCombatAt = now;
+      this.director.intensity = Math.min(1.0, (this.director.intensity || 0) + 0.04);
+    }
+    if (enemy.health <= 0) {
+      this.killEnemy(enemy, source);
+      return true;
+    }
+    return false;
+  }
+
+  damageGenerator(gen, dmg, now = performance.now()) {
+    if (!gen || !gen.alive) return false;
+    gen.hp -= dmg;
+    gen.hitFlash = 0.22;
+    this.hitmarkerUntil = now + 100;
+    this.audio.playHitmarker();
+    this.spawnWallSparks(gen.x, gen.y, 6, '#00f5d4');
+    if (gen.hp <= 0) {
+      gen.alive = false;
+      this.audio.playExplosion();
+      this.screenShake = Math.max(this.screenShake, 0.35);
+      this.shockwaves.push({ x: gen.x, y: gen.y, radius: 0.3, maxRadius: 3.2, life: 0.45, maxLife: 0.45, color: '#00f5d4' });
+      const rem = this.generators.filter((g) => g.alive).length;
+      if (rem === 0) {
+        this.player.hasKey = true;
+        this.audio.playKeyPickup();
+        this.pushLootNotification('💥 ¡TODOS LOS GENERADORES DESTRUIDOS!', ['COMPUERTA EXIT DESBLOQUEADA · CORRE A SALIR'], '#70e000');
+        this.onStatus('💥 ¡REACTORES EXTERMINADOS! Compuerta EXIT desbloqueada');
+      } else {
+        this.pushLootNotification(`⚡ REACTOR #${gen.id} DESTRUIDO`, [`QUEDAN ${rem} GENERADORES ACTIVOS`], '#00f5d4');
+        this.onStatus(`⚡ Generador destruido · Quedan ${rem}`);
+        if (this.director && this.director.reservePool.length > 0) {
+          this.spawnTeleportWave(gen.x, gen.y, Math.min(2, this.director.reservePool.length), null, 'CONTRAATAQUE DEL REACTOR');
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  damagePylon(pylon, dmg, now = performance.now()) {
+    if (!pylon || pylon.destroyed || !pylon.active) return false;
+    pylon.hp -= dmg;
+    this.hitmarkerUntil = now + 100;
+    this.audio.playHitmarker();
+    this.spawnWallSparks(pylon.x, pylon.y, 7, '#ff00ff');
+    if (pylon.hp <= 0) {
+      pylon.destroyed = true;
+      pylon.active = false;
+      this.audio.playExplosion();
+      this.screenShake = Math.max(this.screenShake, 0.35);
+      this.shockwaves.push({ x: pylon.x, y: pylon.y, radius: 0.4, maxRadius: 3.4, life: 0.45, maxLife: 0.45, color: '#00f5d4' });
+      const activeLeft = this.arenaPylons.filter((p) => p.active && !p.destroyed).length;
+      if (activeLeft === 0) {
+        const icon = this.enemies.find((e) => e.isFinalIcon && e.alive);
+        if (icon) {
+          icon.shieldActive = false;
+          icon.stunTimer = 1.4;
+          icon.wakeFlash = 0.65;
+        }
+        this.pushLootNotification('🔮 ¡PILONES DESTRUIDOS!', ['EL ESCUDO DEL ICON OF SIN HA CAÍDO · ¡ATACA AHORA!'], '#00f5d4');
+        this.onStatus('🔮 ¡ESCUDO ROTO! El ICON OF SIN es vulnerable — ¡descarga toda tu potencia!');
+      } else {
+        this.onStatus(`🔮 Pilón de Alma destruido · Queda ${activeLeft} pilón activo`);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  killVipWardenFallback(now = performance.now()) {
+    if (!this.vip || !this.vip.alive) return;
+    this.vip.alive = false;
+    this.audio.playPlayerDeath();
+    this.spawnBlood(this.vip.x, this.vip.y, 18);
+    // Para evitar bloqueo del nivel, el Guardián Demoníaco más cercano o un Boss invocado porta ahora la llave de emergencia
+    const carrier = this.enemies.find((e) => e.alive && !e.isBoss && !e.dormantCloset);
+    if (carrier) {
+      carrier.holdsKey = true;
+      carrier.elite = true;
+      carrier.health = Math.max(carrier.health, carrier.maxHealth * 1.4);
+      carrier.scale *= 1.15;
+    } else {
+      this.keyItem = { x: this.vip.x, y: this.vip.y, active: true };
+    }
+    this.pushLootNotification('💀 ¡EL CIENTÍFICO VIP HA MUERTO!', ['ABATE AL DEMONIO PORTADOR DE LA LLAVE DE EMERGENCIA'], '#ff003c');
+    this.onStatus('💀 ¡VIP caído! Elimina al portador con la LLAVE de emergencia para escapar');
+  }
+
+  updateDirector(dt, now) {
+    const dir = this.director;
+    if (!dir) return;
+
+    // Decaimiento gradual de intensidad entre combates
+    dir.intensity = Math.max(0.08, dir.intensity - dt * 0.045);
+
+    // Procesar portales de teletransporte activos
+    for (let i = this.teleportPortals.length - 1; i >= 0; i--) {
+      const tp = this.teleportPortals[i];
+      tp.timer -= dt;
+      if (Math.random() < 0.4) {
+        this.wallSparks.push({
+          x: tp.x + (Math.random() - 0.5) * 0.4,
+          y: tp.y + (Math.random() - 0.5) * 0.4,
+          z: 0.25,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: (Math.random() - 0.5) * 0.4,
+          vz: -0.9,
+          life: 0.25,
+          color: '#00f5d4'
+        });
+      }
+      if (tp.timer <= 0) {
+        this.teleportPortals.splice(i, 1);
+        if (this.buildRegularEnemy && !this.isWall(tp.x, tp.y)) {
+          const spawned = this.buildRegularEnemy(tp.specKey || 'IMP', { x: tp.x, y: tp.y }, Boolean(tp.isElite));
+          spawned.alerted = true;
+          spawned.wakeFlash = 0.5;
+          this.enemies.push(spawned);
+          this.shockwaves.push({ x: tp.x, y: tp.y, radius: 0.25, maxRadius: 1.7, life: 0.35, maxLife: 0.35, color: '#9d4edd' });
+          this.spawnWallSparks(tp.x, tp.y, 10, '#00f5d4');
+        }
+      }
+    }
+
+    // Proximidad a Monster Closets (emboscadas ocultas al avanzar por el mapa)
+    for (const closet of this.monsterClosets) {
+      if (!closet.opened && distance(this.player.x, this.player.y, closet.triggerX, closet.triggerY) < 4.4) {
+        this.openMonsterCloset(closet, 'COMPARTIMENTO TRAMPA ABIERTO');
+      }
+    }
+
+    // Ritmo del AI Director: lanza refuerzos desde reservePool en momentos de calma o picos
+    if (dir.reservePool.length > 0 && now >= dir.nextWaveAt) {
+      const activeEnemies = this.enemies.filter((e) => e.alive && !e.isBoss && !e.dormantCloset).length;
+      if (activeEnemies <= 6 && !this.isCellInsideArena(this.player.x, this.player.y)) {
+        const batch = Math.min(dir.reservePool.length, this.level >= 6 ? 3 : 2);
+        const specs = dir.reservePool.splice(0, batch);
+        const spawned = this.spawnTeleportWave(this.player.x, this.player.y, specs.length, specs, 'DIRECTOR // REFUERZOS INFERNALES');
+        dir.nextWaveAt = now + (spawned > 0 ? 15000 : 5000);
+        dir.intensity = Math.min(1, dir.intensity + 0.28);
+      } else {
+        dir.nextWaveAt = now + 4500;
+      }
+    }
+  }
+
+  updateObjectives(dt, now) {
+    const obj = this.sectorObjective;
+    if (!obj) return;
+
+    // Fases del Icon of Sin (Sector 10)
+    if (obj.type === 'FINAL_ICON') {
+      const icon = this.enemies.find((e) => e.isFinalIcon && e.alive);
+      if (icon && !icon.dormant) {
+        const hpRatio = icon.health / Math.max(1, icon.maxHealth);
+        if (icon.phase === 1 && hpRatio <= 0.65) {
+          icon.phase = 2;
+          icon.shieldActive = this.activateIconPylons(2);
+          icon.enraged = true;
+          this.audio.playBossAwaken();
+          this.screenShake = Math.max(this.screenShake, 0.65);
+          this.pushLootNotification('👹 ¡ICON OF SIN · FASE II!', ['DESTRUYE LOS 2 PILONES DE ALMA PARA ROMPER SU ESCUDO'], '#ff00ff');
+          this.onStatus('🛡️ ¡ICON OF SIN FASE II! Su escudo es casi impenetrable: destruye los PILONES en las esquinas');
+        } else if (icon.phase === 2 && hpRatio <= 0.3) {
+          icon.phase = 3;
+          icon.shieldActive = this.activateIconPylons(2);
+          icon.speedMultiplier *= 1.18;
+          this.audio.playAlarm();
+          this.screenShake = Math.max(this.screenShake, 0.75);
+          this.pushLootNotification('💀 ¡ICON OF SIN · FASE III FINAL!', ['DESTRUYE LOS PILONES RESTANTES · TORMENTA DE METEOROS'], '#ff003c');
+          this.onStatus('💀 ¡FASE III! Destruye los pilones restantes y acaba con el Icon of Sin');
+        }
+        // Meteoros periódicos en Fase 2 y 3 del Icon of Sin
+        if (icon.phase >= 2 && Math.random() < dt * (icon.phase === 3 ? 0.85 : 0.45)) {
+          const ang = Math.random() * Math.PI * 2;
+          const d = 1.4 + Math.random() * 4.0;
+          const mx = this.player.x + Math.cos(ang) * d;
+          const my = this.player.y + Math.sin(ang) * d;
+          if (!this.isWall(mx, my)) {
+            this.meteorStrikes.push({ x: mx, y: my, radius: 2.0, timer: 1.25, maxTimer: 1.25 });
+          }
+        }
+      }
+    }
+
+    if (obj.type === 'SURVIVAL_WAVES' && this.survivalState) {
+      const sv = this.survivalState;
+      if (sv.started && !sv.completed) {
+        const hostilesNear = this.enemies.filter((e) => e.alive && !e.isBoss && !e.dormantCloset).length;
+        sv.waveTimer -= dt;
+        if ((sv.waveTimer <= 0 || (sv.waveTimer < 14 && hostilesNear === 0 && this.teleportPortals.length === 0))) {
+          if (sv.wave < sv.maxWaves) {
+            this.startNextSurvivalWave(now);
+          } else {
+            sv.completed = true;
+            this.player.hasKey = true;
+            this.audio.playKeyPickup();
+            this.pushLootNotification('🏆 ¡3 OLEADAS SOBREVIVIDAS!', ['COMPUERTA EXIT DESBLOQUEADA · DIRÍGETE A LA SALIDA'], '#70e000');
+            this.onStatus('🏆 ¡OLEADAS SUPERADAS! Corre a la compuerta EXIT');
+          }
+        }
+      }
+    }
+
+    if (obj.type === 'ESCAPE_COUNTDOWN' && obj.escapeStarted) {
+      obj.escapeTimer = Math.max(0, obj.escapeTimer - dt);
+      if (Math.random() < dt * 0.8) {
+        this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.04 : 0.16);
+      }
+      if (obj.escapeTimer <= 10 && Math.floor((obj.escapeTimer + dt)) !== Math.floor(obj.escapeTimer)) {
+        this.audio.playTurretBeep();
+      }
+      if (obj.escapeTimer <= 0) {
+        this.damagePlayer(999, this.player.x, this.player.y, now);
+        this.onStatus('☢️ ¡EL SECTOR HA EXPLOTADO ANTES DE TU EVACUACIÓN!');
+      }
+    }
+
+    if (obj.type === 'ESCORT_RESCUE' && this.vip) {
+      const vip = this.vip;
+      vip.hitFlash = Math.max(0, (vip.hitFlash || 0) - dt);
+      if (vip.alive && vip.rescued) {
+        const dPlayer = distance(this.player.x, this.player.y, vip.x, vip.y);
+        if (dPlayer > 1.8) {
+          const dirX = (this.player.x - vip.x) / dPlayer;
+          const dirY = (this.player.y - vip.y) / dPlayer;
+          const step = Math.min(3.15, dPlayer > 5 ? 3.5 : 2.65) * dt;
+          if (this.canEnemyMoveTo(vip.x + dirX * step, vip.y, 0.24)) vip.x += dirX * step;
+          if (this.canEnemyMoveTo(vip.x, vip.y + dirY * step, 0.24)) vip.y += dirY * step;
+          vip.walkCycle += dt * 7;
+        }
+        if (this.exitDoor && distance(vip.x, vip.y, this.exitDoor.x, this.exitDoor.y) < 2.2) {
+          if (!this.player.hasKey) {
+            this.player.hasKey = true;
+            this.audio.playKeyPickup();
+            this.pushLootNotification('🧬 ¡VIP EN ZONA DE EXTRACCIÓN!', ['LLAVE DE SALIDA CONCEDIDA · CRUZA EXIT'], '#70e000');
+            this.onStatus('🧬 ¡Científico UAC a salvo en EXIT! Cruza la puerta para extraer');
+          }
+        }
+      }
+    }
+
+    if (obj.type === 'THREE_KEYS') {
+      for (const k of this.coloredKeys) {
+        if (k.active && distance(this.player.x, this.player.y, k.x, k.y) < 0.95) {
+          k.active = false;
+          this.sectorStats.items++;
+          this.pickupFlashTime = now;
+          this.audio.playKeyPickup();
+          const colMap = { RED: ['#ff003c', 'ROJA'], BLUE: ['#00b4d8', 'AZUL'], YELLOW: ['#ffbe0b', 'AMARILLA'] };
+          const [hex, esName] = colMap[k.color] || ['#ffbe0b', k.color];
+          this.spawnWallSparks(k.x, k.y, 12, hex);
+          const remaining = this.coloredKeys.filter((c) => c.active).length;
+          if (remaining === 0) {
+            this.player.hasKey = true;
+            this.pushLootNotification('🗝️ ¡3 LLAVES REUNIDAS!', ['COMPUERTA EXIT DESBLOQUEADA'], '#70e000');
+            this.onStatus('🗝️ ¡3 Llaves recogidas! Corre hacia EXIT');
+          } else {
+            this.pushLootNotification(`🗝️ LLAVE ${esName} RECOGIDA`, [`FALTAN ${remaining} LLAVES PARA EXIT`], hex);
+            this.onStatus(`🗝️ Llave ${esName} recogida · Faltan ${remaining}`);
+          }
+          // Emboscada del Director al coger llave en sectores altos
+          if (this.director && this.director.reservePool.length > 0 && Math.random() < 0.7) {
+            this.spawnTeleportWave(this.player.x, this.player.y, 2, null, 'EMBOSCADA DE LLAVE');
+          }
+        }
+      }
+    }
   }
 
   update(dt, now) {
@@ -5556,10 +5652,18 @@ export class HellfallGame {
     }
     this.screenShake = Math.max(0, this.screenShake - dt * 1.8);
 
+    this.updateDirector(dt, now);
+    this.updateObjectives(dt, now);
+    if (player.health <= 0) {
+      this.startDeathSequence(now);
+      return;
+    }
+
     this.flowTimer = (this.flowTimer || 0) - dt;
     if (this.flowTimer <= 0) {
       this.flowTimer = 0.22;
       this.updateFlowField();
+    this.prebakeSectorSprites();
     }
 
     for (let i = this.lootNotifications.length - 1; i >= 0; i--) {
@@ -5633,8 +5737,13 @@ export class HellfallGame {
       this.combo.count = 0;
     }
 
+    for (let hi = this.hazards.length - 1; hi >= 0; hi--) {
+      if (this.hazards[hi].tempUntil && now >= this.hazards[hi].tempUntil) {
+        this.hazards.splice(hi, 1);
+      }
+    }
     const evType = this.sectorEvent?.type;
-    if ((evType === 'TOXIC' || evType === 'LAVA' || evType === 'APOCALYPSE') && this.hazards.length > 0) {
+    if ((evType === 'TOXIC' || evType === 'LAVA' || evType === 'APOCALYPSE' || this.hazards.some((h) => h.tempUntil)) && this.hazards.length > 0) {
       const hitHazard = this.hazards.find((h) => Math.hypot(player.x - h.x, player.y - h.y) <= h.radius);
       if (hitHazard) {
         if (hitHazard.kind === 'LAVA') {
@@ -5853,6 +5962,28 @@ export class HellfallGame {
       this.spawnBlood(this.keyItem.x, this.keyItem.y, 16, '#ffbe0b');
       this.pushLootNotification('🔑 ¡LLAVE CALAVERA OBTENIDA!', ['COMPUERTA EXIT DESBLOQUEADA'], '#ffbe0b');
       this.onStatus('🔑 ¡LLAVE CALAVERA OBTENIDA! Dirígete a la compuerta EXIT');
+      if (this.director && this.director.reservePool.length > 0 && Math.random() < 0.65) {
+        this.spawnTeleportWave(player.x, player.y, Math.min(2, this.director.reservePool.length), null, 'EMBOSCADA AL COGER LA LLAVE');
+      }
+    }
+
+    // Recogida de armas nuevas en pedestales del mapa
+    for (const wp of this.weaponPickups) {
+      if (!wp.active) continue;
+      if (distance(player.x, player.y, wp.x, wp.y) < 0.95) {
+        wp.active = false;
+        this.sectorStats.items++;
+        this.pickupFlashTime = now;
+        this.evilGrinUntil = now + 1600;
+        if (!this.isWeaponOwned(wp.weaponId)) {
+          this.unlockWeapon(wp.weaponId, true);
+        } else {
+          if (wp.weaponId === 5) player.rockets = Math.min(this.getMaxRockets(), player.rockets + 5);
+          else if (wp.weaponId === 6 || wp.weaponId === 7) player.cells = Math.min(this.getMaxCells(), player.cells + 35);
+          this.audio.playPickup();
+          this.pushLootNotification('📦 MUNICIÓN DE ARSENAL', ['+MUNICIÓN PESADA RECOGIDA'], '#00f5d4');
+        }
+      }
     }
 
     // Físicas del Lanzallamas
@@ -5900,13 +6031,15 @@ export class HellfallGame {
           this.explodeBarrel(barrel, now);
         }
       }
+      for (const gen of this.generators) {
+        if (gen.alive && !p.hitSet.has(`g_${gen.id}`) && Math.hypot(p.x - gen.x, p.y - gen.y) < hitRadius) {
+          p.hitSet.add(`g_${gen.id}`);
+          this.damageGenerator(gen, p.damage * 0.85, now);
+        }
+      }
       for (const enemy of this.enemies) {
-        if (enemy.alive && !p.hitSet.has(enemy.id) && Math.hypot(p.x - enemy.x, p.y - enemy.y) < hitRadius) {
+        if (enemy.alive && !enemy.dormantCloset && !p.hitSet.has(enemy.id) && Math.hypot(p.x - enemy.x, p.y - enemy.y) < hitRadius) {
           p.hitSet.add(enemy.id);
-          if (enemy.isBoss && enemy.dormant) this.awakenBoss(enemy, now);
-          enemy.alerted = true;
-          enemy.health -= p.damage;
-          enemy.hitFlash = 0.1;
           enemy.burnTimer = 2.4;
           this.hitmarkerUntil = now + 80;
           if (now - this.lastHitmarkerSound > 90) {
@@ -5914,11 +6047,180 @@ export class HellfallGame {
             this.audio.playHitmarker();
           }
           this.spawnWallSparks(enemy.x, enemy.y, 3, '#ff4d00');
-          if (enemy.health <= 0) {
-            this.killEnemy(enemy, 'FLAME');
+          this.applyEnemyDamage(enemy, p.damage, 'FLAME', now);
+        }
+      }
+    }
+
+    // Proyectiles especiales del Jugador: Cohete [5], Plasma [6] y BFG-9000 [7]
+    for (let i = this.playerProjectiles.length - 1; i >= 0; i--) {
+      const pp = this.playerProjectiles[i];
+      const nextX = pp.x + pp.vx * dt;
+      const nextY = pp.y + pp.vy * dt;
+      pp.x = nextX;
+      pp.y = nextY;
+      pp.life -= dt;
+
+      // Chispas de estela según el tipo de proyectil
+      if (Math.random() < (pp.kind === 'ROCKET' ? 0.8 : 0.4)) {
+        this.wallSparks.push({
+          x: pp.x,
+          y: pp.y,
+          z: 0,
+          vx: -pp.vx * 0.08 + (Math.random() - 0.5) * 0.4,
+          vy: -pp.vy * 0.08 + (Math.random() - 0.5) * 0.4,
+          vz: -0.25,
+          life: 0.18,
+          color: pp.kind === 'ROCKET' ? '#ff9e00' : (pp.kind === 'BFG' ? '#70e000' : '#00f5d4')
+        });
+      }
+
+      // Rayos verdes automáticos del BFG-9000 mientras vuela
+      if (pp.kind === 'BFG') {
+        pp.zapTimer = (pp.zapTimer || 0) - dt;
+        if (pp.zapTimer <= 0) {
+          pp.zapTimer = 0.16;
+          for (const enemy of this.enemies) {
+            if (!enemy.alive || enemy.dormantCloset) continue;
+            const d = distance(pp.x, pp.y, enemy.x, enemy.y);
+            if (d <= CONFIG.BFG_ZAP_RADIUS && this.lineOfSight(pp.x, pp.y, enemy.x, enemy.y)) {
+              this.hitscanTracers.push({ x1: pp.x, y1: pp.y, x2: enemy.x, y2: enemy.y, color: '#70e000', life: 0.14, maxLife: 0.14 });
+              this.spawnWallSparks(enemy.x, enemy.y, 4, '#70e000');
+              this.applyEnemyDamage(enemy, CONFIG.BFG_ZAP_DAMAGE * (pp.dmgMult || 1), 'BFG', now);
+            }
+          }
+          for (const gen of this.generators) {
+            if (gen.alive && distance(pp.x, pp.y, gen.x, gen.y) <= CONFIG.BFG_ZAP_RADIUS) {
+              this.hitscanTracers.push({ x1: pp.x, y1: pp.y, x2: gen.x, y2: gen.y, color: '#70e000', life: 0.14, maxLife: 0.14 });
+              this.damageGenerator(gen, 2.2, now);
+            }
           }
         }
       }
+
+      let detonate = pp.life <= 0 || this.isWall(pp.x, pp.y);
+      let directEnemy = null;
+
+      if (!detonate) {
+        for (const barrel of this.barrels) {
+          if (!barrel.exploded && distance(pp.x, pp.y, barrel.x, barrel.y) < 0.6) {
+            this.explodeBarrel(barrel, now);
+            detonate = true;
+            break;
+          }
+        }
+      }
+      if (!detonate) {
+        for (const gen of this.generators) {
+          if (gen.alive && distance(pp.x, pp.y, gen.x, gen.y) < 0.72) {
+            this.damageGenerator(gen, pp.damage, now);
+            detonate = true;
+            break;
+          }
+        }
+      }
+      if (!detonate) {
+        for (const pylon of this.arenaPylons) {
+          if (!pylon.destroyed && pylon.active && distance(pp.x, pp.y, pylon.x, pylon.y) < 0.72) {
+            this.damagePylon(pylon, pp.damage, now);
+            detonate = true;
+            break;
+          }
+        }
+      }
+      if (!detonate && this.escapeCore && !this.escapeCore.triggered && distance(pp.x, pp.y, this.escapeCore.x, this.escapeCore.y) < 0.75) {
+        this.triggerEscapeCountdown(now);
+        detonate = true;
+      }
+      if (!detonate) {
+        for (const enemy of this.enemies) {
+          if (!enemy.alive || enemy.dormantCloset) continue;
+          const hitDist = enemy.isBoss ? 0.72 : 0.56;
+          if (distance(pp.x, pp.y, enemy.x, enemy.y) < hitDist) {
+            directEnemy = enemy;
+            detonate = true;
+            break;
+          }
+        }
+      }
+
+      if (detonate) {
+        this.playerProjectiles.splice(i, 1);
+        if (pp.kind === 'PLASMA') {
+          this.spawnWallSparks(pp.x, pp.y, 7, '#00f5d4');
+          this.shockwaves.push({ x: pp.x, y: pp.y, radius: 0.15, maxRadius: 0.75, life: 0.16, maxLife: 0.16, color: '#00f5d4' });
+          if (directEnemy) {
+            const shieldMult = (directEnemy.kind === 'SHIELD' || directEnemy.isTurret) ? 1.4 : 1.0;
+            if (!directEnemy.isBoss && Math.random() < 0.38) directEnemy.stunTimer = Math.max(directEnemy.stunTimer || 0, 0.25);
+            this.hitmarkerUntil = now + 90;
+            this.audio.playHitmarker();
+            this.spawnBlood(directEnemy.x, directEnemy.y, 6, '#00f5d4');
+            this.applyEnemyDamage(directEnemy, pp.damage * shieldMult, 'PLASMA', now);
+          }
+        } else if (pp.kind === 'ROCKET') {
+          const rad = CONFIG.ROCKET_SPLASH_RADIUS;
+          this.audio.playExplosion();
+          this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.12 : 0.36);
+          this.shockwaves.push({ x: pp.x, y: pp.y, radius: 0.3, maxRadius: rad, life: 0.42, maxLife: 0.42, color: '#ff4d00' });
+          this.spawnWallSparks(pp.x, pp.y, 16, '#ffbe0b');
+          const dP = distance(pp.x, pp.y, player.x, player.y);
+          if (dP < rad * 0.85) {
+            this.damagePlayer(Math.max(3, Math.round(14 * (1 - dP / rad))), pp.x, pp.y, now);
+          }
+          for (const barrel of this.barrels) {
+            if (!barrel.exploded && distance(pp.x, pp.y, barrel.x, barrel.y) <= rad) this.explodeBarrel(barrel, now);
+          }
+          for (const gen of this.generators) {
+            if (gen.alive && distance(pp.x, pp.y, gen.x, gen.y) <= rad) this.damageGenerator(gen, pp.damage * 0.75, now);
+          }
+          for (const pylon of this.arenaPylons) {
+            if (!pylon.destroyed && pylon.active && distance(pp.x, pp.y, pylon.x, pylon.y) <= rad) this.damagePylon(pylon, pp.damage * 0.75, now);
+          }
+          for (const enemy of this.enemies) {
+            if (!enemy.alive || enemy.dormantCloset) continue;
+            const dE = distance(pp.x, pp.y, enemy.x, enemy.y);
+            if (dE <= rad) {
+              const falloff = enemy === directEnemy ? 1.0 : Math.max(0.35, 1 - dE / (rad * 1.15));
+              this.applyKnockback(enemy, enemy.x - pp.x, enemy.y - pp.y, 6.2 * falloff, 0.35);
+              this.spawnBlood(enemy.x, enemy.y, 12);
+              this.hitmarkerUntil = now + 110;
+              this.applyEnemyDamage(enemy, pp.damage * falloff, 'ROCKET', now);
+            }
+          }
+        } else if (pp.kind === 'BFG') {
+          const rad = CONFIG.BFG_SPLASH_RADIUS;
+          this.audio.playBfgDetonate();
+          this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.16 : 0.6);
+          this.shockwaves.push({ x: pp.x, y: pp.y, radius: 0.4, maxRadius: rad, life: 0.58, maxLife: 0.58, color: '#70e000' });
+          this.spawnWallSparks(pp.x, pp.y, 24, '#70e000');
+          for (const barrel of this.barrels) {
+            if (!barrel.exploded && distance(pp.x, pp.y, barrel.x, barrel.y) <= rad) this.explodeBarrel(barrel, now);
+          }
+          for (const gen of this.generators) {
+            if (gen.alive && distance(pp.x, pp.y, gen.x, gen.y) <= rad) this.damageGenerator(gen, pp.damage * 0.7, now);
+          }
+          for (const pylon of this.arenaPylons) {
+            if (!pylon.destroyed && pylon.active && distance(pp.x, pp.y, pylon.x, pylon.y) <= rad) this.damagePylon(pylon, pp.damage * 0.75, now);
+          }
+          for (const enemy of this.enemies) {
+            if (!enemy.alive || enemy.dormantCloset) continue;
+            const dE = distance(pp.x, pp.y, enemy.x, enemy.y);
+            if (dE <= rad) {
+              const falloff = enemy === directEnemy ? 1.0 : Math.max(0.45, 1 - dE / (rad * 1.15));
+              this.hitscanTracers.push({ x1: pp.x, y1: pp.y, x2: enemy.x, y2: enemy.y, color: '#70e000', life: 0.25, maxLife: 0.25 });
+              this.applyKnockback(enemy, enemy.x - pp.x, enemy.y - pp.y, 8.0 * falloff, 0.5);
+              this.spawnBlood(enemy.x, enemy.y, 16, '#70e000');
+              this.hitmarkerUntil = now + 140;
+              this.applyEnemyDamage(enemy, pp.damage * falloff, 'BFG', now);
+            }
+          }
+        }
+      }
+    }
+
+    for (let i = this.hitscanTracers.length - 1; i >= 0; i--) {
+      this.hitscanTracers[i].life -= dt;
+      if (this.hitscanTracers[i].life <= 0) this.hitscanTracers.splice(i, 1);
     }
 
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
@@ -5948,15 +6250,36 @@ export class HellfallGame {
       ep.x += ep.vx * dt;
       ep.y += ep.vy * dt;
       ep.life -= dt;
+      const explodeAt = (hitX, hitY) => {
+        const r = ep.explodeRadius || 1.8;
+        this.audio.playExplosion();
+        this.shockwaves.push({ x: hitX, y: hitY, radius: 0.25, maxRadius: r, life: 0.36, maxLife: 0.36, color: '#ff4d00' });
+        this.spawnWallSparks(hitX, hitY, 10, '#ff9e00');
+        const dp = distance(hitX, hitY, player.x, player.y);
+        if (dp < r) {
+          this.damagePlayer(Math.max(4, Math.round(ep.damage * (1 - (dp / r) * 0.65))), hitX, hitY, now);
+        }
+      };
+
       if (ep.life <= 0 || this.isWall(ep.x, ep.y)) {
-        this.spawnWallSparks(ep.x, ep.y, 4);
+        if (ep.explosive) explodeAt(ep.x, ep.y);
+        else this.spawnWallSparks(ep.x, ep.y, 4);
+        this.enemyProjectiles.splice(i, 1);
+        continue;
+      }
+
+      if (this.vip && this.vip.alive && this.vip.rescued && distance(ep.x, ep.y, this.vip.x, this.vip.y) < 0.5) {
+        this.vip.hp -= ep.damage * 0.65;
+        this.vip.hitFlash = 0.2;
+        this.spawnBlood(this.vip.x, this.vip.y, 6);
+        if (this.vip.hp <= 0) this.killVipWardenFallback(now);
         this.enemyProjectiles.splice(i, 1);
         continue;
       }
 
       let hitOtherDemon = false;
       for (const other of this.enemies) {
-        if (other.alive && other.id !== ep.ownerId && other.kind !== ep.ownerKind && distance(ep.x, ep.y, other.x, other.y) < 0.65) {
+        if (other.alive && !other.dormantCloset && other.id !== ep.ownerId && other.kind !== ep.ownerKind && distance(ep.x, ep.y, other.x, other.y) < 0.65) {
           other.health -= ep.damage * 0.35;
           other.hitFlash = 0.15;
           other.targetEnemy = ep.ownerRef || null;
@@ -5972,7 +6295,8 @@ export class HellfallGame {
       }
 
       if (Math.hypot(ep.x - player.x, ep.y - player.y) < 0.45) {
-        this.damagePlayer(ep.damage, ep.x, ep.y, now);
+        if (ep.explosive) explodeAt(ep.x, ep.y);
+        else this.damagePlayer(ep.damage, ep.x, ep.y, now);
         this.enemyProjectiles.splice(i, 1);
       }
     }
@@ -5981,9 +6305,15 @@ export class HellfallGame {
       const bp = this.bloodParticles[i];
       bp.x += bp.vx * dt;
       bp.y += bp.vy * dt;
+      bp.vz = (bp.vz || 0) - 5.2 * dt;
       bp.z -= bp.vz * dt;
       bp.life -= dt;
-      if (bp.life <= 0) this.bloodParticles.splice(i, 1);
+      if (bp.z >= 0.44 || bp.life <= 0) {
+        if (bp.poolOnLand && this.bloodPools.length < 180) {
+          this.spawnBloodPool(bp.x, bp.y, 0.24 + Math.random() * 0.18, bp.color);
+        }
+        this.bloodParticles.splice(i, 1);
+      }
     }
 
     for (let i = this.wallSparks.length - 1; i >= 0; i--) {
@@ -6019,17 +6349,30 @@ export class HellfallGame {
       if (pack.active && Math.hypot(player.x - pack.x, player.y - pack.y) < 0.85) {
         player.reserve = Math.min(this.getMaxReserve(), player.reserve + pack.amount);
         player.fuel = Math.min(MAX_FUEL, player.fuel + (pack.fuelAmount || 12));
+        const extraLines = [`+${pack.amount} CARTUCHOS`, `+${pack.fuelAmount || 12}% GASOLINA`];
+        if (this.isWeaponOwned(5) || pack.rocketAmount) {
+          const rGain = Math.min(this.getMaxRockets() - player.rockets, pack.rocketAmount || 1);
+          player.rockets += Math.max(0, rGain);
+          if (rGain > 0) extraLines.push(`+${rGain} COHETE`);
+        }
+        if (this.isWeaponOwned(6) || this.isWeaponOwned(7) || pack.cellAmount) {
+          const cGain = Math.min(this.getMaxCells() - player.cells, pack.cellAmount || 10);
+          player.cells += Math.max(0, cGain);
+          if (cGain > 0) extraLines.push(`+${cGain} CÉLULAS`);
+        }
         pack.active = false;
         this.pickupFlashTime = now;
         this.evilGrinUntil = now + 900;
         this.audio.playPickup();
-        this.pushLootNotification('📦 RESERVA DE MUNICIÓN', [`+${pack.amount} CARTUCHOS`, `+${pack.fuelAmount || 12}% GASOLINA`], '#ffbe0b');
-        this.onStatus(`Reserva recogida (+${pack.amount} Cartuchos / +Gasolina)`);
+        this.pushLootNotification('📦 RESERVA DE MUNICIÓN', extraLines, '#ffbe0b');
+        this.onStatus(`Reserva recogida (${extraLines.join(' / ')})`);
       }
     }
 
     // IA de Demonios y Bosses con Pathfinding BFS, Colisión con Radio, Alerta y Mecánicas Únicas
-    for (const enemy of this.enemies) {
+    const activeEnemyLen = this.enemies.length;
+    for (let ei = 0; ei < activeEnemyLen; ei++) {
+      const enemy = this.enemies[ei];
       enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
       enemy.painTimer = Math.max(0, (enemy.painTimer || 0) - dt);
       enemy.stunTimer = Math.max(0, (enemy.stunTimer || 0) - dt);
@@ -6103,7 +6446,7 @@ export class HellfallGame {
         }
         continue;
       }
-      if (!enemy.alive) continue;
+      if (!enemy.alive || enemy.dormantCloset) continue;
 
       // Los Bosses permanecen parados en el centro de la sala hasta que el jugador entra en la sala
       if (enemy.isBoss && enemy.dormant) {
@@ -6115,11 +6458,25 @@ export class HellfallGame {
         }
       }
 
-      if (enemy.painTimer > 0 || enemy.stunTimer > 0) continue;
+      if (enemy.painTimer > 0 || enemy.stunTimer > 0) {
+        enemy.aimTimer = 0;
+        enemy.burstLeft = 0;
+        continue;
+      }
 
       if (enemy.targetEnemy && !enemy.targetEnemy.alive) enemy.targetEnemy = null;
-      const targetX = enemy.targetEnemy ? enemy.targetEnemy.x : player.x;
-      const targetY = enemy.targetEnemy ? enemy.targetEnemy.y : player.y;
+      let targetX = enemy.targetEnemy ? enemy.targetEnemy.x : player.x;
+      let targetY = enemy.targetEnemy ? enemy.targetEnemy.y : player.y;
+      let targetIsVip = false;
+      if (!enemy.targetEnemy && this.vip && this.vip.alive && this.vip.rescued) {
+        const dp = distance(enemy.x, enemy.y, player.x, player.y);
+        const dv = distance(enemy.x, enemy.y, this.vip.x, this.vip.y);
+        if (dv < dp * 0.72) {
+          targetX = this.vip.x;
+          targetY = this.vip.y;
+          targetIsVip = true;
+        }
+      }
 
       const dist = Math.hypot(targetX - enemy.x, targetY - enemy.y);
       enemy.cooldown = Math.max(0, enemy.cooldown - dt);
@@ -6143,12 +6500,14 @@ export class HellfallGame {
         if ((hasLOS && dist < 15.5) || dist < 4.5) {
           enemy.alerted = true;
           this.alertNearbyEnemies(enemy.x, enemy.y, 5.5);
-        } else {
+        } else if (!enemy.isTurret) {
           // Patrulla lenta sin atravesar paredes
           enemy.walkCycle += dt * 2.5;
           const pAngle = (enemy.facingAngle || 0) + Math.sin(now * 0.001 + enemy.id) * 0.3;
           const res = this.moveEnemyWithCollision(enemy, Math.cos(pAngle) * 0.35 * dt, Math.sin(pAngle) * 0.35 * dt, 0.28);
           if (res.hitWall) enemy.facingAngle = (enemy.facingAngle || 0) + Math.PI * 0.65;
+          continue;
+        } else {
           continue;
         }
       }
@@ -6316,11 +6675,11 @@ export class HellfallGame {
           enemy.bossTimer = (2.8 - tier * 1.1) * (enemy.enraged ? 0.8 : 1.0);
         }
       } else {
-        // Demonios regulares con Pathfinding BFS y detección de paredes
+        // Demonios regulares con Pathfinding BFS y comportamientos especializados del Bestiario
         enemy.dashCooldown = Math.max(0, (enemy.dashCooldown || 0) - dt);
 
         if (enemy.kind === 'SHIELD') {
-          const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+          const targetAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
           const diff = Math.atan2(Math.sin(targetAngle - enemy.facingAngle), Math.cos(targetAngle - enemy.facingAngle));
           const maxTurn = dt * 2.4;
           enemy.facingAngle += clamp(diff, -maxTurn, maxTurn);
@@ -6331,16 +6690,115 @@ export class HellfallGame {
           continue;
         }
 
+        if (enemy.isTurret) {
+          this.turnEnemyFacing(enemy, Math.atan2(targetY - enemy.y, targetX - enemy.x), dt, 4.8);
+          if (hasLOS && dist < 15.5 && enemy.rangedCooldown <= 0) {
+            enemy.rangedCooldown = 1.15 + Math.random() * 0.35;
+            const aim = Math.atan2(toY, toX);
+            const pSpeed = enemy.projSpeed || 9.2;
+            for (const lat of [-0.14, 0.14]) {
+              const px = enemy.x + Math.cos(aim + Math.PI / 2) * lat + toX * 0.35;
+              const py = enemy.y + Math.sin(aim + Math.PI / 2) * lat + toY * 0.35;
+              this.enemyProjectiles.push({
+                ownerId: enemy.id,
+                ownerKind: enemy.kind,
+                ownerRef: enemy,
+                x: px,
+                y: py,
+                vx: toX * pSpeed,
+                vy: toY * pSpeed,
+                life: 2.1,
+                damage: enemy.projDamage || 7,
+                sprite: this.orbSprites.TURRET || this.orbSprites.IMP
+              });
+            }
+            this.audio.playTurretBeep();
+          }
+          continue;
+        }
+
+        if (enemy.isSniper) {
+          this.turnEnemyFacing(enemy, Math.atan2(targetY - enemy.y, targetX - enemy.x), dt, 6.2);
+          if (enemy.aimTimer > 0) {
+            enemy.aimTimer -= dt;
+            if (!hasLOS) {
+              enemy.aimTimer = 0;
+            } else if (enemy.aimTimer <= 0) {
+              // Disparo hitscan letal a lo largo del láser apuntado
+              const sx = enemy.aimDirX || toX;
+              const sy = enemy.aimDirY || toY;
+              const endX = enemy.x + sx * 19;
+              const endY = enemy.y + sy * 19;
+              this.hitscanTracers.push({ x1: enemy.x, y1: enemy.y, x2: endX, y2: endY, color: '#ff003c', life: 0.28, maxLife: 0.28 });
+              this.audio.playSniperShot(dist);
+              const px = targetX - enemy.x;
+              const py = targetY - enemy.y;
+              const projAlong = px * sx + py * sy;
+              const perp = Math.abs(px * -sy + py * sx);
+              if (projAlong > 0 && perp < 0.56 && hasLOS) {
+                if (targetIsVip && this.vip) {
+                  this.vip.hp -= (enemy.projDamage || 18) * 0.6;
+                  if (this.vip.hp <= 0) this.killVipWardenFallback(now);
+                } else {
+                  this.damagePlayer(enemy.projDamage || 18, enemy.x, enemy.y, now);
+                }
+              }
+              enemy.rangedCooldown = 2.8 + Math.random() * 0.9;
+            }
+            continue;
+          } else if (hasLOS && dist > 3.5 && dist < 18.0 && enemy.rangedCooldown <= 0) {
+            enemy.aimTimer = 1.15;
+            enemy.aimDirX = toX;
+            enemy.aimDirY = toY;
+            this.audio.playSniperLock();
+            continue;
+          }
+        }
+
+        if (enemy.isHitscan) {
+          if (enemy.burstLeft > 0) {
+            enemy.burstCd -= dt;
+            if (enemy.burstCd <= 0) {
+              enemy.burstLeft--;
+              enemy.burstCd = 0.13;
+              const spread = (Math.random() - 0.5) * 0.12;
+              const shotAng = Math.atan2(targetY - enemy.y, targetX - enemy.x) + spread;
+              const sx = Math.cos(shotAng);
+              const sy = Math.sin(shotAng);
+              const endX = enemy.x + sx * 15;
+              const endY = enemy.y + sy * 15;
+              this.hitscanTracers.push({ x1: enemy.x, y1: enemy.y, x2: endX, y2: endY, color: '#ffbe0b', life: 0.12, maxLife: 0.12 });
+              this.audio.playRifleBurst(dist);
+              const px = targetX - enemy.x;
+              const py = targetY - enemy.y;
+              const projAlong = px * sx + py * sy;
+              const perp = Math.abs(px * -sy + py * sx);
+              if (hasLOS && projAlong > 0 && perp < 0.52) {
+                if (targetIsVip && this.vip) {
+                  this.vip.hp -= (enemy.projDamage || 6) * 0.5;
+                  if (this.vip.hp <= 0) this.killVipWardenFallback(now);
+                } else {
+                  this.damagePlayer(enemy.projDamage || 6, enemy.x, enemy.y, now);
+                }
+              }
+            }
+          } else if (hasLOS && dist > 1.8 && dist < 15.0 && enemy.rangedCooldown <= 0) {
+            enemy.burstLeft = 3;
+            enemy.burstCd = 0.25;
+            enemy.rangedCooldown = 2.0 + Math.random() * 1.1;
+          }
+        }
+
         if (enemy.kind === 'SUMMONER') {
           this.updateSummoner(enemy, player, dt, now, dist, hasLOS, toX, toY);
         } else if (enemy.dashTime > 0) {
           enemy.dashTime -= dt;
-          const dSpeed = (enemy.kind === 'PINKY' ? 5.6 : 4.6) * dt;
+          const dSpeed = ((enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 5.6 : 4.8) * dt;
           const res = this.moveEnemyWithCollision(enemy, enemy.dashDirX * dSpeed, enemy.dashDirY * dSpeed, 0.27);
           if (res.hitWall) enemy.dashTime = 0;
           enemy.facingAngle = Math.atan2(enemy.dashDirY, enemy.dashDirX);
           enemy.walkCycle += dt * 18;
-          if (Math.random() < 0.5) this.spawnWallSparks(enemy.x, enemy.y, 2, '#ff4d00');
+          if (Math.random() < 0.5) this.spawnWallSparks(enemy.x, enemy.y, 2, enemy.invisible ? '#9d4edd' : '#ff4d00');
         } else {
           const canDash =
             hasLOS &&
@@ -6349,35 +6807,69 @@ export class HellfallGame {
             enemy.dashCooldown <= 0 &&
             Math.random() < (enemy.dashChance || 0);
           if (canDash) {
-            enemy.dashTime = enemy.kind === 'PINKY' ? 0.36 : 0.26;
+            enemy.dashTime = (enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 0.36 : 0.28;
             enemy.dashDirX = toX;
             enemy.dashDirY = toY;
-            enemy.dashCooldown = (enemy.kind === 'PINKY' ? 2.2 : 3.6) + Math.random() * 2.0;
+            enemy.dashCooldown = ((enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 2.1 : 3.4) + Math.random() * 1.8;
             this.audio.playBossDash(dist);
             this.spawnWallSparks(enemy.x, enemy.y, 6, '#ff4d00');
           }
 
-          if (hasLOS && enemy.projSpeed > 0 && dist > 2.4 && dist < 14.0 && enemy.rangedCooldown <= 0) {
-            enemy.rangedCooldown = 2.2 + Math.random() * 1.3;
+          if (!enemy.isHitscan && !enemy.isSniper && !enemy.isTurret && hasLOS && enemy.projSpeed > 0 && dist > 2.2 && dist < 15.5 && enemy.rangedCooldown <= 0) {
+            enemy.rangedCooldown = (enemy.isCyberRocket ? 2.4 : 2.1) + Math.random() * 1.1;
             const pSpeed = enemy.projSpeed || 6.5;
             const key = enemy.kind || 'IMP';
             const isHoming = key === 'REVENANT';
-            this.enemyProjectiles.push({
-              ownerId: enemy.id,
-              ownerKind: enemy.kind,
-              ownerRef: enemy,
-              x: enemy.x + toX * 0.4,
-              y: enemy.y + toY * 0.4,
-              vx: toX * pSpeed,
-              vy: toY * pSpeed,
-              speed: pSpeed,
-              homing: isHoming,
-              turnRate: isHoming ? 1.5 : 0,
-              life: isHoming ? 3.0 : 2.6,
-              damage: enemy.projDamage || 10,
-              sprite: this.orbSprites[key] || this.orbSprites.IMP
-            });
-            this.audio.playDemonFireball(dist);
+            const baseA = Math.atan2(toY, toX);
+            if (enemy.isMancubus) {
+              for (const off of [-0.24, 0, 0.24]) {
+                const a = baseA + off;
+                this.enemyProjectiles.push({
+                  ownerId: enemy.id, ownerKind: enemy.kind, ownerRef: enemy,
+                  x: enemy.x + Math.cos(a) * 0.48, y: enemy.y + Math.sin(a) * 0.48,
+                  vx: Math.cos(a) * pSpeed, vy: Math.sin(a) * pSpeed,
+                  life: 2.5, damage: enemy.projDamage || 10, sprite: this.orbSprites.MANCUBUS || this.orbSprites.IMP
+                });
+              }
+              this.audio.playDemonFireball(dist);
+            } else if (enemy.isHellKnight) {
+              for (const off of [-0.09, 0.09]) {
+                const a = baseA + off;
+                this.enemyProjectiles.push({
+                  ownerId: enemy.id, ownerKind: enemy.kind, ownerRef: enemy,
+                  x: enemy.x + Math.cos(a) * 0.42, y: enemy.y + Math.sin(a) * 0.42,
+                  vx: Math.cos(a) * pSpeed, vy: Math.sin(a) * pSpeed,
+                  life: 2.4, damage: enemy.projDamage || 11, sprite: this.orbSprites.HELL_KNIGHT || this.orbSprites.SUMMONER
+                });
+              }
+              this.audio.playDemonFireball(dist);
+            } else if (enemy.isCyberRocket) {
+              this.enemyProjectiles.push({
+                ownerId: enemy.id, ownerKind: enemy.kind, ownerRef: enemy,
+                x: enemy.x + toX * 0.5, y: enemy.y + toY * 0.5,
+                vx: toX * pSpeed, vy: toY * pSpeed,
+                explosive: true, explodeRadius: 1.9,
+                life: 3.1, damage: enemy.projDamage || 16, sprite: this.orbSprites.CYBERDEMON || this.orbSprites.BOSS_CYBER
+              });
+              this.audio.playRocketLauncher();
+            } else {
+              this.enemyProjectiles.push({
+                ownerId: enemy.id,
+                ownerKind: enemy.kind,
+                ownerRef: enemy,
+                x: enemy.x + toX * 0.4,
+                y: enemy.y + toY * 0.4,
+                vx: toX * pSpeed,
+                vy: toY * pSpeed,
+                speed: pSpeed,
+                homing: isHoming,
+                turnRate: isHoming ? 1.5 : 0,
+                life: isHoming ? 3.0 : 2.6,
+                damage: enemy.projDamage || 10,
+                sprite: this.orbSprites[key] || this.orbSprites.IMP
+              });
+              this.audio.playDemonFireball(dist);
+            }
           }
 
           if (dist > 0.95) {
@@ -6385,8 +6877,11 @@ export class HellfallGame {
             let dirX = toX;
             let dirY = toY;
 
-            // Si hay muros entre el demonio y el jugador, sigue el Flow Field BFS para rodear paredes y cruzar puertas
-            if (!hasLOS && !enemy.targetEnemy) {
+            // Francotiradores retroceden si el jugador se acerca demasiado
+            if (enemy.isSniper && hasLOS && dist < 7.5) {
+              dirX = -toX;
+              dirY = -toY;
+            } else if (!hasLOS && !enemy.targetEnemy) {
               const flow = this.getFlowStep(enemy.x, enemy.y);
               if (flow) {
                 dirX = flow.dirX;
@@ -6396,7 +6891,7 @@ export class HellfallGame {
 
             let mx = dirX * step;
             let my = dirY * step;
-            if (hasLOS && enemy.movePattern === 'STRAFE') {
+            if (hasLOS && (enemy.movePattern === 'STRAFE' || enemy.invisible)) {
               const w = Math.sin(now * 0.005 + enemy.walkCycle) * enemy.strafeDir;
               mx += -dirY * step * 0.82 * w;
               my += dirX * step * 0.82 * w;
@@ -6407,7 +6902,7 @@ export class HellfallGame {
 
             // Separación suave entre demonios para que te rodeen en vez de apilarse en el mismo punto
             for (const other of this.enemies) {
-              if (other === enemy || !other.alive) continue;
+              if (other === enemy || !other.alive || other.dormantCloset) continue;
               const odx = enemy.x - other.x;
               const ody = enemy.y - other.y;
               const od = Math.hypot(odx, ody);
@@ -6421,16 +6916,15 @@ export class HellfallGame {
             const res = this.moveEnemyWithCollision(enemy, mx, my, 0.27);
             if (res.hitWall) {
               enemy.strafeDir *= -1;
-              // Si chocó con una esquina teniendo LOS parcial, usa el paso del Flow Field para desatascarse
               const flow = this.getFlowStep(enemy.x, enemy.y);
               if (flow) {
                 this.moveEnemyWithCollision(enemy, flow.dirX * step, flow.dirY * step, 0.27);
               }
             }
             if (enemy.kind !== 'SHIELD' && Math.hypot(mx, my) > 0.0001) {
-              this.turnEnemyFacing(enemy, Math.atan2(my, mx), dt, enemy.kind === 'PINKY' ? 8.5 : 6.2);
+              this.turnEnemyFacing(enemy, Math.atan2(my, mx), dt, (enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 8.5 : 6.2);
             }
-            enemy.walkCycle += dt * (enemy.kind === 'PINKY' ? 8.2 : 5.4);
+            enemy.walkCycle += dt * ((enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 8.2 : 5.4);
           } else if (enemy.kind !== 'SHIELD') {
             this.turnEnemyFacing(enemy, Math.atan2(toY, toX), dt, 7.5);
           }
@@ -6438,8 +6932,15 @@ export class HellfallGame {
       }
 
       if (!enemy.targetEnemy && dist <= 1.15 && enemy.cooldown <= 0) {
-        this.damagePlayer(enemy.damage, enemy.x, enemy.y, now);
-        enemy.cooldown = enemy.kind === 'PINKY' ? 0.75 : 0.95;
+        if (targetIsVip && this.vip && this.vip.alive) {
+          this.vip.hp -= enemy.damage * 0.65;
+          this.vip.hitFlash = 0.25;
+          this.spawnBlood(this.vip.x, this.vip.y, 8);
+          if (this.vip.hp <= 0) this.killVipWardenFallback(now);
+        } else {
+          this.damagePlayer(enemy.damage, enemy.x, enemy.y, now);
+        }
+        enemy.cooldown = (enemy.kind === 'PINKY' || enemy.kind === 'SPECTRE') ? 0.75 : 0.95;
       }
     }
 
@@ -6453,7 +6954,17 @@ export class HellfallGame {
 
     if (this.exitDoor && distance(player.x, player.y, this.exitDoor.x, this.exitDoor.y) < 1.1) {
       if (!player.hasKey) {
-        this.onStatus('🔒 COMPUERTA EXIT BLOQUEADA: Derrota al BOSS GUARDIÁN y recoge su LLAVE 🔑');
+        const objType = this.sectorObjective?.type || 'BOSS_KEY';
+        const lockMsgs = {
+          GENERATORS: '🔒 EXIT BLOQUEADO: Destruye todos los GENERADORES ⚡ del sector',
+          SURVIVAL_WAVES: '🔒 EXIT BLOQUEADO: Activa el NEXUS central [E] y sobrevive las 3 oleadas',
+          ESCORT_RESCUE: '🔒 EXIT BLOQUEADO: Rescata al CIENTÍFICO VIP [E] y escoltalo hasta EXIT',
+          ESCAPE_COUNTDOWN: '🔒 EXIT BLOQUEADO: Sabotea el NÚCLEO DE FUSIÓN [E] antes de evacuar',
+          THREE_KEYS: '🔒 EXIT BLOQUEADO: Reúne las 3 LLAVES (Roja, Azul y Amarilla)',
+          FINAL_ICON: '🔒 EXIT BLOQUEADO: Extermina al ICON OF SIN y recoge su llave',
+          BOSS_KEY: '🔒 COMPUERTA EXIT BLOQUEADA: Derrota al BOSS GUARDIÁN y recoge su LLAVE 🔑'
+        };
+        this.onStatus(lockMsgs[objType] || lockMsgs.BOSS_KEY);
       } else if (this.level >= MAX_LEVELS) {
         if ((this.sectorDamageTaken || 0) === 0) {
           this.runStats.perfectSectors = (this.runStats.perfectSectors || 0) + 1;
@@ -6638,10 +7149,11 @@ export class HellfallGame {
     const now = performance.now();
     if (now < this.shotUntil) return;
     const w = this.player.weapon;
+    if (!this.isWeaponOwned(w)) return;
     const dmgMult = (now < this.player.berserkUntil ? 2.0 : 1.0) * (1 + (this.weaponDamageBonus || 0));
 
     // Alerta por sonido a los demonios cercanos al disparar
-    this.alertNearbyEnemies(this.player.x, this.player.y, w === 4 ? 7 : 14);
+    this.alertNearbyEnemies(this.player.x, this.player.y, w === 4 ? 7 : 15);
 
     if (w === 4) {
       this.shotUntil = now + CONFIG.CHAINSAW_COOLDOWN_MS;
@@ -6650,10 +7162,28 @@ export class HellfallGame {
       this.muzzleFlash = Math.max(this.muzzleFlash, 0.32);
       this.audio.playChainsaw();
 
+      let hitTarget = false;
+      for (const gen of this.generators) {
+        if (gen.alive && distance(this.player.x, this.player.y, gen.x, gen.y) <= CONFIG.CHAINSAW_RANGE + 0.25) {
+          this.damageGenerator(gen, CONFIG.CHAINSAW_DAMAGE * dmgMult, now);
+          hitTarget = true;
+          break;
+        }
+      }
+      if (!hitTarget) {
+        for (const pylon of this.arenaPylons) {
+          if (!pylon.destroyed && pylon.active && distance(this.player.x, this.player.y, pylon.x, pylon.y) <= CONFIG.CHAINSAW_RANGE + 0.25) {
+            this.damagePylon(pylon, CONFIG.CHAINSAW_DAMAGE * dmgMult, now);
+            hitTarget = true;
+            break;
+          }
+        }
+      }
+
       let target = null;
       let bestDist = Infinity;
       for (const enemy of this.enemies) {
-        if (!enemy.alive) continue;
+        if (!enemy.alive || enemy.dormantCloset) continue;
         const d = distance(this.player.x, this.player.y, enemy.x, enemy.y);
         if (d > CONFIG.CHAINSAW_RANGE || d >= bestDist) continue;
         const angle = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
@@ -6665,12 +7195,7 @@ export class HellfallGame {
       }
 
       if (target) {
-        if (target.isBoss && target.dormant) this.awakenBoss(target, now);
-        target.alerted = true;
         const isGlory = target.gloryUntil > now;
-        target.hitFlash = 0.14;
-        target.health -= CONFIG.CHAINSAW_DAMAGE * dmgMult;
-        target.targetEnemy = null;
         this.spawnBlood(target.x, target.y, 10);
         this.hitmarkerUntil = now + 100;
         if (now - this.lastHitmarkerSound > 80) {
@@ -6679,10 +7204,10 @@ export class HellfallGame {
         }
         if (isGlory) {
           this.executeGloryKill(target, true);
-        } else if (target.health <= 0) {
-          this.killEnemy(target, 'CHAINSAW');
+        } else {
+          this.applyEnemyDamage(target, CONFIG.CHAINSAW_DAMAGE * dmgMult, 'CHAINSAW', now);
         }
-      } else {
+      } else if (!hitTarget) {
         const wallDist = Math.min(CONFIG.CHAINSAW_RANGE, this.zBuffer[Math.floor(this.worldW / 2)] || 1.4);
         const hx = this.player.x + Math.cos(this.player.angle) * Math.max(0.2, wallDist - 0.2);
         const hy = this.player.y + Math.sin(this.player.angle) * Math.max(0.2, wallDist - 0.2);
@@ -6731,6 +7256,93 @@ export class HellfallGame {
       return;
     }
 
+    // Armas de energía y explosivos [5] Lanzacohetes, [6] Rifle Plasma, [7] BFG-9000
+    if (w === 5) {
+      if (this.player.rockets <= 0) {
+        this.audio.playEmptyClip();
+        this.shotUntil = now + 260;
+        this.onStatus('¡SIN COHETES! Busca cajas de munición, usa la Motosierra [4] o compra al Mercader [E]');
+        return;
+      }
+      this.player.rockets -= 1;
+      this.shotUntil = now + CONFIG.ROCKET_COOLDOWN_MS;
+      this.shotStartTime = now;
+      this.recoil = 1.05;
+      this.muzzleFlash = 1.0;
+      this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.06 : 0.22);
+      this.audio.playRocketLauncher();
+      const ang = this.player.angle;
+      this.playerProjectiles.push({
+        kind: 'ROCKET',
+        x: this.player.x + Math.cos(ang) * 0.35,
+        y: this.player.y + Math.sin(ang) * 0.35,
+        vx: Math.cos(ang) * CONFIG.ROCKET_SPEED,
+        vy: Math.sin(ang) * CONFIG.ROCKET_SPEED,
+        damage: CONFIG.ROCKET_DAMAGE * dmgMult,
+        life: 3.2,
+        sprite: this.rocketSprites?.[0]
+      });
+      return;
+    }
+
+    if (w === 6) {
+      if (this.player.cells < CONFIG.PLASMA_CELL_COST) {
+        this.audio.playEmptyClip();
+        this.shotUntil = now + 220;
+        this.onStatus('¡SIN CÉLULAS DE ENERGÍA! Compra al Mercader [E] o abre cofres');
+        return;
+      }
+      this.player.cells -= CONFIG.PLASMA_CELL_COST;
+      this.shotUntil = now + CONFIG.PLASMA_COOLDOWN_MS;
+      this.shotStartTime = now;
+      this.recoil = 0.38;
+      this.muzzleFlash = 0.85;
+      this.audio.playPlasma();
+      const ang = this.player.angle + (Math.random() - 0.5) * 0.025;
+      this.playerProjectiles.push({
+        kind: 'PLASMA',
+        x: this.player.x + Math.cos(ang) * 0.32,
+        y: this.player.y + Math.sin(ang) * 0.32,
+        vx: Math.cos(ang) * CONFIG.PLASMA_SPEED,
+        vy: Math.sin(ang) * CONFIG.PLASMA_SPEED,
+        damage: CONFIG.PLASMA_DAMAGE * dmgMult,
+        life: 2.0,
+        sprite: this.plasmaSprites?.[0]
+      });
+      return;
+    }
+
+    if (w === 7) {
+      if (this.player.cells < CONFIG.BFG_CELL_COST) {
+        this.audio.playEmptyClip();
+        this.shotUntil = now + 350;
+        this.onStatus(`¡BFG-9000 NECESITA ${CONFIG.BFG_CELL_COST} CÉLULAS DE ENERGÍA!`);
+        return;
+      }
+      this.player.cells -= CONFIG.BFG_CELL_COST;
+      this.shotUntil = now + CONFIG.BFG_COOLDOWN_MS;
+      this.shotStartTime = now;
+      this.recoil = 1.25;
+      this.muzzleFlash = 1.15;
+      this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.1 : 0.35);
+      this.audio.playPlasma();
+      this.audio.playBossAwaken();
+      const ang = this.player.angle;
+      this.playerProjectiles.push({
+        kind: 'BFG',
+        x: this.player.x + Math.cos(ang) * 0.4,
+        y: this.player.y + Math.sin(ang) * 0.4,
+        vx: Math.cos(ang) * CONFIG.BFG_SPEED,
+        vy: Math.sin(ang) * CONFIG.BFG_SPEED,
+        damage: CONFIG.BFG_DAMAGE * dmgMult,
+        dmgMult,
+        zapTimer: 0.05,
+        life: 3.4,
+        sprite: this.bfgSprites?.[0]
+      });
+      return;
+    }
+
     if (this.player.ammo <= 0) {
       if (this.player.reserve > 0) {
         this.reload();
@@ -6756,6 +7368,8 @@ export class HellfallGame {
     const pelletCount = isChaingun ? 1 : (CONFIG.SHOTGUN_PELLET_COUNT || 7);
     const spreadSpan = isChaingun ? 0.03 : (CONFIG.SHOTGUN_SPREAD || 0.19);
     const hitMap = new Map();
+    const hitGenSet = new Set();
+    const hitPylonSet = new Set();
     let hitAnyBarrel = false;
     let shieldBlocked = false;
 
@@ -6777,15 +7391,47 @@ export class HellfallGame {
         }
       }
 
+      // Impacto en Generadores, Pilones y Núcleo de Fusión
+      for (const gen of this.generators) {
+        if (!gen.alive) continue;
+        const gd = distance(this.player.x, this.player.y, gen.x, gen.y);
+        if (gd > 17) continue;
+        const gAng = Math.atan2(gen.y - this.player.y, gen.x - this.player.x);
+        const gDelta = Math.abs(Math.atan2(Math.sin(gAng - rayAngle), Math.cos(gAng - rayAngle)));
+        if (gDelta < Math.max(0.06, 0.25 / Math.max(1, gd)) && this.lineOfSight(this.player.x, this.player.y, gen.x, gen.y)) {
+          hitGenSet.add(gen);
+        }
+      }
+      for (const pylon of this.arenaPylons) {
+        if (pylon.destroyed || !pylon.active) continue;
+        const pd = distance(this.player.x, this.player.y, pylon.x, pylon.y);
+        if (pd > 18) continue;
+        const pAng = Math.atan2(pylon.y - this.player.y, pylon.x - this.player.x);
+        const pDelta = Math.abs(Math.atan2(Math.sin(pAng - rayAngle), Math.cos(pAng - rayAngle)));
+        if (pDelta < Math.max(0.06, 0.25 / Math.max(1, pd)) && this.lineOfSight(this.player.x, this.player.y, pylon.x, pylon.y)) {
+          hitPylonSet.add(pylon);
+        }
+      }
+      if (this.escapeCore && !this.escapeCore.triggered) {
+        const cd = distance(this.player.x, this.player.y, this.escapeCore.x, this.escapeCore.y);
+        if (cd < 16) {
+          const cAng = Math.atan2(this.escapeCore.y - this.player.y, this.escapeCore.x - this.player.x);
+          const cDelta = Math.abs(Math.atan2(Math.sin(cAng - rayAngle), Math.cos(cAng - rayAngle)));
+          if (cDelta < Math.max(0.06, 0.24 / Math.max(1, cd)) && this.lineOfSight(this.player.x, this.player.y, this.escapeCore.x, this.escapeCore.y)) {
+            this.triggerEscapeCountdown(now);
+          }
+        }
+      }
+
       let selected = null;
       let bestEnemyDist = Infinity;
       for (const enemy of this.enemies) {
-        if (!enemy.alive) continue;
+        if (!enemy.alive || enemy.dormantCloset) continue;
         const dist = distance(this.player.x, this.player.y, enemy.x, enemy.y);
         if (dist >= 18 || dist >= bestEnemyDist) continue;
         const angle = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
         const delta = Math.abs(Math.atan2(Math.sin(angle - rayAngle), Math.cos(angle - rayAngle)));
-        const cone = enemy.isBoss ? 0.34 : (isChaingun ? 0.16 : 0.26);
+        const cone = enemy.isBoss ? 0.36 : (isChaingun ? 0.16 : 0.26);
         if (delta < Math.max(0.06, cone / Math.max(0.85, dist)) && this.lineOfSight(this.player.x, this.player.y, enemy.x, enemy.y)) {
           selected = enemy;
           bestEnemyDist = dist;
@@ -6817,6 +7463,10 @@ export class HellfallGame {
       }
     }
 
+    const baseObjDmg = isChaingun ? CONFIG.CHAINGUN_DAMAGE * 2 : CONFIG.SHOTGUN_PELLET_DAMAGE * 4;
+    for (const gen of hitGenSet) this.damageGenerator(gen, baseObjDmg * dmgMult, now);
+    for (const pylon of hitPylonSet) this.damagePylon(pylon, baseObjDmg * dmgMult, now);
+
     if (shieldBlocked && hitMap.size === 0) {
       if (now - this.lastShieldBlockAt > 140) {
         this.lastShieldBlockAt = now;
@@ -6824,12 +7474,12 @@ export class HellfallGame {
       }
       if (now - (this.lastShieldStatusAt || 0) > 1100) {
         this.lastShieldStatusAt = now;
-        this.onStatus('🛡️ EL DEMONIO CON ESCUDO BLOQUEA EL FUEGO FRONTAL: rodéalo, quémalo o usa la motosierra');
+        this.onStatus('🛡️ EL DEMONIO CON ESCUDO BLOQUEA EL FUEGO FRONTAL: rodéalo, quémalo o usa Plasma/Motosierra');
       }
       this.hitmarkerUntil = now + 80;
     }
 
-    if (hitMap.size > 0 || hitAnyBarrel) {
+    if (hitMap.size > 0 || hitAnyBarrel || hitGenSet.size > 0 || hitPylonSet.size > 0) {
       this.hitmarkerUntil = now + 110;
       if (now - this.lastHitmarkerSound > 70) {
         this.lastHitmarkerSound = now;
@@ -6839,27 +7489,23 @@ export class HellfallGame {
 
     for (const [selected, info] of hitMap.entries()) {
       if (!selected.alive) continue;
-      if (selected.isBoss && selected.dormant) this.awakenBoss(selected, now);
-      selected.alerted = true;
       const pelletDmg = isChaingun ? CONFIG.CHAINGUN_DAMAGE : (CONFIG.SHOTGUN_PELLET_DAMAGE || 0.44);
       const closeBonus = !isChaingun && info.dist < 4.2 ? 1.32 : 1.0;
       const totalDmg = pelletDmg * info.pellets * closeBonus * dmgMult;
-      selected.health -= totalDmg;
-      selected.hitFlash = 0.16;
-      selected.targetEnemy = null;
-
-      const dodgeChance = 0.1 + ((this.level - 1) / Math.max(1, MAX_LEVELS - 1)) * 0.38;
-      if (selected.isBoss && selected.alive && selected.bossState === 'CHASE' && selected.reactDashCd <= 0 && Math.random() < dodgeChance) {
-        selected.reactDashCd = 2.8 - ((this.level - 1) / Math.max(1, MAX_LEVELS - 1)) * 1.3;
-        const toX = (this.player.x - selected.x) / Math.max(0.001, info.dist);
-        const toY = (this.player.y - selected.y) / Math.max(0.001, info.dist);
-        this.triggerBossDash(selected, toX, toY, 'LATERAL');
-      } else if (!isChaingun && Math.random() < (selected.painChance || 0.45)) {
-        selected.painTimer = 0.22;
-      }
-
       this.spawnBlood(selected.x, selected.y, isChaingun ? 8 : Math.min(18, 4 + info.pellets * 2));
-      if (selected.health <= 0) this.killEnemy(selected, 'SHOT');
+      const died = this.applyEnemyDamage(selected, totalDmg, 'SHOT', now);
+
+      if (!died && selected.alive) {
+        const dodgeChance = 0.1 + ((this.level - 1) / Math.max(1, MAX_LEVELS - 1)) * 0.38;
+        if (selected.isBoss && selected.bossState === 'CHASE' && selected.reactDashCd <= 0 && Math.random() < dodgeChance) {
+          selected.reactDashCd = 2.8 - ((this.level - 1) / Math.max(1, MAX_LEVELS - 1)) * 1.3;
+          const toX = (this.player.x - selected.x) / Math.max(0.001, info.dist);
+          const toY = (this.player.y - selected.y) / Math.max(0.001, info.dist);
+          this.triggerBossDash(selected, toX, toY, 'LATERAL');
+        } else if (!isChaingun && Math.random() < (selected.painChance || 0.45)) {
+          selected.painTimer = 0.22;
+        }
+      }
     }
 
     if (this.player.ammo === 0 && this.player.reserve > 0) this.reload();
@@ -6934,6 +7580,9 @@ export class HellfallGame {
   startVictorySequence(now = performance.now()) {
     if (this.victorySequence || this.finished) return;
     this.mouseDown = false;
+    this.keys.clear();
+    this.wasPointerLocked = false;
+    this.safeExitPointerLock();
     this.mapOpen = false;
     this.shopOpen = false;
     this.intermission = null;
@@ -7039,6 +7688,9 @@ export class HellfallGame {
   startDeathSequence(now = performance.now()) {
     if (this.deathSequence || this.finished) return;
     this.mouseDown = false;
+    this.keys.clear();
+    this.wasPointerLocked = false;
+    this.safeExitPointerLock();
     this.mapOpen = false;
     this.shopOpen = false;
     this.intermission = null;
@@ -7056,17 +7708,34 @@ export class HellfallGame {
   drawDeathScreen(now = performance.now()) {
     this.setLogicalTransform();
     const c = this.ctx;
-    c.fillStyle = '#0d0204';
+    c.fillStyle = '#090103';
     c.fillRect(0, 0, WIDTH, VIEW_HEIGHT);
 
-    // Columnas de sangre goteando por la pantalla
-    for (let i = 0; i < 32; i++) {
-      const bx = i * 10;
-      const len = 18 + ((i * 29) % 45) + Math.sin(now * 0.004 + i) * 6;
-      c.fillStyle = i % 2 === 0 ? 'rgba(140, 0, 12, 0.65)' : 'rgba(217, 4, 41, 0.45)';
-      c.fillRect(bx, 0, 7, len);
-      c.fillStyle = '#ff2a2a';
-      c.fillRect(bx + 1, Math.max(0, len - 3), 4, 3);
+    // Cortinas orgánicas de sangre arterial coagulada cayendo en cascada realista
+    const tSec = now * 0.001;
+    const strands = 54;
+    for (let i = 0; i < strands; i++) {
+      const bx = i * 6 + ((i * 7) % 3);
+      const w = 3 + ((i * 11) % 4);
+      const dripProg = Math.min(1, (tSec * 0.45 + (i * 0.17)) % 1.35);
+      const baseLen = 14 + ((i * 37) % 58) + Math.sin(tSec * 2.2 + i * 1.7) * 5;
+      const len = Math.min(VIEW_HEIGHT - 12, baseLen + dripProg * 28);
+      // Borde oscuro coagulado
+      c.fillStyle = 'rgba(72, 2, 10, 0.88)';
+      c.fillRect(bx, 0, w, len);
+      // Núcleo venoso
+      c.fillStyle = 'rgba(138, 4, 22, 0.84)';
+      c.fillRect(bx + 1, 0, Math.max(1, w - 2), len - 2);
+      // Brillo arterial húmedo
+      c.fillStyle = 'rgba(218, 18, 44, 0.72)';
+      c.fillRect(bx + 1, Math.max(0, len - 10), Math.max(1, w - 2), 6);
+      // Gota esférica brillante en la punta
+      c.fillStyle = '#ff384c';
+      c.fillRect(bx + Math.floor(w / 3), Math.max(0, len - 3), Math.max(2, Math.floor(w / 2)), 3);
+      if (i % 3 === 0) {
+        c.fillStyle = '#ff8a95';
+        c.fillRect(bx + Math.floor(w / 3), Math.max(0, len - 3), 1, 1);
+      }
     }
 
     c.strokeStyle = '#d90429';
@@ -7080,12 +7749,13 @@ export class HellfallGame {
     c.fillStyle = '#ff1e27';
     c.fillText('MUERTO', WIDTH / 2, 44);
 
-    c.font = 'bold 7.5px monospace';
+    c.font = 'bold 7.2px monospace';
     c.fillStyle = '#ffbe0b';
-    const secName = CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
-    c.fillText(`AGENTE CAÍDO EN SECTOR ${String(this.level).padStart(2, '0')} · ${secName}`, WIDTH / 2, 58);
+    const secName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
+    const callsign = this.characterProfile?.callsign || 'MARINE';
+    c.fillText(`${callsign} CAÍDO EN SECTOR ${String(this.level).padStart(2, '0')} · ${secName}`, WIDTH / 2, 58);
 
-    const pts = this.player.kills * 100 + this.bonusPoints;
+    const pts = this.player.kills * 100 + Math.min(this.bonusPoints, this.player.kills * 250);
     c.font = 'bold 7px monospace';
     c.fillStyle = '#fff3b0';
     c.fillText(
@@ -7140,9 +7810,12 @@ export class HellfallGame {
     this.victorySequence = null;
     this.melt = null;
     this.mouseDown = false;
+    this.keys.clear();
+    this.wasPointerLocked = false;
     this.audio.stopAmbience();
+    globalDoomMusic.stopMatch();
     if (this.frameId) cancelAnimationFrame(this.frameId);
-    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.safeExitPointerLock();
     const now = performance.now();
     const medals = this.computeMedals(won);
     this.earnedMedals = medals;
@@ -7152,15 +7825,18 @@ export class HellfallGame {
       this.drawDeathScreen(now);
     }
     this.drawHUD(now);
+    const cappedBonus = Math.min(Math.max(0, Math.round(this.bonusPoints)), this.player.kills * 250);
     this.onStatus(won ? '¡LOS 10 SECTORES CONQUISTADOS! Partida guardada' : 'MUERTO // Agente caído — Partida guardada');
     this.onFinish({
       won,
       level: this.level,
       kills: this.player.kills,
-      bonusPoints: this.bonusPoints,
-      points: this.player.kills * 100 + this.bonusPoints,
+      bonusPoints: cappedBonus,
+      points: this.player.kills * 100 + cappedBonus,
       durationMs: Math.max(1000, Math.round(now - this.startTime)),
       medals,
+      characterName: this.characterProfile?.callsign || 'MARCUS VANE',
+      characterGender: this.characterGender,
       runStats: { ...this.runStats }
     });
   }
@@ -7169,25 +7845,31 @@ export class HellfallGame {
     if (!this.running || this.paused || this.finished) return;
     const dt = clamp((now - this.lastTime) / 1000, 0, 0.045);
     this.lastTime = now;
-    this.update(dt, now);
-    if (!this.finished) {
-      this.setLogicalTransform();
-      if (this.briefingOpen) {
-        this.drawBriefingScreen(now);
-      } else if (this.victorySequence) {
-        this.drawVictoryScreen(now);
-      } else if (this.deathSequence) {
-        this.drawDeathScreen(now);
-      } else if (this.intermission) {
-        this.drawIntermissionScreen(now);
-      } else if (this.mapOpen) {
-        this.drawAutomap(now);
-      } else {
-        this.renderWorld(now);
+    try {
+      this.update(dt, now);
+      if (!this.finished) {
+        this.setLogicalTransform();
+        if (this.briefingOpen) {
+          this.drawBriefingScreen(now);
+        } else if (this.victorySequence) {
+          this.drawVictoryScreen(now);
+        } else if (this.deathSequence) {
+          this.drawDeathScreen(now);
+        } else if (this.intermission) {
+          this.drawIntermissionScreen(now);
+        } else if (this.mapOpen) {
+          this.drawAutomap(now);
+        } else {
+          this.renderWorld(now);
+        }
+        this.drawHUD(now);
+        if (this.shopOpen) this.drawShopScreen();
+        if (this.melt) this.updateAndDrawMelt(dt);
       }
-      this.drawHUD(now);
-      if (this.shopOpen) this.drawShopScreen();
-      if (this.melt) this.updateAndDrawMelt(dt);
+    } catch (err) {
+      console.error('HELLFALL loop error recovered:', err);
+    }
+    if (!this.finished && this.running && !this.paused) {
       this.frameId = requestAnimationFrame(this.boundLoop);
     }
   }
@@ -7208,9 +7890,10 @@ export class HellfallGame {
     c.strokeRect(6, 4, WIDTH - 12, VIEW_HEIGHT - 8);
 
     c.textAlign = 'center';
-    c.font = 'bold 10.5px monospace';
+    c.font = 'bold 9.5px monospace';
     c.fillStyle = '#ffbe0b';
-    c.fillText('HELLFALL // MANUAL TÁCTICO Y COMANDOS', WIDTH / 2, 16);
+    const charLabel = this.characterProfile?.callsign || 'MARCUS VANE';
+    c.fillText(`HELLFALL // MANUAL TÁCTICO · ${charLabel}`, WIDTH / 2, 15.5);
 
     // Columna Izquierda: COMANDOS Y CONTROLES
     c.fillStyle = 'rgba(24, 10, 12, 0.94)';
@@ -7229,22 +7912,22 @@ export class HellfallGame {
       ['[Shift]', 'Correr rápido'],
       ['[Clic Izq / Esp]', 'Disparar arma'],
       ['[R]', 'Recargar cartuchos'],
-      ['[1] [2] [3]', 'Escopeta/Chain/Flamer'],
-      ['[4] Motosierra', 'A las 40 bajas (da munición)'],
+      ['[1]-[4]', 'Escopeta/Chain/Flamer/Sierra'],
+      ['[5]-[7]', 'Cohetes / Plasma / BFG-9000'],
       ['[V / Clic Der]', 'Puñetazo (empuja/estampa)'],
-      ['[E] Interactuar', 'Puertas/Cofres/Glory Kill'],
-      ['[C] Embestida', 'Dash (desbloqueo en Altar)'],
+      ['[E] Interactuar', 'Puertas/Cofres/VIP/Núcleo'],
+      ['[C] Embestida', 'Dash (Altar de Mejoras)'],
       ['[TAB] / [F]', 'Automapa / Pant. Completa'],
       ['[ESC] / [H]', 'Pausa y Ajustes / Ayuda']
     ];
     controls.forEach(([key, desc], idx) => {
       const y = 39 + idx * 8.8;
-      c.font = 'bold 5.5px monospace';
+      c.font = 'bold 5.3px monospace';
       c.fillStyle = '#ffbe0b';
       c.fillText(key, 14, y);
-      c.font = '5.3px monospace';
+      c.font = '5.1px monospace';
       c.fillStyle = '#fff3b0';
-      c.fillText(desc, 72, y);
+      c.fillText(desc, 68, y);
     });
 
     // Columna Derecha: QUÉ PUEDES HACER EN EL JUEGO
@@ -7259,10 +7942,10 @@ export class HellfallGame {
     c.fillText('🔥 QUÉ HACER EN EL JUEGO', 168, 30);
 
     const actions = [
-      { title: '1. EXPLORA Y SAQUEA:', l1: 'Abre cofres [E], dispara a barriles', l2: 'y busca 2 muros secretos por sector.' },
-      { title: '2. MERCADER DE ALMAS:', l1: 'Gasta monedas en munición, vida,', l2: 'blindaje o +12% daño de armas [1-5].' },
-      { title: '3. ARENAS DE JEFES:', l1: 'El Campeón y el Boss esperan en el', l2: 'centro y despiertan cuando entras.' },
-      { title: '4. LLAVE 🔑 Y SALIDA EXIT:', l1: 'Mata al Boss Guardián, coge la llave,', l2: 've a EXIT y elige Mejoras Dinámicas.' }
+      { title: '1. ENCUENTRA ARSENAL [1-7]:', l1: 'Empiezas con Super Escopeta.', l2: 'Busca pedestales de armas y cofres.' },
+      { title: '2. MERCADER DE ALMAS:', l1: 'Compra munición pesada [1-7],', l2: 'blindaje, vida o +12% daño.' },
+      { title: '3. MISIONES Y RUTAS:', l1: 'Reactores, oleadas, escolta VIP,', l2: 'cuenta atrás, 3 llaves y puertas.' },
+      { title: '4. DIRECTOR Y JEFES:', l1: 'Cuidado con emboscadas ocultas.', l2: 'Sector 10: ICON OF SIN en 3 fases.' }
     ];
     actions.forEach((act, idx) => {
       const by = 40 + idx * 24.5;
@@ -7858,23 +8541,24 @@ export class HellfallGame {
     );
     if (!activeBoss) return;
     const c = this.ctx;
-    const title = `${activeBoss.kind}${activeBoss.enraged ? ' · FURIA' : ''}`;
+    const phaseTag = activeBoss.isFinalIcon ? ` · FASE ${['I', 'II', 'III'][(activeBoss.phase || 1) - 1]}` : '';
+    const title = `${activeBoss.kind}${phaseTag}${activeBoss.enraged ? ' · FURIA' : ''}`;
     c.font = 'bold 6.2px monospace';
-    const barW = clamp(Math.ceil(c.measureText(title).width) + 28, 128, 196);
+    const barW = clamp(Math.ceil(c.measureText(title).width) + 28, 134, 210);
     const barH = 10;
     const bx = Math.floor((WIDTH - barW) / 2);
     const by = 21;
 
     c.fillStyle = 'rgba(14, 4, 6, 0.9)';
     c.fillRect(bx - 2, by - 1, barW + 4, barH + 8);
-    c.strokeStyle = activeBoss.enraged ? '#ff0055' : (activeBoss.holdsKey ? '#ffd700' : '#d90429');
+    c.strokeStyle = activeBoss.shieldActive ? '#00f5d4' : (activeBoss.enraged ? '#ff0055' : (activeBoss.holdsKey ? '#ffd700' : '#d90429'));
     c.lineWidth = 1;
     c.strokeRect(bx - 1.5, by - 0.5, barW + 3, barH + 7);
 
     const ratio = clamp(activeBoss.health / activeBoss.maxHealth, 0, 1);
     c.fillStyle = '#26090d';
     c.fillRect(bx, by + 6, barW, 6);
-    c.fillStyle = activeBoss.enraged ? '#ff0055' : (activeBoss.holdsKey ? '#ffbe0b' : '#d90429');
+    c.fillStyle = activeBoss.shieldActive ? '#00b4d8' : (activeBoss.enraged ? '#ff0055' : (activeBoss.holdsKey ? '#ffbe0b' : '#d90429'));
     c.fillRect(bx, by + 6, Math.floor(barW * ratio), 6);
     c.fillStyle = 'rgba(255, 255, 255, 0.25)';
     c.fillRect(bx, by + 6, Math.floor(barW * ratio), 2);
@@ -7882,6 +8566,12 @@ export class HellfallGame {
     c.textAlign = 'center';
     c.fillStyle = '#fff3b0';
     c.fillText(title, WIDTH / 2, by + 4.5);
+
+    if (activeBoss.shieldActive) {
+      c.font = 'bold 5.5px monospace';
+      c.fillStyle = '#00f5d4';
+      c.fillText('🛡️ ESCUDO ACTIVO — DESTRUYE LOS PILONES DE LAS ESQUINAS', WIDTH / 2, by + 23);
+    }
   }
 
   drawBossAwakenBanner(now) {
@@ -7920,6 +8610,18 @@ export class HellfallGame {
 
     if (this.findGloryTarget()) {
       promptTxt = `[E] EJECUCIÓN (+${CONFIG.GLORY_HEAL} HP)`;
+    }
+
+    if (!promptTxt && this.vip && this.vip.alive && !this.vip.rescued && distance(this.player.x, this.player.y, this.vip.x, this.vip.y) < 2.5) {
+      promptTxt = '[E] RESCATAR CIENTÍFICO VIP';
+    }
+
+    if (!promptTxt && this.escapeCore && !this.escapeCore.triggered && distance(this.player.x, this.player.y, this.escapeCore.x, this.escapeCore.y) < 2.6) {
+      promptTxt = '☢️ [E] SABOTEAR NÚCLEO (65s ESCAPE)';
+    }
+
+    if (!promptTxt && this.survivalState && !this.survivalState.started && distance(this.player.x, this.player.y, this.survivalState.cx, this.survivalState.cy) < 2.8) {
+      promptTxt = '⚔️ [E] INICIAR OLEADAS DE RESISTENCIA';
     }
 
     if (!promptTxt && this.merchant && distance(this.player.x, this.player.y, this.merchant.x, this.merchant.y) < 2.4) {
@@ -8044,7 +8746,7 @@ export class HellfallGame {
     const list = this._bbList;
     let count = 0;
 
-    const pushItem = (x, y, type, sprite, scale, stepBounce = 0, zOffset = 0) => {
+    const pushItem = (x, y, type, sprite, scale, stepBounce = 0, zOffset = 0, objHpRatio = -1) => {
       if (!sprite) return;
       const o = this._acquireBB(count++);
       const dx = x - px;
@@ -8071,10 +8773,14 @@ export class HellfallGame {
       o.enraged = false;
       o.alive = false;
       o.holdsKey = false;
+      o.invisible = false;
+      o.shieldActive = false;
+      o.objHpRatio = objHpRatio;
     };
 
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i];
+      if (e.dormantCloset) continue;
       let sprite;
       let stepBounce = 0;
       const dir = this.spriteDir(e);
@@ -8106,7 +8812,7 @@ export class HellfallGame {
       o.sprite = sprite;
       o.scale = e.scale || 0.95;
       o.stepBounce = stepBounce;
-      o.zOffset = 0;
+      o.zOffset = e.zOffset || 0;
       o.floating = e.kind === 'CACODEMON' || e.kind === 'LOST_SOUL';
       o.gloryReady = e.state === 'ALIVE' && now < (e.gloryUntil || 0);
       o.hitFlash = e.hitFlash || 0;
@@ -8123,6 +8829,9 @@ export class HellfallGame {
       o.health = e.health;
       o.maxHealth = e.maxHealth;
       o.holdsKey = !!e.holdsKey;
+      o.invisible = !!e.invisible && e.alive;
+      o.shieldActive = !!e.shieldActive;
+      o.objHpRatio = -1;
     }
 
     const barrels = this.barrels || [];
@@ -8143,6 +8852,35 @@ export class HellfallGame {
     }
     if (this.keyItem && this.keyItem.active) {
       pushItem(this.keyItem.x, this.keyItem.y, 'key', this.keySprites[pulseFrame], 0.68, itemBob);
+    }
+    for (const ck of this.coloredKeys) {
+      if (ck.active) pushItem(ck.x, ck.y, 'key', this.coloredKeySprites?.[ck.color]?.[pulseFrame] || this.keySprites[pulseFrame], 0.66, itemBob);
+    }
+    for (const wp of this.weaponPickups) {
+      if (wp.active && this.weaponPickupSprites?.[wp.weaponId]) {
+        pushItem(wp.x, wp.y, 'key', this.weaponPickupSprites[wp.weaponId][pulseFrame], 0.76, itemBob);
+      }
+    }
+    for (const gen of this.generators) {
+      if (gen.alive) {
+        pushItem(gen.x, gen.y, 'barrel', this.generatorSprites?.alive?.[pulseFrame], 0.92, 0, 0, clamp(gen.hp / Math.max(1, gen.maxHp), 0, 1));
+      }
+    }
+    for (const pyl of this.arenaPylons) {
+      if (!pyl.destroyed) {
+        const ratio = pyl.active ? clamp(pyl.hp / Math.max(1, pyl.maxHp), 0, 1) : -1;
+        const pSprite = pyl.active ? this.pylonSprites?.active?.[pulseFrame] : this.pylonSprites?.inactive;
+        pushItem(pyl.x, pyl.y, 'key', pSprite, 0.95, pyl.active ? itemBob * 0.5 : 0, 0, ratio);
+      }
+    }
+    if (this.vip && this.vip.alive && this.vipSprites) {
+      const vFrame = this.vip.rescued ? Math.floor(this.vip.walkCycle) % 2 : 0;
+      const vSprite = (this.vip.rescued ? this.vipSprites.rescued : this.vipSprites.trapped)?.[vFrame];
+      pushItem(this.vip.x, this.vip.y, 'merchant', vSprite, 0.78, 0, 0, clamp(this.vip.hp / Math.max(1, this.vip.maxHp), 0, 1));
+    }
+    if (this.escapeCore && this.coreSprites) {
+      const cSprite = (this.escapeCore.triggered ? this.coreSprites.active : this.coreSprites.idle)?.[pulseFrame];
+      pushItem(this.escapeCore.x, this.escapeCore.y, 'key', cSprite, 0.92);
     }
     for (let i = 0; i < this.armorPickups.length; i++) {
       const a = this.armorPickups[i];
@@ -8170,9 +8908,18 @@ export class HellfallGame {
       const stage = ratio < 0.3 ? 0 : (ratio < 0.7 ? 1 : 2);
       pushItem(fp.x, fp.y, 'orb', this.flameBallSprites[stage], fp.scale || 0.54, 0, fp.zOffset || 0);
     }
+    for (let i = 0; i < this.playerProjectiles.length; i++) {
+      const pp = this.playerProjectiles[i];
+      const sc = pp.kind === 'BFG' ? 0.9 : (pp.kind === 'ROCKET' ? 0.56 : 0.44);
+      const ppSprite =
+        (pp.kind === 'BFG'
+          ? this.bfgSprites?.[pulseFrame]
+          : (pp.kind === 'ROCKET' ? this.rocketSprites?.[pulseFrame] : this.plasmaSprites?.[pulseFrame])) || pp.sprite;
+      pushItem(pp.x, pp.y, 'orb', ppSprite, sc);
+    }
     for (let i = 0; i < this.enemyProjectiles.length; i++) {
       const ep = this.enemyProjectiles[i];
-      pushItem(ep.x, ep.y, 'orb', ep.sprite, 0.5);
+      pushItem(ep.x, ep.y, 'orb', ep.sprite, ep.explosive ? 0.64 : 0.5);
     }
 
     list.length = count;
@@ -8181,6 +8928,7 @@ export class HellfallGame {
     const invDet = 1.0 / (planeX * dirY - dirX * planeY);
     const hpBars = this._hpBars;
     let hpCount = 0;
+    const zLen = Math.min(W, this.zBuffer.length);
 
     for (let i = 0; i < count; i++) {
       const obj = list[i];
@@ -8188,9 +8936,10 @@ export class HellfallGame {
       const sy = obj.y - py;
       const tx = invDet * (dirY * sx - dirX * sy);
       const ty = invDet * (-planeY * sx + planeX * sy);
-      if (ty <= 0.15 || ty > 28) continue;
+      if (!Number.isFinite(ty) || !Number.isFinite(tx) || ty <= 0.15 || ty > 28) continue;
 
       const sp = obj.sprite;
+      if (!sp || !sp.width || !sp.height) continue;
       const screenX = Math.floor((W / 2) * (1 + tx / ty));
       const wallSpan = Math.abs(Math.floor((H * WALL_SCALE) / ty));
       let spriteH = Math.abs(Math.floor(H / ty)) * (obj.scale || 0.95);
@@ -8210,9 +8959,9 @@ export class HellfallGame {
       const endY = clamp(rawEndY, 0, H - 1);
       const dstH = endY - startY;
       const rawLeftX = Math.floor(screenX - spriteW / 2);
-      const startX = clamp(rawLeftX, 0, W - 1);
-      const endX = clamp(Math.floor(screenX + spriteW / 2), 0, W - 1);
-      if (dstH < 1 || endX < startX) continue;
+      const startX = clamp(rawLeftX, 0, zLen - 1);
+      const endX = clamp(Math.floor(screenX + spriteW / 2), 0, zLen - 1);
+      if (dstH < 1 || endX < startX || !Number.isFinite(startX) || !Number.isFinite(endX)) continue;
 
       // Sombra de contacto oscura en el suelo respetando zBuffer
       if (obj.type === 'enemy' || obj.type === 'merchant' || obj.type === 'barrel') {
@@ -8286,35 +9035,41 @@ export class HellfallGame {
 
       let visible = false;
       let col = startX;
+      const baseAlpha = obj.invisible
+        ? (obj.hitFlash > 0 || obj.burnTimer > 0 || obj.gloryReady ? 0.62 : clamp(0.16 + Math.sin(now * 0.014) * 0.06, 0.08, 0.28))
+        : 1;
       while (col <= endX) {
-        if (ty >= this.zBuffer[col]) {
+        const zVal = this.zBuffer[col];
+        if (!(ty < zVal)) {
           col++;
           continue;
         }
         visible = true;
         const runStart = col;
         while (col <= endX && ty < this.zBuffer[col]) col++;
+        if (col <= runStart) col = runStart + 1;
         const runW = col - runStart;
         const srcX = clamp(((runStart - rawLeftX) / Math.max(1, spriteW)) * sp.width, 0, sp.width - 0.1);
         const srcW = clamp((runW / Math.max(1, spriteW)) * sp.width, 0.1, sp.width - srcX);
 
+        c.globalAlpha = baseAlpha;
         c.drawImage(sp, srcX, srcY, srcW, srcH, runStart, startY, runW, dstH);
         if (tintSprite) {
-          c.globalAlpha = tintAlpha;
+          c.globalAlpha = Math.min(baseAlpha, tintAlpha);
           c.drawImage(tintSprite, srcX, srcY, srcW, srcH, runStart, startY, runW, dstH);
-          c.globalAlpha = 1;
         }
-        if (darkSprite) {
+        if (darkSprite && !obj.invisible) {
           c.globalAlpha = darkAlpha;
           c.drawImage(darkSprite, srcX, srcY, srcW, srcH, runStart, startY, runW, dstH);
-          c.globalAlpha = 1;
         }
-        if (emissiveSprite) {
+        if (emissiveSprite && !obj.invisible) {
+          c.globalAlpha = 1;
           c.drawImage(emissiveSprite, srcX, srcY, srcW, srcH, runStart, startY, runW, dstH);
         }
+        c.globalAlpha = 1;
       }
 
-      if (visible && obj.type === 'enemy' && obj.alive && (obj.isBoss || obj.health < obj.maxHealth)) {
+      if (visible && ((obj.type === 'enemy' && obj.alive && (obj.isBoss || obj.health < obj.maxHealth)) || obj.objHpRatio >= 0)) {
         let slot = hpBars[hpCount];
         if (!slot) {
           slot = {};
@@ -8323,13 +9078,66 @@ export class HellfallGame {
         slot.screenX = screenX / S;
         slot.barW = clamp(Math.floor((spriteW / S) * 0.85), 18, 54);
         slot.barY = Math.max(4, Math.floor(startY / S) - 6);
-        slot.ratio = clamp(obj.health / obj.maxHealth, 0, 1);
+        slot.ratio = obj.objHpRatio >= 0 ? obj.objHpRatio : clamp(obj.health / obj.maxHealth, 0, 1);
         slot.dormant = obj.dormant;
-        slot.holdsKey = obj.holdsKey;
+        slot.holdsKey = obj.holdsKey || obj.objHpRatio >= 0;
         slot.isBoss = obj.isBoss;
         slot.gloryReady = obj.gloryReady;
+        slot.isShielded = !!obj.shieldActive;
         slot.showIdleTag = obj.isBoss && obj.dormant && ty < 12;
         hpCount++;
+      }
+    }
+
+    // Rayos 3D proyectados (láser de Francotiradores, tracers hitscan, relámpagos BFG y tethers de Pilones)
+    const drawWorldSegment = (x1, y1, z1, x2, y2, z2, color, width = 1.6, alpha = 0.85) => {
+      const p1x = x1 - px, p1y = y1 - py;
+      const p2x = x2 - px, p2y = y2 - py;
+      const tx1 = invDet * (dirY * p1x - dirX * p1y);
+      const ty1 = invDet * (-planeY * p1x + planeX * p1y);
+      const tx2 = invDet * (dirY * p2x - dirX * p2y);
+      const ty2 = invDet * (-planeY * p2x + planeX * p2y);
+      if (!Number.isFinite(ty1) || !Number.isFinite(ty2) || (ty1 <= 0.2 && ty2 <= 0.2)) return;
+      const safeT1 = Math.max(0.25, ty1);
+      const safeT2 = Math.max(0.25, ty2);
+      const sx1 = (W / 2) * (1 + tx1 / safeT1);
+      const sy1 = horizonPx + (z1 * H) / safeT1;
+      const sx2 = (W / 2) * (1 + tx2 / safeT2);
+      const sy2 = horizonPx + (z2 * H) / safeT2;
+      if (!Number.isFinite(sx1) || !Number.isFinite(sy1) || !Number.isFinite(sx2) || !Number.isFinite(sy2)) return;
+      c.save();
+      c.globalAlpha = alpha;
+      c.strokeStyle = color;
+      c.lineWidth = width * S;
+      c.beginPath();
+      c.moveTo(sx1, sy1);
+      c.lineTo(sx2, sy2);
+      c.stroke();
+      c.restore();
+    };
+
+    for (let i = 0; i < this.hitscanTracers.length; i++) {
+      const tr = this.hitscanTracers[i];
+      const alpha = clamp(tr.life / Math.max(0.05, tr.maxLife), 0.1, 1);
+      drawWorldSegment(tr.x1, tr.y1, 0.04, tr.x2, tr.y2, 0.08, tr.color || '#ffbe0b', 1.8, alpha);
+    }
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i];
+      if (e.alive && e.isSniper && e.aimTimer > 0 && !e.dormantCloset) {
+        const endX = e.x + (e.aimDirX || 1) * 18;
+        const endY = e.y + (e.aimDirY || 0) * 18;
+        const pulse = Math.floor(now / 70) % 2 === 0 ? 0.9 : 0.45;
+        drawWorldSegment(e.x, e.y, -0.05, endX, endY, 0.02, '#ff003c', 1.4, pulse);
+      }
+    }
+    if (this.arenaPylons.length > 0) {
+      const icon = this.enemies.find((e) => e.isFinalIcon && e.alive);
+      if (icon && icon.shieldActive) {
+        for (const pyl of this.arenaPylons) {
+          if (!pyl.destroyed && pyl.active) {
+            drawWorldSegment(pyl.x, pyl.y, -0.1, icon.x, icon.y, -0.15, '#00f5d4', 2.2, 0.78);
+          }
+        }
       }
     }
 
@@ -8449,6 +9257,26 @@ export class HellfallGame {
       const radius = clamp(55 / p.ty, 8, 72);
       glow(p.screenX, horizon, radius, 255, 110, 0, 0.18 * intensity);
     }
+    for (const pp of this.playerProjectiles) {
+      const p = project(pp.x, pp.y);
+      if (!p) continue;
+      const radius = clamp((pp.kind === 'BFG' ? 110 : 62) / p.ty, 10, 110);
+      if (pp.kind === 'BFG') glow(p.screenX, horizon, radius, 112, 224, 0, 0.34 * intensity);
+      else if (pp.kind === 'PLASMA') glow(p.screenX, horizon, radius, 0, 245, 212, 0.28 * intensity);
+      else glow(p.screenX, horizon, radius, 255, 120, 15, 0.25 * intensity);
+    }
+    for (const tp of this.teleportPortals) {
+      const p = project(tp.x, tp.y);
+      if (!p) continue;
+      const radius = clamp(68 / p.ty, 8, 78);
+      glow(p.screenX, p.floorY - 12, radius, 157, 78, 221, 0.28 * intensity);
+    }
+    for (const pyl of this.arenaPylons) {
+      if (pyl.destroyed || !pyl.active) continue;
+      const p = project(pyl.x, pyl.y);
+      if (!p) continue;
+      glow(p.screenX, p.floorY - 10, clamp(72 / p.ty, 10, 80), 0, 245, 212, 0.28 * intensity);
+    }
     c.restore();
   }
 
@@ -8467,6 +9295,66 @@ export class HellfallGame {
       const floorY = horizon + (VIEW_HEIGHT * WALL_SCALE * 0.5) / ty;
       return { screenX, floorY, ty };
     };
+
+    // Charcos orgánicos persistentes de sangre en el suelo
+    for (let bi = 0; bi < this.bloodPools.length; bi++) {
+      const bp = this.bloodPools[bi];
+      const p = project(bp.x, bp.y);
+      if (!p || p.ty > 16) continue;
+      const rx = clamp((bp.radius / p.ty) * (VIEW_HEIGHT * 0.88), 2, 42);
+      c.save();
+      c.translate(p.screenX, p.floorY);
+      c.scale(1, 0.3);
+      c.fillStyle = bp.color ? 'rgba(60, 140, 15, 0.55)' : 'rgba(92, 4, 14, 0.85)';
+      c.beginPath();
+      c.arc(0, 0, rx, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = bp.color ? 'rgba(112, 224, 0, 0.55)' : 'rgba(155, 10, 24, 0.8)';
+      c.beginPath();
+      c.arc(-rx * 0.22, rx * 0.14, rx * 0.65, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+
+    // Portales de teletransporte demoníaco activos
+    for (let ti = 0; ti < this.teleportPortals.length; ti++) {
+      const tp = this.teleportPortals[ti];
+      const p = project(tp.x, tp.y);
+      if (!p) continue;
+      const rx = clamp((1.1 / p.ty) * (VIEW_HEIGHT * 0.92), 5, WIDTH);
+      const pulse = 0.5 + 0.4 * Math.sin(now * 0.02);
+      c.save();
+      c.translate(p.screenX, p.floorY);
+      c.scale(1, 0.32);
+      c.fillStyle = `rgba(157, 78, 221, ${pulse * 0.48})`;
+      c.beginPath();
+      c.arc(0, 0, rx, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#00f5d4';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(0, 0, rx * (1 - clamp(tp.timer / tp.maxTimer, 0, 1) * 0.5), 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+
+    // Anillo del Nexus de Supervivencia cuando este objetivo está activo
+    if (this.survivalState && this.sectorObjective?.type === 'SURVIVAL_WAVES') {
+      const sv = this.survivalState;
+      const p = project(sv.cx, sv.cy);
+      if (p) {
+        const rx = clamp((1.8 / p.ty) * (VIEW_HEIGHT * 0.92), 6, WIDTH);
+        c.save();
+        c.translate(p.screenX, p.floorY);
+        c.scale(1, 0.32);
+        c.strokeStyle = sv.started ? '#ff4d00' : '#00f5d4';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(0, 0, rx, 0, Math.PI * 2);
+        c.stroke();
+        c.restore();
+      }
+    }
 
     // Círculo rúnico infernal bajo los Bosses que están parados en el centro de su sala
     for (const enemy of this.enemies) {
@@ -8601,25 +9489,54 @@ export class HellfallGame {
 
   drawObjectiveBanner(now) {
     const c = this.ctx;
+    const obj = this.sectorObjective || { type: 'BOSS_KEY' };
     let statusText;
     if (this.player.hasKey) {
-      statusText = '🔑 VE A EXIT';
+      if (obj.type === 'ESCAPE_COUNTDOWN' && obj.escapeStarted) {
+        statusText = `⏱️ ESCAPA: ${Math.max(0, obj.escapeTimer).toFixed(1)}s`;
+      } else {
+        statusText = '🔑 VE A EXIT';
+      }
     } else if (this.keyItem && this.keyItem.active) {
       statusText = '🔑 COGE LA LLAVE';
+    } else if (obj.type === 'GENERATORS') {
+      const aliveG = this.generators.filter((g) => g.alive).length;
+      statusText = `⚡ REACTORES: ${this.generators.length - aliveG}/${this.generators.length}`;
+    } else if (obj.type === 'SURVIVAL_WAVES') {
+      const sv = this.survivalState;
+      statusText = sv?.started
+        ? `⚔️ OLEADA ${sv.wave}/${sv.maxWaves} (${Math.max(0, Math.ceil(sv.waveTimer))}s)`
+        : '⚔️ ACTIVA NEXUS [E]';
+    } else if (obj.type === 'ESCORT_RESCUE') {
+      if (this.vip && !this.vip.alive) {
+        statusText = '💀 MATA AL PORTADOR';
+      } else if (this.vip?.rescued) {
+        statusText = `🧬 VIP ${Math.max(0, Math.round((this.vip.hp / this.vip.maxHp) * 100))}% -> EXIT`;
+      } else {
+        statusText = '🧬 RESCATA AL VIP [E]';
+      }
+    } else if (obj.type === 'ESCAPE_COUNTDOWN') {
+      statusText = '☢️ SABOTEA EL NÚCLEO [E]';
+    } else if (obj.type === 'THREE_KEYS') {
+      const rem = this.coloredKeys.filter((k) => k.active).length;
+      statusText = `🗝️ 3 LLAVES (${3 - rem}/3)`;
+    } else if (obj.type === 'FINAL_ICON') {
+      statusText = '👹 MATA AL ICON OF SIN';
     } else {
       statusText = '⚔️ MATA AL BOSS';
     }
     if (now < this.player.berserkUntil) statusText += ' · 🔥BERSERK';
 
+    const urgentCountdown = obj.type === 'ESCAPE_COUNTDOWN' && obj.escapeStarted && obj.escapeTimer <= 15;
     c.font = 'bold 6.5px monospace';
-    const objW = clamp(Math.ceil(c.measureText(statusText).width) + 12, 74, 152);
-    c.fillStyle = 'rgba(20, 7, 8, 0.85)';
+    const objW = clamp(Math.ceil(c.measureText(statusText).width) + 12, 74, 160);
+    c.fillStyle = urgentCountdown ? 'rgba(62, 6, 12, 0.92)' : 'rgba(20, 7, 8, 0.85)';
     c.fillRect(4, 4, objW, 14);
-    c.strokeStyle = this.player.hasKey ? '#ffbe0b' : '#ff4d00';
+    c.strokeStyle = urgentCountdown ? '#ff003c' : (this.player.hasKey ? '#ffbe0b' : '#ff4d00');
     c.lineWidth = 1;
     c.strokeRect(4, 4, objW, 14);
     c.textAlign = 'left';
-    c.fillStyle = this.player.hasKey ? '#fff3b0' : '#ffbe0b';
+    c.fillStyle = urgentCountdown ? '#ff8fa3' : (this.player.hasKey ? '#fff3b0' : '#ffbe0b');
     c.fillText(statusText, 9, 13.5, objW - 10);
 
     let evtW = 0;
@@ -8631,6 +9548,10 @@ export class HellfallGame {
       evtTxt = this.sectorEvent.short;
       evtStroke = dark ? '#00b4d8' : '#70e000';
       evtFill = dark ? '#caf0f8' : '#ccff33';
+    } else if (this.activeRouteMod) {
+      evtTxt = this.activeRouteMod.short;
+      evtStroke = this.activeRouteMod.color || '#ffbe0b';
+      evtFill = '#fff3b0';
     } else if (this.pressurePct > 0) {
       evtTxt = `AMENAZA +${this.pressurePct}%`;
       evtStroke = '#ff9e00';
@@ -8813,6 +9734,45 @@ export class HellfallGame {
       return;
     }
 
+    if (w === 5 && ws.rocket) {
+      if (this.muzzleFlash > 0.14) {
+        const fl = ws.rocket.flash;
+        c.drawImage(fl, cx - fl.width / 4, baseY - 94, fl.width / 2, fl.height / 2);
+      }
+      const sinceShot = now - this.shotStartTime;
+      const sp = sinceShot < 220 ? ws.rocket.fire : ws.rocket.idle;
+      c.drawImage(sp, cx - sp.width / 4, baseY - sp.height / 2, sp.width / 2, sp.height / 2);
+      this.drawPunchOverlay(c, now);
+      c.restore();
+      return;
+    }
+
+    if (w === 6 && ws.plasma) {
+      if (this.muzzleFlash > 0.1) {
+        const fl = ws.plasma.flash;
+        c.drawImage(fl, cx - fl.width / 4, baseY - 86, fl.width / 2, fl.height / 2);
+      }
+      const frame = Math.floor(now / 65) % 2;
+      const sp = ws.plasma.frames[frame];
+      c.drawImage(sp, cx - sp.width / 4, baseY - sp.height / 2, sp.width / 2, sp.height / 2);
+      this.drawPunchOverlay(c, now);
+      c.restore();
+      return;
+    }
+
+    if (w === 7 && ws.bfg) {
+      if (this.muzzleFlash > 0.1) {
+        const fl = ws.bfg.flash;
+        c.drawImage(fl, cx - fl.width / 4, baseY - 108, fl.width / 2, fl.height / 2);
+      }
+      const frame = Math.floor(now / 90) % 2;
+      const sp = ws.bfg.frames[frame];
+      c.drawImage(sp, cx - sp.width / 4, baseY - sp.height / 2, sp.width / 2, sp.height / 2);
+      this.drawPunchOverlay(c, now);
+      c.restore();
+      return;
+    }
+
     const sinceShot = now - this.shotStartTime;
     const isPumping = sinceShot > 110 && sinceShot < 390;
     if (this.muzzleFlash > 0.12) {
@@ -8900,6 +9860,93 @@ export class HellfallGame {
     chip(162, 'SECRETS', `${sVal}%`, '#70e000');
     chip(236, 'TIME', `${mins}:${secs}`, '#fff3b0');
 
+    const wrapLines = (text, maxChars = 20) => {
+      const words = String(text || '').split(' ');
+      const lines = [];
+      let cur = '';
+      for (const w of words) {
+        if ((cur + ' ' + w).trim().length <= maxChars) {
+          cur = (cur + ' ' + w).trim();
+        } else {
+          if (cur) lines.push(cur);
+          cur = w;
+        }
+      }
+      if (cur) lines.push(cur);
+      return lines.slice(0, 3);
+    };
+
+    if (im.stage === 'ROUTE' && im.routeChoices?.length > 0) {
+      const rChoices = im.routeChoices;
+      const count = rChoices.length;
+      const totalW = WIDTH - 24;
+      const gap = 6;
+      const cardW = Math.floor((totalW - gap * (count - 1)) / count);
+      const cardH = 74;
+      const cardY = 63;
+
+      c.textAlign = 'left';
+      c.font = 'bold 6.2px monospace';
+      c.fillStyle = '#00f5d4';
+      c.fillText(`ELIGE TU RUTA AL SECTOR ${this.level + 1} CON [1]..[${count}] O CLIC:`, 14, 57);
+
+      rChoices.forEach((rc, idx) => {
+        const cardX = 12 + idx * (cardW + gap);
+        const mod = rc.routeMod || { label: 'ESTÁNDAR', hint: '', color: '#ffbe0b', short: 'RUTA' };
+        const objMeta = CONFIG.OBJECTIVE_LABELS[rc.objectiveType || rc.objective] || CONFIG.OBJECTIVE_LABELS.BOSS_KEY;
+
+        c.fillStyle = 'rgba(20, 12, 18, 0.96)';
+        c.fillRect(cardX, cardY, cardW, cardH);
+        c.strokeStyle = mod.color || '#ffbe0b';
+        c.lineWidth = 1.5;
+        c.strokeRect(cardX + 0.5, cardY + 0.5, cardW - 1, cardH - 1);
+
+        // Barra superior puerta con tecla
+        c.fillStyle = mod.color || '#ffbe0b';
+        c.fillRect(cardX + 4, cardY + 4, 14, 10);
+        c.fillStyle = '#140708';
+        c.font = 'bold 6.5px monospace';
+        c.textAlign = 'center';
+        c.fillText(`[${idx + 1}]`, cardX + 11, cardY + 11.5);
+
+        c.textAlign = 'right';
+        c.font = 'bold 5.2px monospace';
+        c.fillStyle = mod.color || '#ffbe0b';
+        c.fillText(mod.short || 'PUERTA', cardX + cardW - 4, cardY + 11);
+
+        c.textAlign = 'left';
+        c.font = 'bold 5.8px monospace';
+        c.fillStyle = '#fff3b0';
+        c.fillText(mod.label, cardX + 4, cardY + 22, cardW - 8);
+
+        c.fillStyle = 'rgba(255, 190, 11, 0.25)';
+        c.fillRect(cardX + 4, cardY + 25, cardW - 8, 1);
+
+        c.font = 'bold 5.2px monospace';
+        c.fillStyle = '#00f5d4';
+        c.fillText(`MISION: ${objMeta.short}`, cardX + 4, cardY + 34, cardW - 8);
+        c.font = '5.1px monospace';
+        c.fillStyle = '#ffbe0b';
+        c.fillText(`EVENTO: ${rc.event?.short || 'LIMPIO'}`, cardX + 4, cardY + 43, cardW - 8);
+        c.fillStyle = '#d8d2c5';
+        const lines = wrapLines(mod.hint || rc.themeName || rc.theme?.name || '', count === 3 ? 21 : 30);
+        lines.slice(0, 2).forEach((ln, lIdx) => {
+          c.fillText(ln, cardX + 4, cardY + 52 + lIdx * 7.5, cardW - 8);
+        });
+
+        c.textAlign = 'center';
+        c.font = 'bold 5.4px monospace';
+        c.fillStyle = mod.color || '#70e000';
+        c.fillText(`CRUZAR PUERTA [${idx + 1}]`, cardX + cardW / 2, cardY + 70);
+      });
+
+      c.textAlign = 'center';
+      c.font = 'bold 6px monospace';
+      c.fillStyle = '#00f5d4';
+      c.fillText('SELECCIONA UNA PUERTA [1]-[3] O HAZ CLIC PARA DESPLEGAR', WIDTH / 2, 156);
+      return;
+    }
+
     const choices = im.upgradeChoices || [];
     const hasChoices = choices.length > 0;
     c.textAlign = 'left';
@@ -8924,22 +9971,6 @@ export class HellfallGame {
       c.fillStyle = canReroll ? '#fff3b0' : '#7a6a58';
       c.fillText(`[R] REROLL (${CONFIG.REROLL_COST}C)`, 261, 56.5);
     }
-
-    const wrapLines = (text, maxChars = 20) => {
-      const words = String(text || '').split(' ');
-      const lines = [];
-      let cur = '';
-      for (const w of words) {
-        if ((cur + ' ' + w).trim().length <= maxChars) {
-          cur = (cur + ' ' + w).trim();
-        } else {
-          if (cur) lines.push(cur);
-          cur = w;
-        }
-      }
-      if (cur) lines.push(cur);
-      return lines.slice(0, 3);
-    };
 
     if (hasChoices) {
       const count = choices.length;
@@ -9047,85 +10078,19 @@ export class HellfallGame {
   }
 
   drawDoomGuyFace(c, x, y, now = performance.now()) {
-    const px = (dx, dy, w, h, col) => {
-      c.fillStyle = col;
-      c.fillRect(x + dx, y + dy, w, h);
-    };
-
-    px(0, 0, 32, 30, '#140708');
-    px(1, 1, 30, 28, '#262626');
-
-    const hp = this.player.health;
-
-    if (hp <= 0) {
-      px(7, 4, 18, 16, '#d8d2c5');
-      px(9, 3, 14, 3, '#fff3b0');
-      px(9, 10, 5, 4, '#140708');
-      px(18, 10, 5, 4, '#140708');
-      px(15, 14, 2, 3, '#140708');
-      px(10, 20, 12, 6, '#b8b0a2');
-      for (let tx = 11; tx <= 19; tx += 2) px(tx, 21, 1, 4, '#140708');
-      return;
-    }
-
     const isHit = now - this.lastDamageTime < 450;
     const isGrin = now < this.evilGrinUntil;
     const isFiring = this.muzzleFlash > 0.1 || this.recoil > 0.35;
-
     const lookDir = isHit ? this.damageDir : (isFiring || isGrin ? 0 : (Math.floor(now / 850) % 3) - 1);
-
-    px(6, 2, 20, 6, '#4a2c18');
-    px(5, 4, 22, 4, '#633b20');
-
-    px(6, 7, 20, 17, '#e0ac8b');
-    px(8, 24, 16, 4, '#c68b67');
-    px(6, 14, 3, 8, '#c68b67');
-    px(23, 14, 3, 8, '#c68b67');
-
-    const browY = isHit ? 9 : (isGrin ? 9 : 10);
-    px(8, browY, 6, 2, '#3b2010');
-    px(18, browY, 6, 2, '#3b2010');
-
-    px(9, 12, 5, 3, '#ffffff');
-    px(18, 12, 5, 3, '#ffffff');
-    const eyeColor = isFiring || isGrin ? '#ffbe0b' : '#140708';
-    px(10 + lookDir, 12, 2, 3, eyeColor);
-    px(19 + lookDir, 12, 2, 3, eyeColor);
-
-    px(14, 13, 4, 5, '#c68b67');
-
-    if (isHit) {
-      px(12, 19, 8, 6, '#2b0909');
-      px(13, 20, 6, 2, '#fff3b0');
-    } else if (isGrin) {
-      px(8, 19, 16, 5, '#2b0909');
-      px(9, 19, 14, 2, '#fff3b0');
-      px(9, 22, 14, 2, '#fff3b0');
-    } else if (isFiring) {
-      px(9, 20, 14, 4, '#2b0909');
-      px(10, 21, 12, 2, '#fff3b0');
-    } else {
-      px(11, 21, 10, 2, '#6e3b2b');
-      px(12, 21, 8, 1, '#fff3b0');
-    }
-
-    if (hp < 80) {
-      px(7, 8, 3, 4, '#b80c09');
-      px(21, 17, 3, 3, '#780000');
-    }
-    if (hp < 60) {
-      px(13, 7, 3, 6, '#d90429');
-      px(22, 11, 3, 6, '#9e0000');
-    }
-    if (hp < 40) {
-      px(8, 15, 5, 7, '#a30000');
-      px(10, 23, 6, 4, '#d90429');
-    }
-    if (hp < 20) {
-      px(17, 16, 6, 8, '#d90429');
-      px(13, 22, 6, 6, '#780000');
-      px(6, 11, 3, 8, '#d90429');
-    }
+    drawCharacterFace(c, x, y, {
+      gender: this.characterGender,
+      hp: this.player.health,
+      isHit,
+      isGrin,
+      isFiring,
+      lookDir,
+      now
+    });
   }
 
   drawHUD(now = performance.now()) {
@@ -9162,10 +10127,15 @@ export class HellfallGame {
       c.fillText(text, cx, cy);
     };
 
-    if (this.player.weapon === 4) {
+    const wpn = this.player.weapon;
+    if (wpn === 4) {
       drawDoomNum('∞', 28, VIEW_HEIGHT + 17, '#ff4d00');
-    } else if (this.player.weapon === 3) {
+    } else if (wpn === 3) {
       drawDoomNum(`${Math.ceil(this.player.fuel)}%`, 28, VIEW_HEIGHT + 17, '#ff4d00');
+    } else if (wpn === 5) {
+      drawDoomNum(`🚀${this.player.rockets || 0}`, 28, VIEW_HEIGHT + 17, (this.player.rockets || 0) <= 2 ? '#ffbe0b' : '#ff4d00');
+    } else if (wpn === 6 || wpn === 7) {
+      drawDoomNum(`${this.player.cells || 0}`, 28, VIEW_HEIGHT + 17, wpn === 7 ? '#70e000' : '#00f5d4');
     } else {
       const totalAmmo = this.player.ammo + this.player.reserve;
       drawDoomNum(`${this.player.ammo}/${this.player.reserve}`, 28, VIEW_HEIGHT + 17, totalAmmo <= 6 ? '#ffbe0b' : '#d90429');
@@ -9174,16 +10144,18 @@ export class HellfallGame {
     const hpColor = this.player.health > 100 ? '#00f5d4' : (this.player.health > 30 ? '#d90429' : '#ffbe0b');
     drawDoomNum(`${Math.max(0, this.player.health)}%`, 84, VIEW_HEIGHT + 17, hpColor);
 
-    c.font = 'bold 8px monospace';
-    const chainsawUnlocked = this.player.kills >= CONFIG.CHAINSAW_UNLOCK_KILLS;
-    [1, 2, 3, 4].forEach((num, idx) => {
-      const bx = 113 + idx * 7;
-      const by = VIEW_HEIGHT + 6;
-      const locked = num === 4 && !chainsawUnlocked;
-      c.fillStyle = this.player.weapon === num ? '#ffbe0b' : (locked ? '#1b1214' : '#26282a');
-      c.fillRect(bx, by, 7, 11);
-      c.fillStyle = this.player.weapon === num ? '#140708' : (locked ? '#5a3a3a' : (num === 4 ? '#ff4d00' : '#adb5bd'));
-      c.fillText(String(num), bx + 3.5, by + 9);
+    c.font = 'bold 6.4px monospace';
+    [1, 2, 3, 4, 5, 6, 7].forEach((num, idx) => {
+      const row = idx < 4 ? 0 : 1;
+      const col = idx < 4 ? idx : idx - 4;
+      const bx = 114 + col * 7;
+      const by = VIEW_HEIGHT + 3 + row * 10;
+      const owned = this.isWeaponOwned(num);
+      const active = this.player.weapon === num;
+      c.fillStyle = active ? '#ffbe0b' : (!owned ? '#160d0f' : '#26282a');
+      c.fillRect(bx, by, 6.5, 8.5);
+      c.fillStyle = active ? '#140708' : (!owned ? '#4a3538' : (num === 7 ? '#70e000' : (num === 6 ? '#00f5d4' : (num >= 4 ? '#ff4d00' : '#adb5bd'))));
+      c.fillText(String(num), bx + 3.25, by + 6.5);
     });
 
     c.font = 'bold 13px monospace';
@@ -9191,7 +10163,13 @@ export class HellfallGame {
 
     c.fillStyle = '#140708';
     c.fillRect(236, VIEW_HEIGHT + 5, 12, 22);
-    if (this.player.hasKey) {
+    if (this.sectorObjective?.type === 'THREE_KEYS' && this.coloredKeys.length > 0) {
+      const kCols = { RED: '#ff003c', BLUE: '#00b4d8', YELLOW: '#ffbe0b' };
+      this.coloredKeys.forEach((ck, idx) => {
+        c.fillStyle = !ck.active ? kCols[ck.color] : '#2b2224';
+        c.fillRect(238, VIEW_HEIGHT + 7 + idx * 6.5, 8, 5);
+      });
+    } else if (this.player.hasKey) {
       c.fillStyle = '#ffbe0b';
       c.fillRect(239, VIEW_HEIGHT + 8, 6, 6);
       c.fillRect(241, VIEW_HEIGHT + 14, 2, 10);
@@ -9206,9 +10184,9 @@ export class HellfallGame {
       '#ffbe0b'
     );
 
-    c.font = 'bold 6.5px monospace';
+    c.font = 'bold 6.2px monospace';
     c.fillStyle = '#d8d2c5';
-    c.fillText('AMMO', 28, VIEW_HEIGHT + 28);
+    c.fillText(wpn === 5 ? 'ROCKETS' : (wpn >= 6 ? 'CELLS' : 'AMMO'), 28, VIEW_HEIGHT + 28);
     c.fillText('HEALTH', 84, VIEW_HEIGHT + 28);
     c.fillText('ARMS', 128, VIEW_HEIGHT + 28);
     c.fillText('ARMOR', 204, VIEW_HEIGHT + 28);
@@ -9224,49 +10202,49 @@ export class HellfallGame {
 
     c.strokeStyle = '#ffbe0b';
     c.lineWidth = 1;
-    c.strokeRect(14, 6, WIDTH - 28, VIEW_HEIGHT - 12);
+    c.strokeRect(14, 4, WIDTH - 28, VIEW_HEIGHT - 8);
 
     c.textAlign = 'center';
     c.fillStyle = '#ff4d00';
-    c.font = 'bold 12px monospace';
-    c.fillText('MERCADER DE ALMAS', WIDTH / 2, 19);
+    c.font = 'bold 11px monospace';
+    c.fillText('MERCADER DE ALMAS', WIDTH / 2, 15);
     c.fillStyle = '#ffbe0b';
-    c.font = 'bold 8px monospace';
-    c.fillText(`MONEDAS: ${this.player.coins || 0} · DAÑO ARSENAL: +${Math.round((this.weaponDamageBonus || 0) * 100)}%`, WIDTH / 2, 30);
+    c.font = 'bold 7px monospace';
+    c.fillText(`MONEDAS: ${this.player.coins || 0} · DAÑO ARSENAL: +${Math.round((this.weaponDamageBonus || 0) * 100)}%`, WIDTH / 2, 24);
 
     const items = this.merchantItems();
     items.forEach((item, idx) => {
-      const y = 35 + idx * 20;
+      const y = 27 + idx * 17;
       const affordable = (this.player.coins || 0) >= item.price && item.canBuy();
       c.fillStyle = affordable ? 'rgba(74, 37, 17, 0.92)' : 'rgba(30, 18, 18, 0.92)';
-      c.fillRect(26, y, WIDTH - 52, 18);
+      c.fillRect(24, y, WIDTH - 48, 15.5);
       c.strokeStyle = affordable ? '#ffbe0b' : '#4a2c30';
-      c.strokeRect(26, y, WIDTH - 52, 18);
+      c.strokeRect(24, y, WIDTH - 48, 15.5);
 
       c.textAlign = 'left';
-      c.font = 'bold 6.8px monospace';
+      c.font = 'bold 6.2px monospace';
       c.fillStyle = affordable ? '#fff3b0' : '#8d7b6a';
-      c.fillText(`[${idx + 1}] ${item.label}`, 31, y + 7.5);
-      c.font = '5.6px monospace';
+      c.fillText(`[${idx + 1}] ${item.label}`, 29, y + 6.5);
+      c.font = '5.1px monospace';
       c.fillStyle = affordable ? '#d8d2c5' : '#6b5a4a';
-      c.fillText(item.detail, 31, y + 14.5);
+      c.fillText(item.detail, 29, y + 12.8);
 
       c.textAlign = 'right';
-      c.font = 'bold 8.5px monospace';
+      c.font = 'bold 7.5px monospace';
       c.fillStyle = affordable ? '#ffbe0b' : '#6b5a4a';
-      c.fillText(`${item.price}`, WIDTH - 32, y + 12);
+      c.fillText(`${item.price}`, WIDTH - 30, y + 10.5);
     });
 
     c.textAlign = 'center';
-    c.font = 'bold 6.5px monospace';
+    c.font = 'bold 6px monospace';
     c.fillStyle = this.shopNotice.startsWith('FALTAN') || this.shopNotice.startsWith('YA ESTÁ')
       ? '#ff4d00'
       : '#70e000';
-    c.fillText(this.shopNotice, WIDTH / 2, 145);
+    c.fillText(this.shopNotice, WIDTH / 2, 151);
 
     c.fillStyle = '#adb5bd';
-    c.font = 'bold 6px monospace';
-    c.fillText('[1]-[5] COMPRAR · [E] O [ESC] SALIR', WIDTH / 2, 155);
+    c.font = 'bold 5.8px monospace';
+    c.fillText('[1]-[7] COMPRAR · [E] O [ESC] SALIR', WIDTH / 2, 160);
     c.restore();
   }
 
@@ -9337,6 +10315,26 @@ export class HellfallGame {
     for (const chest of this.chests) {
       const gx = Math.floor(chest.x), gy = Math.floor(chest.y);
       if (explored[gy]?.[gx]) mark(gx, gy, chest.opened ? '#3b4a2f' : '#ffbe0b', 2);
+    }
+    for (const wp of this.weaponPickups) {
+      const gx = Math.floor(wp.x), gy = Math.floor(wp.y);
+      if (wp.active && explored[gy]?.[gx]) mark(gx, gy, '#00f5d4', 3);
+    }
+    for (const gen of this.generators) {
+      const gx = Math.floor(gen.x), gy = Math.floor(gen.y);
+      if (gen.alive) mark(gx, gy, '#00b4d8', 3);
+    }
+    for (const ck of this.coloredKeys) {
+      if (ck.active) {
+        const kCols = { RED: '#ff003c', BLUE: '#00b4d8', YELLOW: '#ffbe0b' };
+        mark(Math.floor(ck.x), Math.floor(ck.y), kCols[ck.color] || '#ffd700', 3);
+      }
+    }
+    if (this.vip && this.vip.alive) {
+      mark(Math.floor(this.vip.x), Math.floor(this.vip.y), '#00f5d4', 3);
+    }
+    if (this.escapeCore && !this.escapeCore.triggered) {
+      mark(Math.floor(this.escapeCore.x), Math.floor(this.escapeCore.y), '#ff0055', 3);
     }
     for (const p of this.powerups) {
       const gx = Math.floor(p.x), gy = Math.floor(p.y);

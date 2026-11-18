@@ -1,11 +1,16 @@
 import { api, ApiError } from '../api/apiClient.js';
-import { HellfallGame } from '../game/game.js';
+import { HellfallGame, globalDoomMusic } from '../game/game.js';
+import { DoomFireEffect } from '../game/fireMenu.js';
+import { CHARACTERS, drawCharacterFace } from '../game/portrait.js';
 
 const $ = (selector) => document.querySelector(selector);
 const views = ['home', 'login', 'register', 'game', 'profile', 'admin'];
 let currentUser = null;
 let game = null;
 let noticeTimer = null;
+let selectedGender = 'male';
+let fireEffect = null;
+let portraitFrameId = null;
 
 function escapeText(value) { return String(value ?? ''); }
 
@@ -39,7 +44,11 @@ function hideRegisterBox() {
 
 function showView(name) {
   if (!views.includes(name)) name = 'home';
-  if (name !== 'game' && game?.running && !game.paused && !game.finished) game.pause();
+  if (name !== 'game') {
+    stopMetalMenuEffects();
+    if (game?.running && !game.paused && !game.finished) game.pause();
+    globalDoomMusic.setPaused(true);
+  }
   if (name === 'game' && !currentUser) {
     showNotice('Inicia sesión o crea una cuenta para acceder al juego.', 'error');
     name = 'login';
@@ -207,10 +216,10 @@ function renderCombatReport(result) {
   const statsGrid = document.createElement('div');
   statsGrid.className = 'combat-stats-row';
   const statItems = [
+    { label: 'SLAYER', value: (result.characterName || CHARACTERS[selectedGender]?.name || 'MARCUS VANE').split(' ')[0] },
     { label: 'PUNTOS', value: String(points) },
     { label: 'BAJAS', value: String(result.kills ?? 0) },
-    { label: 'SECTOR', value: `${result.level || 1}/10` },
-    { label: 'SIERRA / FUEGO', value: `${stats.chainsawKills || 0} / ${stats.flamerKills || 0}` },
+    { label: 'SECTOR / JEFES', value: `${result.level || 1}/10 (${stats.bossKills || 0}J)` },
     { label: 'SECRETOS', value: `${stats.secretsFound || 0}/${stats.secretsTotal || 1}` }
   ];
   statItems.forEach((st) => {
@@ -251,25 +260,118 @@ function renderCombatReport(result) {
   container.classList.remove('hidden');
 }
 
-function prepareGameView() {
-  $('#game-status').textContent = 'READY';
-  $('#game-status-text').textContent = 'A la espera del despliegue';
-  $('#game-message').textContent = 'Revisa los comandos y objetivos antes de iniciar la misión.';
-  if ($('#overlay-eyebrow')) $('#overlay-eyebrow').textContent = 'HELL INVASION ACTIVE';
+function stopMetalMenuEffects() {
+  if (fireEffect) {
+    fireEffect.stop();
+  }
+  if (portraitFrameId) {
+    cancelAnimationFrame(portraitFrameId);
+    portraitFrameId = null;
+  }
+}
+
+function startMetalMenuEffects() {
+  stopMetalMenuEffects();
+  const fireCanvas = $('#metal-fire-canvas');
+  if (fireCanvas) {
+    if (!fireEffect || fireEffect.canvas !== fireCanvas) {
+      fireEffect = new DoomFireEffect(fireCanvas);
+    }
+    fireEffect.start();
+  }
+
+  const renderPortraits = (now) => {
+    const metalMenu = $('#metal-menu');
+    if (!metalMenu || metalMenu.classList.contains('hidden')) {
+      portraitFrameId = null;
+      return;
+    }
+    document.querySelectorAll('.char-portrait-canvas').forEach((cv) => {
+      const gender = cv.dataset.portrait === 'female' ? 'female' : 'male';
+      const ctx = cv.getContext('2d');
+      if (!ctx) return;
+      const isSelected = selectedGender === gender;
+      const lookDir = isSelected ? 0 : ((Math.floor(now / 1100 + (gender === 'female' ? 1 : 0)) % 3) - 1);
+      ctx.imageSmoothingEnabled = false;
+      ctx.save();
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.scale(2, 2);
+      drawCharacterFace(ctx, 0, 0, {
+        gender,
+        hp: 100,
+        isHit: false,
+        isGrin: isSelected && Math.floor(now / 1600) % 3 === 0,
+        isFiring: false,
+        lookDir,
+        now
+      });
+      ctx.restore();
+    });
+    portraitFrameId = requestAnimationFrame(renderPortraits);
+  };
+  portraitFrameId = requestAnimationFrame(renderPortraits);
+}
+
+function selectCharacter(gender) {
+  selectedGender = gender === 'female' ? 'female' : 'male';
+  document.querySelectorAll('.char-card').forEach((card) => {
+    const isSel = card.dataset.character === selectedGender;
+    card.classList.toggle('selected', isSel);
+    card.setAttribute('aria-checked', isSel ? 'true' : 'false');
+  });
+  const charMeta = CHARACTERS[selectedGender];
+  if (charMeta) {
+    $('#game-status-text').textContent = `Slayer seleccionado: ${charMeta.callsign}`;
+  }
+}
+
+function showMetalMenu() {
+  globalDoomMusic.stopMatch();
+  $('#game-status').textContent = 'SELECT SLAYER';
+  $('#game-status-text').textContent = `Slayer seleccionado: ${CHARACTERS[selectedGender]?.callsign || 'MARCUS VANE'}`;
+  $('#game-message').textContent = 'Elige tu personaje (Hombre o Mujer) y pulsa INICIAR PARTIDA para ver los comandos.';
+  if ($('#metal-menu')) $('#metal-menu').classList.remove('hidden');
+  if ($('#briefing-box')) $('#briefing-box').classList.add('hidden');
+  if ($('#combat-report')) $('#combat-report').classList.add('hidden');
+  $('#game-overlay').classList.remove('hidden');
+  selectCharacter(selectedGender);
+  startMetalMenuEffects();
+}
+
+function showMissionBriefing() {
+  stopMetalMenuEffects();
+  const charMeta = CHARACTERS[selectedGender] || CHARACTERS.male;
+  if ($('#metal-menu')) $('#metal-menu').classList.add('hidden');
+  if ($('#briefing-box')) $('#briefing-box').classList.remove('hidden');
+  $('#game-status').textContent = 'BRIEFING';
+  $('#game-status-text').textContent = `${charMeta.callsign} listo para el despliegue`;
+  $('#game-message').textContent = 'Revisa los comandos y mecánicas. Pulsa INICIAR MISIÓN para desplegar (la música empezará en combate).';
+  if ($('#overlay-eyebrow')) $('#overlay-eyebrow').textContent = `SLAYER: ${charMeta.callsign} // HELL INVASION ACTIVE`;
   if ($('#overlay-title')) $('#overlay-title').innerHTML = 'SECTOR <span>01 / 10</span>';
-  if ($('#overlay-desc')) $('#overlay-desc').textContent = 'El infierno ha tomado el complejo. Revisa el manual táctico de comandos y objetivos antes de desplegarte.';
+  if ($('#overlay-desc')) {
+    $('#overlay-desc').textContent = `${charMeta.name} aguarda órdenes. Revisa el manual táctico de comandos y misiones antes de entrar.`;
+  }
   if ($('#mission-briefing')) $('#mission-briefing').classList.remove('hidden');
   if ($('#combat-report')) $('#combat-report').classList.add('hidden');
+  if ($('#back-to-metal-menu')) $('#back-to-metal-menu').classList.remove('hidden');
   $('#game-overlay').classList.remove('hidden');
   $('#start-game').textContent = 'INICIAR MISIÓN';
 }
 
+function prepareGameView() {
+  showMetalMenu();
+}
+
 function startGame() {
   if (!currentUser) return showView('login');
+  stopMetalMenuEffects();
   $('#game-overlay').classList.add('hidden');
+  if ($('#metal-menu')) $('#metal-menu').classList.add('hidden');
+  if ($('#briefing-box')) $('#briefing-box').classList.add('hidden');
   if ($('#combat-report')) $('#combat-report').classList.add('hidden');
+  const charMeta = CHARACTERS[selectedGender] || CHARACTERS.male;
   $('#game-status').textContent = 'IN PROGRESS';
-  $('#game-status-text').textContent = 'Agente desplegado';
+  $('#game-status-text').textContent = `${charMeta.callsign} desplegado`;
   $('#game-message').textContent = 'Elimina a los hostiles. Haz clic en el juego para capturar el ratón.';
   if (!game) {
     game = new HellfallGame($('#game-canvas'), {
@@ -279,22 +381,26 @@ function startGame() {
       },
       onFinish: async (result) => {
         $('#game-overlay').classList.remove('hidden');
+        if ($('#metal-menu')) $('#metal-menu').classList.add('hidden');
+        if ($('#briefing-box')) $('#briefing-box').classList.remove('hidden');
         if ($('#mission-briefing')) $('#mission-briefing').classList.add('hidden');
+        if ($('#back-to-metal-menu')) $('#back-to-metal-menu').classList.remove('hidden');
         $('#start-game').textContent = 'VOLVER A JUGAR';
         $('#game-status-text').textContent = result.won ? 'Sector despejado' : 'MUERTO — Agente caído';
         const bonus = result.bonusPoints || 0;
         const points = result.points ?? (result.kills * 100 + bonus);
         const medalNames = (result.medals || []).map((m) => m.name).join(' · ');
+        const slayerName = result.characterName || charMeta.callsign;
         if ($('#overlay-eyebrow')) {
-          $('#overlay-eyebrow').textContent = result.won ? 'LOS 10 SECTORES CONQUISTADOS' : 'AGENTE CAÍDO EN COMBATE';
+          $('#overlay-eyebrow').textContent = result.won ? `${slayerName} // 10 SECTORES CONQUISTADOS` : `${slayerName} // CAÍDO EN COMBATE`;
         }
         if ($('#overlay-title')) {
           $('#overlay-title').innerHTML = result.won ? '¡VICTORIA <span>INFERNAL!</span>' : '<span>MUERTO</span>';
         }
         if ($('#overlay-desc')) {
           $('#overlay-desc').textContent = result.won
-            ? `Has sobrevivido al infierno con ${points} puntos y ${result.kills} bajas.`
-            : `Has caído en el Sector ${result.level || 1}. Bajas: ${result.kills} · Puntos: ${points}.`;
+            ? `${slayerName} ha sobrevivido al infierno con ${points} puntos y ${result.kills} bajas.`
+            : `${slayerName} cayó en el Sector ${result.level || 1}. Bajas: ${result.kills} · Puntos: ${points}.`;
         }
         renderCombatReport(result);
         $('#game-message').textContent = `Bajas: ${result.kills} · Puntos: ${points}${bonus > 0 ? ` (bonus combo: +${bonus})` : ''}${medalNames ? ` · Títulos: ${medalNames}` : ''}.`;
@@ -306,12 +412,17 @@ function startGame() {
       }
     });
   }
-  game.start({ showBriefing: true });
+  game.start({ showBriefing: true, character: selectedGender });
 }
 
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => showView(button.dataset.view));
 }
+document.querySelectorAll('.char-card').forEach((card) => {
+  card.addEventListener('click', () => selectCharacter(card.dataset.character));
+});
+$('#metal-start-btn')?.addEventListener('click', showMissionBriefing);
+$('#back-to-metal-menu')?.addEventListener('click', showMetalMenu);
 $('#nav-profile').addEventListener('click', () => showView('profile'));
 $('#nav-admin').addEventListener('click', () => showView('admin'));
 $('#home-play').addEventListener('click', () => currentUser ? showView('game') : showView('login'));
@@ -425,19 +536,28 @@ function handleUrlParams() {
   const confirmed = params.get('confirmed');
   const oauth = params.get('oauth');
   const error = params.get('error');
+  const terminalLine = $('#login-terminal-line');
+  const errorMessages = {
+    oauth_not_configured: 'El inicio de sesión con Google no está configurado en el servidor.',
+    oauth_cancelled: 'Has cancelado el inicio de sesión con Google.',
+    oauth_token_failed: 'No se pudo verificar la credencial con Google. Inténtalo de nuevo.',
+    oauth_profile_failed: 'No se pudo obtener tu perfil desde Google.',
+    oauth_account_inactive: 'Tu cuenta está desactivada o ha sido eliminada.',
+    oauth_server_error: 'Error interno al autenticar con Google.',
+    invalid_confirmation_token: 'El enlace de activación no es válido o ha caducado.'
+  };
 
   if (confirmed === 'success') {
-    showNotice('¡Cuenta verificada y activada correctamente! Ya estás conectado.', 'success', 12000);
+    showNotice('¡Cuenta confirmada y activada con éxito! Ya puedes iniciar sesión.', 'success', 12000);
   } else if (oauth === 'success') {
-    showNotice('Sesión iniciada con Google correctamente.', 'success', 8000);
-  } else if (error === 'invalid_confirmation_token') {
-    showNotice('El enlace de activación no es válido o ha caducado.', 'error', 10000);
+    showNotice('Sesión iniciada correctamente con Google.', 'success', 8000);
   } else if (error) {
-    showNotice('No se pudo completar la autenticación.', 'error', 8000);
+    showNotice(errorMessages[error] || 'No se pudo completar la autenticación.', 'error', 10000);
+    if (terminalLine) terminalLine.textContent = `> ERROR: ${error.toUpperCase()}`;
   }
 
   if (confirmed || oauth || error) {
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
 
