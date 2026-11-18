@@ -26,7 +26,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:?Configura ADMIN_EMAIL en .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Configura ADMIN_PASSWORD en .env}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      MAX_SCORE_KILLS: ${MAX_SCORE_KILLS:-100}
+      MAX_SCORE_KILLS: ${MAX_SCORE_KILLS:-100000}
     depends_on:
       postgres:
         condition: service_healthy

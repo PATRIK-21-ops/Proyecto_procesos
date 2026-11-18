@@ -7,7 +7,7 @@ import { badRequest, unauthorized } from '../utils/AppError.js';
  * un juego competitivo requeriría validar la partida en un servidor autoritativo.
  */
 export class ScoreService {
-  constructor(scoreRepository, { maxKills = 500 } = {}) {
+  constructor(scoreRepository, { maxKills = 100000 } = {}) {
     this.scoreRepository = scoreRepository;
     this.maxKills = maxKills;
   }
@@ -15,7 +15,7 @@ export class ScoreService {
   async submit(actor, { kills, durationMs, bonusPoints = 0 }) {
     if (!actor?.id) throw unauthorized();
     if (!Number.isInteger(kills) || kills < 0 || kills > this.maxKills) {
-      throw badRequest(`Las bajas deben ser un entero entre 0 y ${this.maxKills}.`, 'INVALID_KILLS');
+      throw badRequest(`Las bajas deben ser un entero no negativo (máx. ${this.maxKills}).`, 'INVALID_KILLS');
     }
     if (!Number.isInteger(durationMs) || durationMs < 1000 || durationMs > 24 * 60 * 60 * 1000) {
       throw badRequest('La duración de la partida no es válida.', 'INVALID_DURATION');
