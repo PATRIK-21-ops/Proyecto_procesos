@@ -194,10 +194,72 @@ async function loadAdminUsers() {
   }
 }
 
+function renderCombatReport(result) {
+  const container = $('#combat-report');
+  if (!container) return;
+  container.replaceChildren();
+
+  const bonus = result.bonusPoints || 0;
+  const points = result.points ?? (result.kills * 100 + bonus);
+  const stats = result.runStats || {};
+  const medals = Array.isArray(result.medals) ? result.medals : [];
+
+  const statsGrid = document.createElement('div');
+  statsGrid.className = 'combat-stats-row';
+  const statItems = [
+    { label: 'PUNTOS', value: String(points) },
+    { label: 'BAJAS', value: String(result.kills ?? 0) },
+    { label: 'SECTOR', value: `${result.level || 1}/10` },
+    { label: 'SIERRA / FUEGO', value: `${stats.chainsawKills || 0} / ${stats.flamerKills || 0}` },
+    { label: 'SECRETOS', value: `${stats.secretsFound || 0}/${stats.secretsTotal || 1}` }
+  ];
+  statItems.forEach((st) => {
+    const cell = document.createElement('div');
+    cell.className = 'combat-stat-chip';
+    const small = document.createElement('span');
+    small.textContent = st.label;
+    const strong = document.createElement('strong');
+    strong.textContent = st.value;
+    cell.append(small, strong);
+    statsGrid.append(cell);
+  });
+  container.append(statsGrid);
+
+  if (medals.length > 0) {
+    const title = document.createElement('p');
+    title.className = 'medal-heading';
+    title.textContent = 'MEDALLAS Y TÍTULOS DE COMBATE';
+    container.append(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'medal-grid';
+    medals.forEach((m) => {
+      const badge = document.createElement('div');
+      badge.className = 'medal-badge';
+      if (m.color) badge.style.borderColor = m.color;
+      const name = document.createElement('strong');
+      name.textContent = `${m.icon || '★'} ${m.name}`;
+      if (m.color) name.style.color = m.color;
+      const desc = document.createElement('small');
+      desc.textContent = m.desc || '';
+      badge.append(name, desc);
+      grid.append(badge);
+    });
+    container.append(grid);
+  }
+
+  container.classList.remove('hidden');
+}
+
 function prepareGameView() {
   $('#game-status').textContent = 'READY';
   $('#game-status-text').textContent = 'A la espera del despliegue';
-  $('#game-message').textContent = 'Inicia la misión cuando estés preparado.';
+  $('#game-message').textContent = 'Revisa los comandos y objetivos antes de iniciar la misión.';
+  if ($('#overlay-eyebrow')) $('#overlay-eyebrow').textContent = 'HELL INVASION ACTIVE';
+  if ($('#overlay-title')) $('#overlay-title').innerHTML = 'SECTOR <span>01 / 10</span>';
+  if ($('#overlay-desc')) $('#overlay-desc').textContent = 'El infierno ha tomado el complejo. Revisa el manual táctico de comandos y objetivos antes de desplegarte.';
+  if ($('#mission-briefing')) $('#mission-briefing').classList.remove('hidden');
+  if ($('#combat-report')) $('#combat-report').classList.add('hidden');
   $('#game-overlay').classList.remove('hidden');
   $('#start-game').textContent = 'INICIAR MISIÓN';
 }
@@ -205,6 +267,7 @@ function prepareGameView() {
 function startGame() {
   if (!currentUser) return showView('login');
   $('#game-overlay').classList.add('hidden');
+  if ($('#combat-report')) $('#combat-report').classList.add('hidden');
   $('#game-status').textContent = 'IN PROGRESS';
   $('#game-status-text').textContent = 'Agente desplegado';
   $('#game-message').textContent = 'Elimina a los hostiles. Haz clic en el juego para capturar el ratón.';
@@ -216,12 +279,26 @@ function startGame() {
       },
       onFinish: async (result) => {
         $('#game-overlay').classList.remove('hidden');
+        if ($('#mission-briefing')) $('#mission-briefing').classList.add('hidden');
         $('#start-game').textContent = 'VOLVER A JUGAR';
-        $('#game-status-text').textContent = result.won ? 'Sector despejado' : 'Agente caído';
+        $('#game-status-text').textContent = result.won ? 'Sector despejado' : 'MUERTO — Agente caído';
         const bonus = result.bonusPoints || 0;
         const points = result.points ?? (result.kills * 100 + bonus);
-        $('#game-message').textContent = `Bajas: ${result.kills} · Puntos: ${points}${bonus > 0 ? ` (bonus combo: +${bonus})` : ''}.`;
-        $('#game-status').textContent = result.won ? 'CLEAR' : 'KIA';
+        const medalNames = (result.medals || []).map((m) => m.name).join(' · ');
+        if ($('#overlay-eyebrow')) {
+          $('#overlay-eyebrow').textContent = result.won ? 'LOS 10 SECTORES CONQUISTADOS' : 'AGENTE CAÍDO EN COMBATE';
+        }
+        if ($('#overlay-title')) {
+          $('#overlay-title').innerHTML = result.won ? '¡VICTORIA <span>INFERNAL!</span>' : '<span>MUERTO</span>';
+        }
+        if ($('#overlay-desc')) {
+          $('#overlay-desc').textContent = result.won
+            ? `Has sobrevivido al infierno con ${points} puntos y ${result.kills} bajas.`
+            : `Has caído en el Sector ${result.level || 1}. Bajas: ${result.kills} · Puntos: ${points}.`;
+        }
+        renderCombatReport(result);
+        $('#game-message').textContent = `Bajas: ${result.kills} · Puntos: ${points}${bonus > 0 ? ` (bonus combo: +${bonus})` : ''}${medalNames ? ` · Títulos: ${medalNames}` : ''}.`;
+        $('#game-status').textContent = result.won ? 'CLEAR' : 'MUERTO';
         try {
           const saved = await api.submitScore({ kills: result.kills, bonusPoints: bonus, durationMs: result.durationMs });
           showNotice(`Partida guardada. Puntuación: ${saved.score.points}.`, 'success');
@@ -229,7 +306,7 @@ function startGame() {
       }
     });
   }
-  game.start();
+  game.start({ showBriefing: true });
 }
 
 for (const button of document.querySelectorAll('[data-view]')) {
