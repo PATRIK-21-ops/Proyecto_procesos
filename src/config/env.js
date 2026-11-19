@@ -17,8 +17,8 @@ export function loadConfig(env = process.env) {
   if (production && (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD)) {
     throw new Error('En producción debes configurar ADMIN_EMAIL y ADMIN_PASSWORD para disponer de una cuenta administradora.');
   }
-  const parsedMaxKills = Number.parseInt(env.MAX_SCORE_KILLS || '100', 10);
-  const maxScoreKills = Number.isSafeInteger(parsedMaxKills) && parsedMaxKills > 0 ? Math.min(parsedMaxKills, 1000) : 100;
+  const parsedMaxKills = Number.parseInt(env.MAX_SCORE_KILLS || '100000', 10);
+  const maxScoreKills = Number.isSafeInteger(parsedMaxKills) && parsedMaxKills > 0 ? Math.min(parsedMaxKills, 500000) : 100000;
   const parsedPort = Number.parseInt(env.PORT || '8080', 10);
   const port = Number.isSafeInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 8080;
   return {
