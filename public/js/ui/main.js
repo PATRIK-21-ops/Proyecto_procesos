@@ -362,7 +362,8 @@ function prepareGameView() {
   showMetalMenu();
 }
 
-function startGame() {
+// challenge = { date, seed } en el desafío diario; null en una partida normal (mapas aleatorios).
+function startGame({ challenge = null } = {}) {
   if (!currentUser) return showView('login');
   stopMetalMenuEffects();
   $('#game-overlay').classList.add('hidden');
@@ -412,7 +413,19 @@ function startGame() {
       }
     });
   }
-  game.start({ showBriefing: true, character: selectedGender });
+  if (challenge) {
+    $('#game-status-text').textContent = `${charMeta.callsign} desplegado // DESAFÍO DIARIO ${challenge.date}`;
+    $('#game-message').textContent = `Desafío diario del ${challenge.date}: hoy todos jugáis los mismos sectores. Haz clic en el juego para capturar el ratón.`;
+  }
+  game.start({ showBriefing: true, character: selectedGender, seed: challenge ? challenge.seed : null });
+}
+
+async function startDailyChallenge() {
+  if (!currentUser) return showView('login');
+  try {
+    const challenge = await api.challengeToday();
+    startGame({ challenge });
+  } catch (error) { showApiError(error); }
 }
 
 for (const button of document.querySelectorAll('[data-view]')) {
@@ -426,7 +439,8 @@ $('#back-to-metal-menu')?.addEventListener('click', showMetalMenu);
 $('#nav-profile').addEventListener('click', () => showView('profile'));
 $('#nav-admin').addEventListener('click', () => showView('admin'));
 $('#home-play').addEventListener('click', () => currentUser ? showView('game') : showView('login'));
-$('#start-game').addEventListener('click', startGame);
+$('#start-game').addEventListener('click', () => startGame());
+$('#start-daily')?.addEventListener('click', startDailyChallenge);
 $('#refresh-users').addEventListener('click', loadAdminUsers);
 
 // REGISTRO CON AVISO EN PANTALLA

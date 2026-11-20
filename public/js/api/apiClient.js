@@ -54,5 +54,6 @@ export const api = {
   deleteUser: async (id) => { const result = await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }); csrfToken = null; return result; },
   topScores: (limit = 10) => request(`/scores/top?limit=${encodeURIComponent(limit)}`),
   myScores: () => request('/scores/mine'),
-  submitScore: (data) => request('/scores', { method: 'POST', body: data })
+  submitScore: (data) => request('/scores', { method: 'POST', body: data }),
+  challengeToday: () => request('/challenge/today')
 };
