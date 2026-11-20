@@ -6,15 +6,19 @@ import helmet from 'helmet';
 import { authRoutes } from './api/authRoutes.js';
 import { userRoutes } from './api/userRoutes.js';
 import { scoreRoutes } from './api/scoreRoutes.js';
+import { challengeRoutes } from './api/challengeRoutes.js';
+import { ChallengeService } from './services/challengeService.js';
 import { verificarDominioEmail } from './services/userService.js';
 import { AppError } from './utils/AppError.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '../public');
 
-export function createApp({ userService, scoreService, sessionStore, sessionSecret, production = false, logger, cookieName = 'hellfall.sid' }) {
+export function createApp({ userService, scoreService, challengeService, sessionStore, sessionSecret, production = false, logger, cookieName = 'hellfall.sid' }) {
   if (!userService || !scoreService || !logger) throw new Error('createApp necesita userService, scoreService y logger.');
   if (!sessionSecret) throw new Error('Falta SESSION_SECRET.');
+  // Si no se pasa, la semilla del desafío diario se firma con el secreto de sesión.
+  const desafio = challengeService || new ChallengeService({ secret: sessionSecret });
 
   const app = express();
   if (production) app.set('trust proxy', 1);
@@ -67,6 +71,7 @@ export function createApp({ userService, scoreService, sessionStore, sessionSecr
   app.use('/api/auth', authRoutes({ userService, logger, cookieName }));
   app.use('/api/users', userRoutes({ userService, logger, cookieName }));
   app.use('/api/scores', scoreRoutes({ userService, scoreService, logger }));
+  app.use('/api/challenge', challengeRoutes({ challengeService: desafio }));
   app.use('/static', express.static(publicDir, { index: false, maxAge: production ? '1h' : 0 }));
   app.use(express.static(publicDir, { index: 'index.html', maxAge: production ? '1h' : 0 }));
 
