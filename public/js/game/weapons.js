@@ -554,3 +554,18 @@ export function makeCoreSprite(triggered = false, frame = 0) {
     px(c, 4, 20, 28, 3, '#adb5bd');
   });
 }
+
+/** Granada táctica EMP/fragmentación [G] que rebota y rompe escudos. */
+export function makeGrenadeSprite(frame = 0) {
+  return mkCanvas(20, 20, (c) => {
+    const p = frame % 2 === 0;
+    px(c, 7, 3, 6, 3, '#adb5bd');
+    px(c, 8, 2, 4, 2, '#f8f9fa');
+    px(c, 12, 2, 3, 2, '#ffbe0b');
+    frameRect(c, 5, 6, 10, 11, '#0b0c0e', '#2b2d42');
+    px(c, 6, 7, 8, 2, '#495057');
+    px(c, 5, 10, 10, 3, p ? '#00f5d4' : '#ff4d00');
+    px(c, 8, 10, 4, 3, p ? '#e0fbfc' : '#ffbe0b');
+    px(c, 6, 14, 8, 2, '#1a1d20');
+  });
+}

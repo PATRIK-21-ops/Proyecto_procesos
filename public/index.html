@@ -4,9 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#120d10">
-  <meta name="description" content="HELLFALL: el infierno ha tomado el sector. FPS retro estilo DOOM.">
+  <meta name="description" content="HELLFALL: FPS retro en el navegador. 10 sectores infernales, 7 armas + Granadas EMP [G], altares roguelite y desafío diario.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="HELLFALL // Brutal Pixel Siege">
+  <meta property="og:description" content="Juega gratis en tu navegador: 10 sectores infernales, 7 armas + Granada EMP [G], jefes con fases y ranking diario por nickname.">
+  <meta property="og:image" content="/og-cover.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>HELLFALL // Brutal Pixel Siege</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/universe.css">
   <script type="module" src="/js/ui/main.js"></script>
 </head>
 <body>
@@ -17,10 +24,16 @@
   <header class="topbar">
     <a class="brand" href="#home" data-view="home" aria-label="HELLFALL, inicio">
       <span class="brand-mark">HF</span>
-      <span><strong>HELLFALL</strong><small>INFERNAL SIEGE // 199X</small></span>
+      <span><strong>HELLFALL</strong><small>EDICIÓN SLAYER // 10 SECTORES</small></span>
     </a>
+    <nav class="topbar-nav" aria-label="Secciones principales">
+      <button class="nav-tab active" type="button" data-view="home">INICIO</button>
+      <button class="nav-tab" type="button" data-view="lore" data-lore-tab="origin">HISTORIA DE SLAYER</button>
+      <button class="nav-tab" type="button" data-view="guide">COMANDOS Y ARSENAL</button>
+      <button class="nav-tab" type="button" data-view="ranking">RANKING</button>
+      <button class="nav-tab nav-play-tab" type="button" data-view="game">JUGAR</button>
+    </nav>
     <div class="topbar-right">
-      <button class="button button-ghost button-small" id="music-toggle" type="button">🔊 BSO: ON</button>
       <span id="session-badge" class="session-badge">INVITADO</span>
       <button class="button button-ghost button-small hidden" id="nav-profile" type="button">MI CUENTA</button>
       <button class="button button-ghost button-small hidden" id="nav-admin" type="button">ADMIN</button>
@@ -32,26 +45,28 @@
 
     <section id="view-home" class="view hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> ALERTA ROJA // 10 SECTORES ROGUELITE INFERNALES</p>
-        <h1>HELL<span>FALL</span><em>INFERNAL LABYRINTH</em></h1>
-        <p class="hero-lede">El infierno ha tomado el sector. Enfréntate a un bestiario implacable dirigido por una IA táctica y emboscadas ocultas. Empieza con tu Super Escopeta, descubre el Lanzacohetes, Rifle de Plasma y BFG-9000 en el mapa, elige rutas entre sectores, sobrevive a misiones variadas y derrota al Icon of Sin.</p>
+        <p class="eyebrow"><span class="status-dot"></span> GRATIS · EN EL NAVEGADOR · PC (TECLADO Y RATÓN)</p>
+        <h1>HELL<span>FALL</span><em>EL ÚNICO SLAYER</em></h1>
+        <p class="hero-lede">Ábrete paso por 10 sectores infernales como Slayer, rompe escudos enemigos con Granadas EMP [G] y derrota al Icon of Sin.</p>
         <div class="hero-actions">
-          <button class="button button-primary" id="home-play" type="button">▶ ENTRAR AL INFIERNO</button>
+          <button class="button button-primary" id="home-play" type="button">▶ DESPLEGAR SLAYER</button>
           <button class="button button-secondary" data-view="login" type="button">INICIAR SESIÓN</button>
           <button class="button button-ghost" data-view="register" type="button">CREAR CUENTA</button>
         </div>
-        <div class="spec-row">
-          <div><span class="spec-label">ARSENAL [1-7]</span><strong>ESCOPETA · CHAINGUN · FLAMER · SIERRA · COHETES · PLASMA · BFG</strong></div>
-          <div><span class="spec-label">MISIONES & RUTAS</span><strong>6 OBJETIVOS · PUERTAS ROGUELITE · DIRECTOR IA</strong></div>
-          <div><span class="spec-label">BESTIARIO</span><strong class="green">15 ENEMIGOS · 6 JEFES ÚNICOS · FASES FINALES</strong></div>
+        <div class="home-stats-strip" id="home-stats-strip" aria-label="Estadísticas de la comunidad">
+          <div class="stat-chip"><span>Partidas</span><strong id="stat-matches">—</strong></div>
+          <div class="stat-chip"><span>Bajas totales</span><strong id="stat-kills">—</strong></div>
+          <div class="stat-chip"><span>Jugadores</span><strong id="stat-players">—</strong></div>
+          <div class="stat-chip"><span>Sector máx.</span><strong id="stat-sector">—</strong></div>
         </div>
       </div>
 
-      <!-- Vista previa en Pixel-Art 320x200 fiel al motor estilo DOOM -->
-      <div class="hero-art" aria-label="Vista previa en primera persona del laberinto infernal estilo DOOM">
-        <div class="art-topline"><span>CAM 01 // SECTOR 10 · ICON OF SIN</span><span>REC ●</span></div>
+      <!-- Vista previa real en bucle 2.5D + fallback SVG si reduced-motion -->
+      <div class="hero-art" aria-label="Vista previa en primera persona de HELLFALL">
+        <div class="art-topline"><span>CAM 01 // GAMEPLAY 2.5D EN VIVO</span><button class="art-mode-btn" id="hero-demo-toggle" type="button">🖼️ VER ARTE</button></div>
         <div class="pixel-scene" style="padding: 0; overflow: hidden; background: #140505;">
-          <svg viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="none" shape-rendering="crispEdges" style="display: block; width: 100%; height="100%;">
+          <canvas id="hero-demo-canvas" width="320" height="200" aria-label="Bucle de gameplay real de HELLFALL"></canvas>
+          <svg id="hero-svg-scene" class="hidden" viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="none" shape-rendering="crispEdges" style="display: block; width: 100%; height: 100%;">
             <defs>
               <linearGradient id="hellSky" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="#220306"/>
@@ -341,28 +356,307 @@
         <div class="art-caption"><span>FIG 01. // EL INFIERNO HA TOMADO EL SECTOR</span><span>WARNING: ICON OF SIN · PHASE III</span></div>
       </div>
 
-      <div class="home-lower panel">
-        <div>
-          <p class="eyebrow">OPERATION BRIEFING</p>
-          <h2>COMBATE TÁCTICO Y PROGRESIÓN ROGUELITE</h2>
-          <p>Elige entre Marcus Vane o Valeria Karn y ábrete paso por 10 sectores únicos. Encuentra el Lanzacohetes [5], Rifle de Plasma [6] y BFG-9000 [7] en el terreno, destruye reactores, escolta científicos VIP, cruza puertas con recompensas al estilo roguelite y sobrevive al Director de IA.</p>
+      <div class="home-band">
+        <article class="daily-card" id="daily-challenge-card">
+          <div>
+            <p class="eyebrow">DESAFÍO DE HOY // MISMA SEMILLA PARA TODOS</p>
+            <h2>COMPITE EN EL SECTOR DIARIO</h2>
+            <div class="daily-meta-row">
+              <span class="micro-tag" id="daily-home-date">HOY</span>
+              <span class="countdown-pill" id="daily-countdown">⏱ Reinicia en --:--:--</span>
+            </div>
+            <p>Mismos mapas, eventos y enemigos iniciales para cada jugador hoy. Registra tu marca diaria antes de medianoche.</p>
+            <div style="margin-top: 0.85rem;">
+              <button class="button button-primary" id="home-daily-play" type="button">🔥 JUGAR DESAFÍO DE HOY</button>
+            </div>
+          </div>
+          <div class="daily-top3-box">
+            <h3>🏆 TOP 3 DEL DESAFÍO DE HOY</h3>
+            <ul class="daily-top3-list" id="home-daily-top3">
+              <li class="daily-top3-item"><span>Cargando podio diario…</span><span>—</span></li>
+            </ul>
+          </div>
+        </article>
+
+        <div class="quick-controls-strip" aria-label="Controles rápidos de teclado y ratón">
+          <div class="quick-keys">
+            <span class="quick-key"><span class="keycap-badge">WASD</span> Mover</span>
+            <span class="quick-key"><span class="keycap-badge">RATÓN</span> Apuntar y disparar</span>
+            <span class="quick-key"><span class="keycap-badge">G</span> Granada EMP</span>
+            <span class="quick-key"><span class="keycap-badge">V</span> Puñetazo</span>
+            <span class="quick-key"><span class="keycap-badge">C</span> Dash</span>
+          </div>
+          <span class="pc-only-badge">🖥️ Se juega en PC con teclado y ratón</span>
         </div>
-        <div class="brief-stats">
-          <div><strong>WASD</strong><span>MOVIMIENTO</span></div>
-          <div><strong>1 · · · 7</strong><span>ARSENAL DESCUBRIBLE</span></div>
-          <div><strong>E</strong><span>VIP / NÚCLEO / GLORY</span></div>
-          <div><strong>PUERTAS 1-3</strong><span>RUTAS ROGUELITE</span></div>
+
+        <div class="features-grid" aria-label="Características principales">
+          <div class="feature-tile"><span class="feature-icon">🔫</span><strong>7 Armas + EMP [G]</strong><small>Super Escopeta, Sierra, Plasma, BFG y granadas que rompen escudos.</small></div>
+          <div class="feature-tile"><span class="feature-icon">🌋</span><strong>10 Sectores</strong><small>Plantillas procedurales y paletas temáticas progresivas.</small></div>
+          <div class="feature-tile"><span class="feature-icon">⚡</span><strong>Altares Roguelite</strong><small>Elige mejoras dinámicas y rutas entre sectores.</small></div>
+          <div class="feature-tile"><span class="feature-icon">⚖️</span><strong>Mercader de Almas</strong><small>Canjea monedas por munición, granadas [8] y +12% daño.</small></div>
+          <div class="feature-tile"><span class="feature-icon">🚪</span><strong>Salas Secretas</strong><small>Dos compartimentos ocultos y botín extra por sector.</small></div>
+          <div class="feature-tile"><span class="feature-icon">💀</span><strong>Jefes con Fases</strong><small>Arenas con activación táctica e Icon of Sin en 3 fases.</small></div>
+        </div>
+      </div>
+
+      <div class="home-band depth-split">
+        <div class="panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">ADELANTO DEL BESTIARIO VOXEL</p><h2>AMENAZAS PRINCIPALES</h2></div>
+            <button class="button button-ghost button-small" type="button" data-view="lore" data-lore-tab="threats">VER CÓDICE →</button>
+          </div>
+          <div class="bestiary-mini-grid">
+            <div class="bestiary-card">
+              <canvas class="bestiary-sprite-canvas" width="92" height="96" data-species="SHIELD" aria-label="Retrato pixel-art de Centinela del Escudo"></canvas>
+              <strong>Centinela del Escudo</strong>
+              <small>Rómpele la guardia con Granada EMP [G], puñetazo [V] o 6 impactos.</small>
+            </div>
+            <div class="bestiary-card">
+              <canvas class="bestiary-sprite-canvas" width="92" height="96" data-species="REVENANT" aria-label="Retrato pixel-art de Revenant"></canvas>
+              <strong>Revenant</strong>
+              <small>Dispara misiles teledirigidos. Usa esquinas o tu Dash [C].</small>
+            </div>
+            <div class="bestiary-card">
+              <canvas class="bestiary-sprite-canvas" width="92" height="96" data-species="SUMMONER" aria-label="Retrato pixel-art de Invocador"></canvas>
+              <strong>Invocador</strong>
+              <small>Revive demonios caídos hasta ser eliminado con Plasma o fuego.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="eyebrow">ESCAPARATE DE MEDALLAS Y NOVEDADES</p>
+          <h3>TÍTULOS ARCADE Y CHANGELOG</h3>
+          <div class="medals-showcase">
+            <div class="medal-showcase-chip"><strong>🪚 Carnicero</strong><small>+15 bajas con motosierra</small></div>
+            <div class="medal-showcase-chip"><strong>🛡️ Intocable</strong><small>Sector completado sin daño</small></div>
+            <div class="medal-showcase-chip"><strong>🗝️ Cazatesoros</strong><small>Todas las salas secretas abiertas</small></div>
+            <div class="medal-showcase-chip"><strong>🔥 Pirómano</strong><small>Maestría con Lanzallamas</small></div>
+          </div>
+          <ul class="changelog-list">
+            <li><strong>Granadas EMP [G] y Escudo:</strong> rebote en muros y ruptura de guardia [G]/[V].</li>
+            <li><strong>Nicknames en BD:</strong> nickname obligatorio al guardar y ranking público sin emails.</li>
+            <li><strong>Portal Universo SLAYER:</strong> historia, mejores marcas por periodo y botón Atrás nativo.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="universe-hub panel">
+        <div class="section-heading">
+          <div><p class="eyebrow">UNIVERSO HELLFALL</p><h2>EXPLORA MÁS ANTES DE ENTRAR</h2></div>
+          <button class="button button-ghost button-small" type="button" data-view="lore" data-lore-tab="origin">📖 HISTORIA DE SLAYER →</button>
+        </div>
+        <div class="universe-cards">
+          <button type="button" class="universe-card" data-view="lore" data-lore-tab="origin">
+            <div>
+              <span class="universe-card-tag">01 // HISTORIA</span>
+              <h3>CRÓNICA DE SLAYER</h3>
+              <p>Descubre el origen de Slayer, los diez sectores y cómo derrotar al Centinela del Escudo.</p>
+            </div>
+            <span class="universe-card-cta">EXPLORAR →</span>
+          </button>
+          <button type="button" class="universe-card" data-view="guide">
+            <div>
+              <span class="universe-card-tag">02 // GUÍA</span>
+              <h3>COMANDOS Y ARSENAL</h3>
+              <p>Consulta todas las teclas de combate, armas [1-7], Granadas EMP [G] y mejoras.</p>
+            </div>
+            <span class="universe-card-cta">VER GUÍA →</span>
+          </button>
+          <button type="button" class="universe-card" data-view="ranking">
+            <div>
+              <span class="universe-card-tag">03 // HALL OF FAME</span>
+              <h3>RANKING GLOBAL</h3>
+              <p>Clasificación por periodo (Hoy, Semana e Histórico) con tu posición destacada.</p>
+            </div>
+            <span class="universe-card-cta">VER RANKING →</span>
+          </button>
         </div>
       </div>
 
       <section class="panel leaderboard-panel">
-        <div class="section-heading"><div><p class="eyebrow">HALL OF FAME</p><h2>MEJORES PUNTUACIONES</h2></div><span class="micro-tag">GLOBAL // TOP 10</span></div>
-        <div id="home-leaderboard" class="leaderboard-empty">Aún no hay puntuaciones. Sé el primero en entrar.</div>
+        <div class="ranking-toolbar">
+          <div><p class="eyebrow">CLASIFICACIÓN OFICIAL (&gt; 0 PTS)</p><h2>MEJORES PUNTUACIONES</h2></div>
+          <div class="ranking-tabs" role="tablist" aria-label="Filtrar ranking por periodo">
+            <button class="rank-tab-btn" type="button" data-ranking-period="day">Hoy</button>
+            <button class="rank-tab-btn" type="button" data-ranking-period="week">Semana</button>
+            <button class="rank-tab-btn active" type="button" data-ranking-period="all">Histórico</button>
+          </div>
+          <button class="button button-ghost button-small" type="button" data-view="ranking">VER TABLA COMPLETA →</button>
+        </div>
+        <div id="home-rank-status" class="viewer-rank-banner hidden"></div>
+        <div id="home-leaderboard" class="leaderboard-empty">Aún no hay puntuaciones registradas en este periodo.</div>
       </section>
     </section>
 
+    <section id="view-lore" class="view hidden">
+      <div class="section-topbar">
+        <button class="button button-ghost button-small back-nav-btn" type="button">← VOLVER</button>
+        <span class="breadcrumb-trail" id="lore-breadcrumb">HELLFALL / UNIVERSO / EL ORIGEN DE SLAYER</span>
+      </div>
+      <div class="lore-hero-banner">
+        <div class="slayer-emblem-frame">
+          <canvas width="32" height="30" data-portrait="slayer" aria-hidden="true"></canvas>
+        </div>
+        <div class="lore-hero-copy">
+          <p class="eyebrow">DOSSIER CLASIFICADO // ÚNICO PROTAGONISTA</p>
+          <h2>SLAYER · CENTINELA DEL ABISMO</h2>
+          <p>Forjado tras el colapso de Phobos y Deimos. Sin escuadrones de apoyo y sin retirada posible: cada demonio abatido alimenta su arsenal.</p>
+          <blockquote>«No me encerraron con las legiones del infierno. Encerraron al infierno conmigo.»</blockquote>
+        </div>
+      </div>
+
+      <div class="lore-tabs" role="tablist" aria-label="Capítulos de la historia">
+        <button class="lore-tab-btn active" type="button" data-lore-tab="origin" role="tab" aria-selected="true">I. EL ORIGEN DE SLAYER</button>
+        <button class="lore-tab-btn" type="button" data-lore-tab="sectors" role="tab" aria-selected="false">II. LOS DIEZ SECTORES</button>
+        <button class="lore-tab-btn" type="button" data-lore-tab="threats" role="tab" aria-selected="false">III. BESTIARIO Y ESCUDOS</button>
+      </div>
+
+      <div id="lore-panel-origin" class="lore-panel">
+        <div class="lore-grid">
+          <article class="lore-card">
+            <span class="lore-chip">ARCHIVO 01 // PHOBOS</span>
+            <h3>EL PROTOCOLO QUEBRADO</h3>
+            <p>Cuando los reactores de teletransporte de la UAC perforaron la corteza dimensional, todo el destacamento de guardia cayó en cuestión de minutos. Solo un soldado ignoró la orden de evacuación para sellar manualmente la esclusa central desde dentro.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">ARCHIVO 02 // ARMADURA PRETOR</span>
+            <h3>LA FORJA DEL CAZADOR</h3>
+            <p>Su traje no funciona con baterías convencionales: absorbe calor residual, blindaje enemigo y energía argenta mediante ejecuciones a quemarropa (Glory Kill). Cuanto más frenético es el combate, más letal se vuelve el propio Slayer.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">ARCHIVO 03 // CRUZADA SIN FIN</span>
+            <h3>JURAMENTO DE LOS DIEZ CÍRCULOS</h3>
+            <p>Con la Super Escopeta como única constante y un cinturón de granadas EMP experimentales [G], Slayer desciende hoy hacia diez sectores mutantes hasta alcanzar el corazón viviente del Icon of Sin en el Sector 10.</p>
+          </article>
+        </div>
+        <div class="lore-chapter-footer">
+          <button class="button button-ghost button-small back-nav-btn" type="button">← VOLVER ATRÁS</button>
+          <button class="button button-secondary" type="button" data-lore-tab="sectors">SIGUIENTE: LOS DIEZ SECTORES →</button>
+        </div>
+      </div>
+
+      <div id="lore-panel-sectors" class="lore-panel hidden">
+        <div class="lore-grid">
+          <article class="lore-card">
+            <span class="lore-chip">SECTORES 01 - 03</span>
+            <h3>COMPLEJO DE CONTENCIÓN</h3>
+            <p>Pasillos industriales inundados de magma y laboratorios de Phobos donde los Imps y Cacodemonios tienden emboscadas en cruces oscuros. Aquí se esconden las primeras salas secretas y pedestales de Chaingun.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">SECTORES 04 - 07</span>
+            <h3>FUNDICIÓN Y ABISMO TÓXICO</h3>
+            <p>Sectores con lluvia de meteoros, niebla densa y reactores inestables. Deberás destruir generadores, escoltar personal VIP o recuperar las tres llaves cromáticas mientras el Mercader de Almas ofrece templados de arma.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">SECTORES 08 - 10</span>
+            <h3>TRONO DEL ICON OF SIN</h3>
+            <p>Cámara final protegida por cuatro Pilones de Alma invulnerables desde lejos. En el Sector 10, cada jefe activa un patrón distinto hasta liberar las tres fases finales contra el Icon of Sin.</p>
+          </article>
+        </div>
+        <div class="lore-chapter-footer">
+          <button class="button button-ghost" type="button" data-lore-tab="origin">← CAPÍTULO ANTERIOR</button>
+          <button class="button button-secondary" type="button" data-lore-tab="threats">SIGUIENTE: BESTIARIO Y ESCUDOS →</button>
+        </div>
+      </div>
+
+      <div id="lore-panel-threats" class="lore-panel hidden">
+        <div class="lore-grid">
+          <article class="lore-card featured">
+            <span class="lore-chip counter">CÓMO DERROTARLO // CONTRAATAQUE</span>
+            <h3>CENTINELA DEL ESCUDO</h3>
+            <p>Su escudo frontal desvía gran parte del fuego balístico, pero tiene cuatro debilidades claras: <strong>1) Pulsa [G]</strong> para lanzar una <strong>Granada EMP</strong> que rebota en paredes y rompe su guardia durante 3.4s; <strong>2) Puñetazo [V]</strong> para quebrar el escudo cuerpo a cuerpo; <strong>3) Sobrecarga</strong> disparando 6 impactos seguidos o haciendo daño residual; <strong>4) Flanqueo / Plasma [6] / Fuego [3]</strong>.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">AMENAZA ARCANO-INFERNAL</span>
+            <h3>INVOCADOR Y REVENANT</h3>
+            <p>El Invocador revive cadáveres caídos si no lo priorizas rápido o lo calcinas con el Lanzallamas [3]. Los Revenant disparan misiles teledirigidos: usa esquinas y tu Dash [C] para estrellar sus cohetes.</p>
+          </article>
+          <article class="lore-card">
+            <span class="lore-chip">ARENA FIN DE SECTOR</span>
+            <h3>JEFES Y FASE 3</h3>
+            <p>Al entrar en la sala del jefe esperan inmóviles hasta detectar movimiento. Mantén distancia de sus embestidas, usa barriles explosivos y guarda tu BFG-9000 [7] o Granadas EMP [G] para abrir hueco.</p>
+          </article>
+        </div>
+        <div class="lore-chapter-footer">
+          <button class="button button-ghost" type="button" data-lore-tab="sectors">← CAPÍTULO ANTERIOR</button>
+          <button class="button button-primary" type="button" data-view="game">▶ DESPLEGAR EN EL SECTOR 01</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-guide" class="view hidden">
+      <div class="section-topbar">
+        <button class="button button-ghost button-small back-nav-btn" type="button">← VOLVER</button>
+        <span class="breadcrumb-trail">HELLFALL / MANUAL TÁCTICO / COMANDOS Y ARSENAL</span>
+      </div>
+      <div class="section-heading">
+        <div><p class="eyebrow">CAMPO DE ENTRENAMIENTO SLAYER</p><h2>COMANDOS, ARMAS Y REGLAS DE SECTOR</h2></div>
+        <button class="button button-primary" type="button" data-view="game">▶ IR AL JUEGO</button>
+      </div>
+      <div class="guide-grid">
+        <div class="panel">
+          <p class="eyebrow">CONTROL DEL COMBATE</p>
+          <h3>TECLADO Y RATÓN</h3>
+          <ul class="keycap-list">
+            <li class="keycap-item"><span>Moverse y deslizarse por el mapa</span><span class="keycap-badge">W A S D</span></li>
+            <li class="keycap-item"><span>Correr a máxima velocidad</span><span class="keycap-badge">SHIFT</span></li>
+            <li class="keycap-item"><span>Apuntar libremente (clic en pantalla)</span><span class="keycap-badge">RATÓN</span></li>
+            <li class="keycap-item"><span>Disparar arma equipada / Recargar</span><span class="keycap-badge">CLIC IZQ · R</span></li>
+            <li class="keycap-item"><span>Lanzar Granada EMP (rebota y rompe escudos)</span><span class="keycap-badge">G</span></li>
+            <li class="keycap-item"><span>Puñetazo rompe-guardia y empuje</span><span class="keycap-badge">V / CLIC DER</span></li>
+            <li class="keycap-item"><span>Interactuar (Puertas, Cofres, Mercader, VIP)</span><span class="keycap-badge">E</span></li>
+            <li class="keycap-item"><span>Dash táctico · Automapa · Pantalla Completa</span><span class="keycap-badge">C · TAB · F</span></li>
+          </ul>
+        </div>
+        <div class="panel">
+          <p class="eyebrow">ARSENAL DE SLAYER</p>
+          <h3>ARMAS [1]-[7] Y GRANADAS [G]</h3>
+          <ul class="keycap-list">
+            <li class="keycap-item"><span>Super Escopeta (7 perdigones letales)</span><span class="keycap-badge">[1]</span></li>
+            <li class="keycap-item"><span>Chaingun pesada de fuego continuo</span><span class="keycap-badge">[2]</span></li>
+            <li class="keycap-item"><span>Lanzallamas incinerador de hordas</span><span class="keycap-badge">[3]</span></li>
+            <li class="keycap-item"><span>Motosierra (recupera gasolina y +bajas)</span><span class="keycap-badge">[4]</span></li>
+            <li class="keycap-item"><span>Lanzacohetes de alto impacto en área</span><span class="keycap-badge">[5]</span></li>
+            <li class="keycap-item"><span>Rifle de Plasma · BFG-9000 devastadora</span><span class="keycap-badge">[6] · [7]</span></li>
+            <li class="keycap-item"><span>Granada EMP (quiebra escudos + aturde)</span><span class="keycap-badge">[G]</span></li>
+          </ul>
+        </div>
+        <div class="panel">
+          <p class="eyebrow">PROGRESIÓN Y MEDALLAS</p>
+          <h3>ROGUELITE Y TÍTULOS ARCADE</h3>
+          <ul class="keycap-list">
+            <li class="keycap-item"><span><strong>Altar de Mejoras:</strong> elige poderes dinámicos tras limpiar sector</span><span class="keycap-badge">SECTOR+</span></li>
+            <li class="keycap-item"><span><strong>Puertas 1-3:</strong> escoge Tesoro, Mercader, Élite o Arcano</span><span class="keycap-badge">RUTAS</span></li>
+            <li class="keycap-item"><span><strong>Mercader [E]:</strong> compra granadas [8], munición y +12% daño</span><span class="keycap-badge">MONEDAS</span></li>
+            <li class="keycap-item"><span><strong>Medallas:</strong> Carnicero, Intocable, Cazatesoros y Pirómano</span><span class="keycap-badge">FIN</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-ranking" class="view hidden">
+      <div class="section-topbar">
+        <button class="button button-ghost button-small back-nav-btn" type="button">← VOLVER</button>
+        <span class="breadcrumb-trail">HELLFALL / RANKING GLOBAL</span>
+      </div>
+      <div class="panel leaderboard-panel">
+        <div class="ranking-toolbar">
+          <div><p class="eyebrow">SALÓN DE LOS INMORTALES</p><h2>CLASIFICACIÓN TOP 10 (&gt; 0 PTS)</h2></div>
+          <div class="ranking-tabs" role="tablist" aria-label="Filtrar ranking completo por periodo">
+            <button class="rank-tab-btn" type="button" data-ranking-period="day">Hoy</button>
+            <button class="rank-tab-btn" type="button" data-ranking-period="week">Semana</button>
+            <button class="rank-tab-btn active" type="button" data-ranking-period="all">Histórico</button>
+          </div>
+          <span class="privacy-banner">🏷️ Ranking público por Nickname</span>
+        </div>
+        <div id="ranking-viewer-status" class="viewer-rank-banner hidden"></div>
+        <div id="ranking-leaderboard" class="leaderboard-empty">Cargando mejores marcas de Slayer…</div>
+      </div>
+    </section>
+
     <section id="view-login" class="view auth-layout hidden">
-      <div class="auth-copy"><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>INFIERNO.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line" id="login-terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
+      <div class="auth-copy"><button class="button button-ghost button-small back-nav-btn" type="button" style="margin-bottom:0.85rem;">← VOLVER</button><p class="eyebrow">AUTH // 01</p><h1>VUELVE AL<br><span>INFIERNO.</span></h1><p>Identifícate para guardar tu progreso y comparar puntuaciones.</p><div class="terminal-line" id="login-terminal-line">&gt; WAITING FOR CREDENTIALS<span class="blink">_</span></div></div>
       <form id="login-form" class="panel form-panel">
         <p class="eyebrow">AUTENTICACIÓN LOCAL Y OAUTH</p><h2>INICIAR SESIÓN</h2>
         <label for="login-email">CORREO ELECTRÓNICO</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
@@ -374,7 +668,7 @@
     </section>
 
     <section id="view-register" class="view auth-layout hidden">
-      <div class="auth-copy"><p class="eyebrow">CREATE USER // 02</p><h1>RECLUTA<br><span>NUEVO.</span></h1><p>Abre una cuenta para acceder al juego y guardar las marcas de tus partidas.</p><div class="terminal-line">&gt; ENCRYPTING PASSWORD WITH BCRYPT<span class="blink">_</span></div></div>
+      <div class="auth-copy"><button class="button button-ghost button-small back-nav-btn" type="button" style="margin-bottom:0.85rem;">← VOLVER</button><p class="eyebrow">CREATE USER // 02</p><h1>RECLUTA<br><span>NUEVO.</span></h1><p>Abre una cuenta para acceder al juego y guardar las marcas de tus partidas.</p><div class="terminal-line">&gt; ENCRYPTING PASSWORD WITH BCRYPT<span class="blink">_</span></div></div>
       <form id="register-form" class="panel form-panel">
         <p class="eyebrow">ALTA DE USUARIO</p><h2>CREAR CUENTA</h2>
         <label for="register-email">CORREO ELECTRÓNICO</label><input id="register-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="marine@sector.net">
@@ -393,55 +687,118 @@
     </section>
 
     <section id="view-game" class="view game-layout hidden">
-      <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // 10 SECTORS</p><h2>INFERNAL LABYRINTH PROTOCOL</h2></div><span class="micro-tag" id="game-status">READY</span></div>
+      <div class="section-heading game-heading"><div><p class="eyebrow">LIVE FEED // 10 SECTORS</p><h2>INFERNAL LABYRINTH PROTOCOL</h2></div><div class="game-heading-actions"><button class="button button-ghost button-small" id="music-toggle" type="button">🔊 BSO: ON</button><span class="micro-tag" id="game-status">READY</span></div></div>
       <div class="game-frame">
         <div class="game-screen-wrap"><canvas id="game-canvas" width="320" height="200" aria-label="Juego de disparos en primera persona. Haz clic para capturar el ratón."></canvas><div id="game-overlay" class="game-overlay">
           <div id="metal-menu" class="metal-menu">
             <canvas id="metal-fire-canvas" width="160" height="100" aria-hidden="true"></canvas>
             <div class="metal-menu-inner">
-              <p class="metal-kicker">⚔️ IRON &amp; BRIMSTONE // SECTOR SELECT ⚔️</p>
+              <p class="metal-kicker">⚔️ DESPLIEGUE // PROTOCOLO PHOBOS ⚔️</p>
               <h2 class="metal-title">HELLFALL</h2>
-              <p class="metal-subtitle">ELIGE TU PERSONAJE ANTES DEL DESPLIEGUE</p>
-              <div class="character-grid" id="character-select-grid" role="radiogroup" aria-label="Selección de personaje">
-                <button type="button" class="char-card selected" data-character="male" role="radio" aria-checked="true">
-                  <canvas class="char-portrait-canvas" width="64" height="60" data-portrait="male" aria-hidden="true"></canvas>
-                  <div class="char-info">
-                    <span class="char-gender">HOMBRE · SLAYER</span>
-                    <strong class="char-name">MARCUS &quot;IRONJAW&quot; VANE</strong>
-                    <small class="char-trait">Asalto Pesado UAC · Voz grave</small>
-                  </div>
-                </button>
-                <button type="button" class="char-card" data-character="female" role="radio" aria-checked="false">
-                  <canvas class="char-portrait-canvas" width="64" height="60" data-portrait="female" aria-hidden="true"></canvas>
-                  <div class="char-info">
-                    <span class="char-gender">MUJER · VALKYRIE</span>
-                    <strong class="char-name">VALERIA &quot;HELLFIRE&quot; KARN</strong>
-                    <small class="char-trait">Comando Élite UAC · Reflejos letales</small>
-                  </div>
-                </button>
+              <div class="slayer-deploy-card">
+                <canvas class="char-portrait-canvas slayer-deploy-portrait" width="64" height="60" data-portrait="slayer" aria-hidden="true"></canvas>
+                <div class="slayer-deploy-meta">
+                  <small>PROTAGONISTA ÚNICO</small>
+                  <strong>SLAYER · CENTINELA DEL ABISMO</strong>
+                  <p>Sobrevive a 10 sectores hasta derrotar al Icon of Sin.</p>
+                </div>
               </div>
-              <button class="button metal-start-btn" id="metal-start-btn" type="button">🔥 INICIAR PARTIDA 🔥</button>
+              <form id="metal-nickname-form" class="metal-nickname-bar">
+                <label for="metal-nickname-input">TU NICKNAME PARA EL RANKING (PUEDES CAMBIARLO)</label>
+                <div class="nickname-inline-row">
+                  <input id="metal-nickname-input" type="text" minlength="2" maxlength="24" placeholder="Tu nickname">
+                  <button class="button button-secondary button-small" type="submit">ACTUALIZAR ALIAS</button>
+                </div>
+              </form>
+              <div class="metal-actions-row">
+                <button class="button metal-start-btn" id="metal-start-btn" type="button">🔥 INICIAR PARTIDA 🔥</button>
+                <button class="button button-secondary" id="metal-daily-btn" type="button" title="Mismos mapas y semilla para todos hoy">🔥 DESAFÍO DIARIO</button>
+              </div>
             </div>
           </div>
-          <div class="overlay-box hidden" id="briefing-box"><p class="eyebrow" id="overlay-eyebrow">HELL INVASION ACTIVE</p><h2 id="overlay-title">SECTOR <span>01 / 10</span></h2><p id="overlay-desc">El infierno ha tomado el complejo. Revisa el manual táctico de comandos y objetivos antes de desplegarte.</p><div id="mission-briefing" class="mission-briefing"><div class="briefing-col"><h3>⌨️ COMANDOS DE COMBATE</h3><ul><li><strong>W A S D + Ratón</strong><span>Moverse y apuntar (<b>Shift</b> correr)</span></li><li><strong>Clic Izq / Espacio</strong><span>Disparar arma · <b>R</b> Recargar</span></li><li><strong>[1]-[4] · [5]-[7]</strong><span>Escopeta, Chaingun, Flamer, Sierra · <b>Cohetes, Plasma y BFG-9000</b></span></li><li><strong>V / Clic Derecho</strong><span>Puñetazo (empuja y estampa contra muros)</span></li><li><strong>E</strong><span>Puertas, cofres, VIP, Reactores, Núcleo y <b>Glory Kill</b></span></li><li><strong>C · TAB · F · ESC</strong><span>Dash · Automapa · Pantalla completa · Pausa</span></li></ul></div><div class="briefing-col"><h3>🔥 QUÉ PUEDES HACER EN EL JUEGO</h3><ul><li><strong>1. Encuentra Arsenal [1-7]</strong><span>Empiezas con Super Escopeta: busca pedestales de armas, cofres UAC y <b>2 salas secretas</b> por sector.</span></li><li><strong>2. Mercader y Rutas</strong><span>Compra munición pesada o <b>+12% daño</b>, y elige entre <b>3 Puertas Roguelite</b> tras cada sector.</span></li><li><strong>3. Misiones y Director IA</strong><span>Reactores, oleadas, escolta VIP, cuenta atrás y 3 llaves con emboscadas ocultas y teletransportes.</span></li><li><strong>4. Jefes y Sector 10</strong><span>Cada Jefe tiene patrón propio. En el Sector 10 derrota al <b>ICON OF SIN</b> en 3 fases.</span></li></ul></div></div><div id="combat-report" class="combat-report hidden"></div><div class="overlay-actions-row"><button class="button button-primary" id="start-game" type="button">INICIAR MISIÓN</button><button class="button button-secondary" id="start-daily" type="button" title="El mismo plan de sectores y los mismos mapas para todos los jugadores hoy">🔥 DESAFÍO DIARIO</button><button class="button button-ghost button-small" id="back-to-metal-menu" type="button">← CAMBIAR PERSONAJE</button></div><small>Pulsa [H] en cualquier momento dentro de la partida para volver a ver este manual</small></div>
+          <div class="overlay-box hidden" id="briefing-box">
+            <p class="eyebrow" id="overlay-eyebrow">INFORME DE COMBATE</p>
+            <h2 id="overlay-title"><span>MUERTO</span></h2>
+            <p id="overlay-desc">Registra tu nickname para guardar esta partida en el ranking.</p>
+            <div id="combat-report" class="combat-report hidden"></div>
+            <form id="score-submit-form" class="score-submit-box">
+              <label for="score-nickname-input">INTRODUCE TU NICKNAME PARA GUARDAR PUNTUACIÓN</label>
+              <div class="score-submit-controls">
+                <input id="score-nickname-input" name="nickname" type="text" required minlength="2" maxlength="24" placeholder="Ej. DoomSlayer99">
+                <button class="button button-primary" id="save-score-btn" type="submit">💾 GUARDAR PUNTUACIÓN</button>
+              </div>
+              <small id="score-save-feedback" class="score-save-feedback">Tu nickname se guardará en la base de datos y aparecerá en el ranking público.</small>
+            </form>
+            <div class="overlay-actions-row">
+              <button class="button button-primary" id="start-game" type="button">VOLVER A JUGAR</button>
+              <button class="button button-secondary" id="start-daily" type="button">🔥 DESAFÍO DIARIO</button>
+              <button class="button button-ghost button-small" id="back-to-metal-menu" type="button">← MENÚ</button>
+            </div>
+          </div>
         </div></div>
-        <div class="game-controls"><span>W A S D <small>MOVER</small></span><span>V / CLIC DER <small>PUÑETAZO</small></span><span>E <small>VIP / NÚCLEO / GLORY</small></span><span>1 · · · 7 <small>ARMAS</small></span><span>CLICK <small>DISPARAR</small></span><span>R <small>RECARGAR</small></span><span>TAB <small>AUTOMAPA</small></span><span>F / ESC <small>PANTALLA / PAUSA</small></span></div>
+        <div class="game-controls"><span>Pulsa <b>[H]</b> en partida para ayuda rápida · <b>[G]</b> Granada EMP · <b>[V]</b> Puñetazo · <b>[ESC]</b> Pausa</span></div>
       </div>
       <div class="game-bottom"><div class="panel mini-panel"><p class="eyebrow">MISSION STATUS</p><strong id="game-status-text">A la espera del despliegue</strong><p id="game-message">Inicia la misión cuando estés preparado.</p></div><div class="panel mini-panel"><p class="eyebrow">PERSONAL BEST</p><strong id="personal-best">— PTS</strong><p>Las mejores puntuaciones se guardan con tu usuario.</p></div></div>
     </section>
 
     <section id="view-profile" class="view profile-layout hidden">
-      <div class="section-heading"><div><p class="eyebrow">PERSONNEL FILE // 03</p><h2>MI CUENTA</h2></div><span class="micro-tag" id="profile-role">USER</span></div>
-      <div class="profile-grid"><div class="panel profile-card"><div class="avatar-block">☠</div><p class="eyebrow">IDENTIDAD REGISTRADA</p><h3 id="profile-email">—</h3><div class="data-line"><span>ROL</span><strong id="profile-role-text">USER</strong></div><div class="data-line"><span>ESTADO</span><strong id="profile-status">ACTIVE</strong></div><div class="data-line"><span>REGISTRO</span><strong id="profile-created">—</strong></div><button id="logout-button" class="button button-secondary button-wide" type="button">CERRAR SESIÓN</button><button id="delete-account-button" class="button button-danger button-wide" type="button">ELIMINAR MI CUENTA</button></div>
+      <div class="section-heading"><div><button class="button button-ghost button-small back-nav-btn" type="button" style="margin-bottom:0.65rem;">← VOLVER</button><p class="eyebrow">PERSONNEL FILE // 03</p><h2>MI CUENTA</h2></div><span class="micro-tag" id="profile-role">USER</span></div>
+      <div class="profile-grid"><div class="panel profile-card"><div class="avatar-block">☠</div><p class="eyebrow">IDENTIDAD DE SLAYER</p><h3 id="profile-nickname-display">SLAYER</h3><div class="data-line"><span>EMAIL</span><strong id="profile-email">—</strong></div><div class="data-line"><span>ROL</span><strong id="profile-role-text">USER</strong></div><div class="data-line"><span>ESTADO</span><strong id="profile-status">ACTIVE</strong></div><div class="data-line"><span>REGISTRO</span><strong id="profile-created">—</strong></div><form id="profile-nickname-form" class="profile-nickname-form"><label for="profile-nickname-input">NICKNAME EN RANKING</label><div class="nickname-inline-row"><input id="profile-nickname-input" type="text" required minlength="2" maxlength="24" placeholder="Tu nickname"><button class="button button-secondary button-small" type="submit">GUARDAR</button></div></form><button id="logout-button" class="button button-secondary button-wide" type="button">CERRAR SESIÓN</button><button id="delete-account-button" class="button button-danger button-wide" type="button">ELIMINAR MI CUENTA</button></div>
         <div class="panel"><div class="section-heading"><div><p class="eyebrow">COMBAT RECORD</p><h2>MIS MEJORES RESULTADOS</h2></div></div><div id="profile-leaderboard" class="leaderboard-empty">Juega una partida para comenzar tu historial.</div></div></div>
     </section>
 
     <section id="view-admin" class="view admin-layout hidden">
-      <div class="section-heading"><div><p class="eyebrow">COMMAND CENTER // ADMIN ONLY</p><h2>GESTIÓN DE PERSONAL</h2></div><span class="micro-tag warning-tag">RESTRICTED</span></div>
+      <div class="section-heading"><div><button class="button button-ghost button-small back-nav-btn" type="button" style="margin-bottom:0.65rem;">← VOLVER</button><p class="eyebrow">COMMAND CENTER // ADMIN ONLY</p><h2>GESTIÓN DE PERSONAL</h2></div><span class="micro-tag warning-tag">RESTRICTED</span></div>
       <div class="panel admin-panel"><div class="admin-toolbar"><p>Este listado se autoriza en el servidor. Ocultar el botón no sustituye a los permisos de API.</p><button id="refresh-users" class="button button-secondary button-small" type="button">↻ ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>EMAIL</th><th>ROL</th><th>ESTADO</th><th>REGISTRO</th><th>ACCIÓN</th></tr></thead><tbody id="admin-users-body"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></div>
     </section>
 
-    <footer class="footer"><span>HELLFALL // BRUTAL SIEGE</span><span>ORIGINAL RETRO FPS · STUDENT PROJECT</span><span>BUILD 0.5.0</span></footer>
+    <section id="view-legal" class="view hidden">
+      <div class="section-topbar">
+        <button class="button button-ghost button-small back-nav-btn" type="button">← VOLVER</button>
+        <span class="breadcrumb-trail" id="legal-breadcrumb">HELLFALL / INFORMACIÓN LEGAL Y PRIVACIDAD</span>
+      </div>
+      <div class="section-heading">
+        <div><p class="eyebrow">TRANSPARENCIA, RGPD Y LSSI</p><h2>AVISO LEGAL, PRIVACIDAD Y COOKIES</h2></div>
+      </div>
+      <div class="legal-cards">
+        <article id="legal-aviso" class="panel">
+          <p class="eyebrow">AVISO LEGAL Y PROPIEDAD INTELECTUAL</p>
+          <h3>PROYECTO DE FANS / ACADÉMICO SIN AFILIACIÓN OFICIAL</h3>
+          <p>HELLFALL es una aplicación web sin ánimo de lucro creada con fines educativos y de entretenimiento en navegador. <strong>No está afiliada, respaldada ni patrocinada por id Software, ZeniMax Media ni Bethesda Softworks.</strong></p>
+          <p>Todos los gráficos del motor 2.5D y retratos voxel se generan de forma procedural en Canvas (`weapons.js`, `voxels.js`, `portrait.js`). Si utilizas esta web en despliegue público, verifica la licencia libre o reemplaza los activos sonoros externos (`doom.mp3`) y revisa la nomenclatura inspirada en clásicos FPS (como <em>Icon of Sin</em>, <em>Revenant</em>, <em>Cacodemonio</em> o <em>BFG-9000</em>) antes de redistribuirla.</p>
+        </article>
+        <article id="legal-privacidad" class="panel">
+          <p class="eyebrow">POLÍTICA DE PRIVACIDAD (RGPD)</p>
+          <h3>USO DE DATOS Y NICKNAMES PÚBLICOS</h3>
+          <p>Los correos electrónicos registrados mediante formulario local o Google OAuth 2.0 se utilizan exclusivamente para autenticar tu sesión, verificar tu cuenta y gestionar tu perfil. Tus contraseñas se almacenan cifradas mediante `bcryptjs`.</p>
+          <p>Las tablas públicas de puntuación muestran únicamente el <strong>Nickname</strong> escogido por el jugador y nunca exponen direcciones de correo electrónico. Puedes eliminar tu cuenta y revocar tu acceso en cualquier momento desde el apartado <strong>Mi Cuenta</strong>.</p>
+        </article>
+        <article id="legal-cookies" class="panel">
+          <p class="eyebrow">POLÍTICA DE COOKIES</p>
+          <h3>COOKIES TÉCNICAS ESTRICTAMENTE NECESARIAS</h3>
+          <p>HELLFALL utiliza únicamente la cookie técnica de sesión (`hellfall.sid`, marcada como `HttpOnly` y `SameSite=Lax`) y tokens CSRF en sesión para proteger las peticiones autenticadas. No se instalan cookies publicitarias ni rastreadores de analítica externa.</p>
+        </article>
+        <article id="legal-contacto" class="panel">
+          <p class="eyebrow">FEEDBACK Y REPOSITORIO</p>
+          <h3>SOPORTE DEL PROYECTO</h3>
+          <p>Puedes enviar sugerencias, reportar errores o revisar el código fuente en el repositorio oficial: <a href="https://github.com/PATRIK-21-ops/Proyecto_procesos/issues" target="_blank" rel="noopener noreferrer">GitHub · PATRIK-21-ops/Proyecto_procesos</a>.</p>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer-rich">
+      <div class="footer-top-row">
+        <span><strong>HELLFALL</strong> // INFERNAL SIEGE · EDICIÓN SLAYER</span>
+        <div class="footer-links">
+          <button class="footer-link-btn" type="button" data-view="legal" data-legal-tab="aviso">Aviso Legal</button>
+          <button class="footer-link-btn" type="button" data-view="legal" data-legal-tab="privacidad">Privacidad (RGPD)</button>
+          <button class="footer-link-btn" type="button" data-view="legal" data-legal-tab="cookies">Cookies</button>
+          <button class="footer-link-btn" type="button" data-view="legal" data-legal-tab="contacto">Feedback</button>
+          <a href="https://github.com/PATRIK-21-ops/Proyecto_procesos" target="_blank" rel="noopener noreferrer">Repositorio GitHub</a>
+        </div>
+      </div>
+      <p class="footer-disclaimer">Proyecto académico y tributo de fans sin afiliación con id Software ni Bethesda Softworks. Gráficos y enemigos generados proceduralmente por código; revisar derechos de audio/nomenclatura (`doom.mp3`) en despliegues públicos.</p>
+    </footer>
   </main>
 </body>
 </html>

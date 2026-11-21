@@ -12,7 +12,15 @@ export function scoreRoutes({ userService, scoreService, logger }) {
 
   router.get('/top', asyncHandler(async (req, res) => {
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit || '10', 10) || 10));
-    res.json({ scores: await scoreService.top(limit) });
+    const period = ['day', 'week', 'all'].includes(req.query.period) ? req.query.period : 'all';
+    const dailyOnly = req.query.dailyOnly === 'true' || req.query.dailyOnly === '1';
+    const viewerUserId = req.session?.userId || null;
+    const summary = await scoreService.rankingSummary({ limit, period, dailyOnly, viewerUserId });
+    res.json(summary);
+  }));
+
+  router.get('/stats', asyncHandler(async (_req, res) => {
+    res.json({ stats: await scoreService.stats() });
   }));
 
   router.post('/', requireAuth(userService), csrfProtection, asyncHandler(async (req, res) => {

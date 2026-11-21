@@ -51,8 +51,14 @@ export const api = {
   me: () => request('/auth/me'),
   logout: async () => { const result = await request('/auth/logout', { method: 'POST', body: {} }); csrfToken = null; return result; },
   users: () => request('/users'),
+  updateNickname: (nickname) => request('/users/me/nickname', { method: 'PATCH', body: { nickname } }),
   deleteUser: async (id) => { const result = await request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }); csrfToken = null; return result; },
-  topScores: (limit = 10) => request(`/scores/top?limit=${encodeURIComponent(limit)}`),
+  topScores: (limit = 10, { period = 'all', dailyOnly = false } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit), period });
+    if (dailyOnly) params.set('dailyOnly', 'true');
+    return request(`/scores/top?${params.toString()}`);
+  },
+  scoreStats: () => request('/scores/stats'),
   myScores: () => request('/scores/mine'),
   submitScore: (data) => request('/scores', { method: 'POST', body: data }),
   challengeToday: () => request('/challenge/today')

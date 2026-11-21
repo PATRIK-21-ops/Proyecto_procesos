@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#120709"/>
+      <stop offset="55%" stop-color="#2a0a0d"/>
+      <stop offset="100%" stop-color="#140708"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f04437"/>
+      <stop offset="100%" stop-color="#ffbd65"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="48" y="48" width="1104" height="534" rx="20" fill="none" stroke="rgba(255,189,101,0.35)" stroke-width="3"/>
+  <text x="96" y="150" fill="#ffbd65" font-family="monospace" font-size="30" font-weight="bold" letter-spacing="6">PROYECTO DE FANS · FPS RETRO EN NAVEGADOR</text>
+  <text x="96" y="295" fill="url(#glow)" font-family="Impact, Arial Black, sans-serif" font-size="152" letter-spacing="8">HELLFALL</text>
+  <text x="96" y="370" fill="#fff3e6" font-family="system-ui, sans-serif" font-size="40" font-weight="bold">10 SECTORES · 7 ARMAS + GRANADA EMP [G] · DESAFÍO DIARIO</text>
+  <text x="96" y="465" fill="#c7b8b0" font-family="system-ui, sans-serif" font-size="28">Motor raycasting 2.5D en Canvas · Altares roguelite · Ranking por Nickname</text>
+  <rect x="96" y="510" width="320" height="44" rx="8" fill="#f04437"/>
+  <text x="256" y="540" text-anchor="middle" fill="#ffffff" font-family="monospace" font-size="24" font-weight="bold">JUEGA GRATIS EN PC</text>
+</svg>

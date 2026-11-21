@@ -136,6 +136,35 @@ describe('API HTTP', () => {
     expect(again.status).toBe(401);
   });
   
+  it('permite actualizar nickname vía PATCH /api/users/me/nickname, guardarlo en POST /api/scores y mostrarlo sin email en /api/scores/top', async () => {
+    const agent = request.agent(app);
+    await login(agent, 'player@hellfall.test', USER_PASSWORD);
+    const me = await agent.get('/api/auth/me');
+    expect(me.body.user.nickname).toBeTruthy();
+
+    const nickRes = await agent.patch('/api/users/me/nickname').set('X-CSRF-Token', me.body.csrfToken).send({ nickname: 'PatrikPhobos' });
+    expect(nickRes.status).toBe(200);
+    expect(nickRes.body.user.nickname).toBe('PatrikPhobos');
+
+    const saveRes = await agent.post('/api/scores').set('X-CSRF-Token', me.body.csrfToken).send({ kills: 7, bonusPoints: 100, durationMs: 18000, sector: 6, isDaily: true, nickname: 'DoomSlayerX' });
+    expect(saveRes.status).toBe(201);
+    expect(saveRes.body.score.nickname).toBe('DoomSlayerX');
+    expect(saveRes.body.score.sector).toBe(6);
+
+    const topRes = await agent.get('/api/scores/top?period=day');
+    expect(topRes.status).toBe(200);
+    expect(topRes.body.scores[0].nickname).toBe('DoomSlayerX');
+    expect(topRes.body.scores[0].sector).toBe(6);
+    expect(topRes.body.scores[0].isCurrentUser).toBe(true);
+    expect(topRes.body.scores[0].email).toBeUndefined();
+    expect(topRes.body.viewerRank.rank).toBe(1);
+
+    const statsRes = await request(app).get('/api/scores/stats');
+    expect(statsRes.status).toBe(200);
+    expect(statsRes.body.stats.matchesPlayed).toBe(1);
+    expect(statsRes.body.stats.maxSector).toBe(6);
+  });
+
   it('GET /api/auth/google redirige a Google cuando está configurado', async () => {
   process.env.GOOGLE_CLIENT_ID = 'test-client-id';
   process.env.GOOGLE_CALLBACK_URL = 'http://localhost:8080/api/auth/google/callback';

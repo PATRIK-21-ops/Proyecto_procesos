@@ -60,11 +60,19 @@ Esta guía está ligada a los PBIs y al documento de especificación. El orden e
 42. En GitHub, comprueba que el último commit de `main` está integrado por PR y el workflow de CI está verde.
 43. Entrega las URL del repositorio y de la aplicación desplegada junto con el README, siguiendo el documento de la asignatura.
 
-## Después del Hito 3
+## Fase 6 — Hito 4 y Mejoras (`MEJORIAS`: OAuth, Nicknames, Universo Slayer y Granadas EMP)
 
-44. Añade email de confirmación y estado pendiente (Hito 4).
-45. Añade OAuth con al menos un proveedor (Hito 4).
-46. Fortalece la validación de resultados si las puntuaciones deben ser competitivas: la implementación actual calcula los puntos en el servidor (`kills × 100`) pero las bajas declaradas siguen viniendo del navegador. Para impedir trampas, la partida tendría que validarse desde lógica autoritativa en el servidor.
+44. Confirmación por correo (`EmailService` + Brevo) y autenticación **Google OAuth 2.0** (`GET /api/auth/google` y `/callback`).
+45. **Nicknames persistentes en PostgreSQL (`sql/schema.sql` + `src/utils/nickname.js`)**:
+    - Los usuarios nuevos y existentes sin nickname reciben uno aleatorio automáticamente.
+    - Al morir o completar la partida (`onFinish`), se solicita confirmar o cambiar el nickname antes de enviar `POST /api/scores`.
+    - El ranking público (`GET /api/scores/top`) devuelve exclusivamente `nickname` (y oculta cualquier email).
+    - También se puede editar el nickname desde **Mi Cuenta** o antes de empezar (`PATCH /api/users/me/nickname`).
+46. **Portal web Universo SLAYER sin redundancias (`public/index.html`, `public/css/universe.css`, `public/js/ui/main.js`)**:
+    - Protagonista único (`SLAYER`), portada simplificada según estado de sesión y vistas separadas (`#view-lore`, `#view-guide`, `#view-ranking`) conectadas con `history.pushState` / `popstate` y botones `← VOLVER`.
+47. **Rebalanceo de combate (`public/js/game/game.js`, `weapons.js`)**:
+    - Añadida la **Granada EMP `[G]`** con rebote contra paredes/suelo y ruptura de escudos enemigos, junto al contraataque con puñetazo `[V]` y sobrecarga por fuego continuo sobre `SHIELD`.
+48. Fortalecer la validación autoritativa si el ranking pasa a torneo competitivo: aunque el servidor calcula los puntos (`kills × 100 + bonusPoints`) y valida rangos (`MAX_SCORE_KILLS`), la simulación de combate corre en el cliente.
 
 ## Problemas comunes
 

@@ -16,7 +16,8 @@ import {
   makePylonSprite,
   makeVipSprite,
   makeColoredKeySprite,
-  makeCoreSprite
+  makeCoreSprite,
+  makeGrenadeSprite
 } from './weapons.js';
 import { crearAleatorio, mezclarSemilla } from './rng.js';
 
@@ -47,6 +48,14 @@ const CONFIG = {
   START_FUEL: 45,
   START_ROCKETS: 0,
   START_CELLS: 0,
+  START_GRENADES: 3,
+  MAX_GRENADES: 6,
+  GRENADE_COOLDOWN_MS: 650,
+  GRENADE_SPEED: 10.2,
+  GRENADE_FUSE_SEC: 1.05,
+  GRENADE_RADIUS: 2.85,
+  GRENADE_DAMAGE: 7.5,
+  GRENADE_BREAK_MS: 3400,
   START_ARMOR: 20,
   SHOTGUN_COOLDOWN_MS: 420,
   SHOTGUN_DAMAGE: 2.15,
@@ -104,7 +113,7 @@ const CONFIG = {
   LOST_SOUL_PACK: 3,
   SUMMONER_REVIVES: 2,
   SUMMONER_REVIVE_CD: [5.5, 8.5],
-  SHIELD_BLOCK_ARC: 0.95,
+  SHIELD_BLOCK_ARC: 0.76,
 
   // Botín de cofres, suelo y monedas
   CHEST_COUNT: 4,
@@ -137,7 +146,8 @@ const CONFIG = {
     FUEL: { price: 6, amount: 35, label: 'BIDÓN DE GASOLINA', detail: '+35% de combustible' },
     WEAPON_MOD: { price: 15, amount: 12, label: 'TEMPLAR ARSENAL', detail: '+12% daño de armas permanente' },
     ROCKETS: { price: 9, amount: 6, label: 'CAJA DE COHETES', detail: '+6 cohetes explosivos [5]' },
-    CELLS: { price: 9, amount: 45, label: 'BATERÍAS DE PLASMA', detail: '+45 celdas para Plasma/BFG [6/7]' }
+    CELLS: { price: 9, amount: 45, label: 'BATERÍAS DE PLASMA', detail: '+45 celdas para Plasma/BFG [6/7]' },
+    GRENADE: { price: 7, amount: 2, label: 'GRANADAS EMP [G]', detail: '+2 granadas aturdidoras (rompen escudos)' }
   },
 
   // Paletas temáticas y bestiario exclusivo por sector
@@ -366,8 +376,8 @@ const CONFIG = {
       painChance: 0.9, scale: 0.68, rangedCd: [99, 99], dashChance: 0
     },
     SHIELD: {
-      hp: 11, speed: 0.82, meleeDmg: 17, projDmg: 11, projSpeed: 6.2,
-      painChance: 0.22, scale: 1.18, rangedCd: [2.8, 4.2], dashChance: 0.04
+      hp: 7.8, speed: 0.8, meleeDmg: 14, projDmg: 9, projSpeed: 5.8,
+      painChance: 0.34, scale: 1.18, rangedCd: [3.0, 4.4], dashChance: 0.03
     },
     PINKY: {
       hp: 6.4, speed: 1.75, meleeDmg: 16, projDmg: 0, projSpeed: 0,
@@ -457,12 +467,17 @@ class DoomMusicPlayer {
 
   updateButton() {
     if (!this.toggleBtn) this.toggleBtn = document.getElementById('music-toggle');
-    if (this.toggleBtn) this.toggleBtn.textContent = this.muted ? '🔇 BSO: OFF' : '🔊 BSO: ON';
+    if (this.toggleBtn) {
+      this.toggleBtn.textContent = this.muted
+        ? '🔇 BSO: OFF'
+        : (this.inMatch ? '🔊 BSO: ACTIVA' : '🔊 BSO: ON');
+    }
   }
 
   startMatch() {
     this.inMatch = true;
     this.bgm.muted = this.muted;
+    this.updateButton();
     if (!this.muted && this.bgm.paused) {
       this.bgm.currentTime = 0;
       this.bgm.play().then(() => this.updateButton()).catch(() => {});
@@ -475,6 +490,7 @@ class DoomMusicPlayer {
       this.bgm.pause();
     }
     try { this.bgm.currentTime = 0; } catch (_) {}
+    this.updateButton();
   }
 
   setPaused(paused) {
@@ -751,6 +767,17 @@ class HellAudioEngine {
   playShieldBlock() {
     this.playTone('square', 1600, 420, 0.06, 0.16);
     this.playNoise('highpass', 2800, 0.06, 0.14);
+  }
+
+  playGrenadeThrow() {
+    this.playTone('triangle', 320, 140, 0.12, 0.22);
+    this.playNoise('bandpass', 950, 0.09, 0.16);
+  }
+
+  playGuardBreak() {
+    this.playTone('sawtooth', 880, 130, 0.22, 0.28);
+    this.playTone('square', 520, 110, 0.18, 0.22, 0.03);
+    this.playNoise('bandpass', 2100, 0.22, 0.28);
   }
 
   playSummon() {
@@ -1498,6 +1525,7 @@ export class HellfallGame {
     this.rocketSprites = [makeRocketProjectileSprite(0), makeRocketProjectileSprite(1)];
     this.plasmaSprites = [makePlasmaBoltSprite(0), makePlasmaBoltSprite(1)];
     this.bfgSprites = [makeBfgOrbSprite(0), makeBfgOrbSprite(1)];
+    this.grenadeSprites = [makeGrenadeSprite(0), makeGrenadeSprite(1)];
     this.weaponPickupSprites = {
       2: [makeWeaponPickupSprite(2, 0), makeWeaponPickupSprite(2, 1)],
       3: [makeWeaponPickupSprite(3, 0), makeWeaponPickupSprite(3, 1)],
@@ -1545,8 +1573,9 @@ export class HellfallGame {
     };
     this.weaponSprites = makeWeaponSprites();
 
-    this.characterGender = 'male';
-    this.characterProfile = getCharacterProfile('male');
+    this.characterGender = 'slayer';
+    this.characterProfile = getCharacterProfile('slayer');
+    this.grenadeUntil = 0;
 
     this.keys = new Set();
     this.zBuffer = new Float32Array(this.worldW);
@@ -1639,6 +1668,7 @@ export class HellfallGame {
     this.mouseSens = 1.0;
     this.reducedEffects = false;
     this.punchCooldownUntil = 0;
+    this.grenadeUntil = 0;
     this.kineticCooldownUntil = 0;
     this.counterCooldownUntil = 0;
     this.dashCooldownUntil = 0;
@@ -1761,12 +1791,12 @@ export class HellfallGame {
       }
       if (this.shopOpen) {
         if (event.button === 0 && cx >= 24 && cx <= WIDTH - 24) {
-          if (cy >= 27 && cy < 146) {
-            const idx = Math.floor((cy - 27) / 17);
-            if (idx >= 0 && idx < 7) {
+          if (cy >= 27 && cy < 147) {
+            const idx = Math.floor((cy - 27) / 15);
+            if (idx >= 0 && idx < 8) {
               this.buyMerchantItem(idx + 1);
             }
-          } else if (cy >= 146) {
+          } else if (cy >= 147) {
             this.closeShop();
           }
         } else if (event.button === 2) {
@@ -2105,9 +2135,9 @@ export class HellfallGame {
     return true;
   }
 
-  setCharacter(gender) {
-    this.characterGender = gender === 'female' ? 'female' : 'male';
-    this.characterProfile = getCharacterProfile(this.characterGender);
+  setCharacter(gender = 'slayer') {
+    this.characterGender = 'slayer';
+    this.characterProfile = getCharacterProfile(gender || 'slayer');
   }
 
   isWeaponOwned(num) {
@@ -2847,6 +2877,7 @@ export class HellfallGame {
       fuel: CONFIG.START_FUEL,
       rockets: CONFIG.START_ROCKETS,
       cells: CONFIG.START_CELLS,
+      grenades: CONFIG.START_GRENADES,
       weapon: 1,
       unlockedWeapons: new Set([1]),
       kills: 0,
@@ -2856,6 +2887,7 @@ export class HellfallGame {
       berserkUntil: 0,
       invulnerableUntil: 0
     };
+    this.grenadeUntil = 0;
     this.rngPlan = this.seed == null ? null : crearAleatorio(mezclarSemilla(this.seed, 0));
     this.initRunPlan();
     this.startTime = performance.now();
@@ -3001,6 +3033,7 @@ export class HellfallGame {
     this.hitmarkerKillUntil = 0;
     this.combo = { count: 0, lastKill: 0, expires: 0, bannerText: '', bannerUntil: 0, bannerBonus: 0 };
     this.punchCooldownUntil = 0;
+    this.grenadeUntil = 0;
     this.kineticCooldownUntil = 0;
     this.counterCooldownUntil = 0;
     this.dashCooldownUntil = 0;
@@ -3682,7 +3715,7 @@ export class HellfallGame {
         this.closeShop();
         return;
       }
-      if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].includes(e.code)) {
+      if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8'].includes(e.code)) {
         this.buyMerchantItem(Number(e.code.slice(-1)));
         return;
       }
@@ -3806,6 +3839,7 @@ export class HellfallGame {
       if (e.code === 'Digit6') this.selectWeapon(6);
       if (e.code === 'Digit7') this.selectWeapon(7);
       if (e.code === 'KeyE' && !e.repeat) this.interact();
+      if (e.code === 'KeyG' && !e.repeat) this.throwGrenade();
       if ((e.code === 'KeyV' || e.code === 'KeyB') && !e.repeat) this.triggerPunch(false);
       if ((e.code === 'KeyC' || e.code === 'AltLeft') && !e.repeat) this.triggerPlayerDash(performance.now());
     }
@@ -4120,11 +4154,20 @@ export class HellfallGame {
       this.audio.playHitmarker();
       for (const { enemy, ang } of targets) {
         if (enemy.isBoss && enemy.dormant) this.awakenBoss(enemy, now);
-        const effDmg = enemy.shieldActive ? baseDmg * dmgMult * 0.25 : baseDmg * dmgMult;
+        let effDmg = enemy.shieldActive ? baseDmg * dmgMult * 0.25 : baseDmg * dmgMult;
+        let stunDur = empowered ? 0.9 : 0.45;
+        if (enemy.kind === 'SHIELD') {
+          enemy.guardBrokenUntil = Math.max(enemy.guardBrokenUntil || 0, now + 2400);
+          enemy.shieldHeat = 0;
+          effDmg = baseDmg * dmgMult * 1.2;
+          stunDur = Math.max(stunDur, 0.95);
+          this.audio.playGuardBreak();
+          this.onStatus('💥 ¡ESCUDO QUEBRADO A PUÑETAZOS! Remátalo antes de que recupere la guardia');
+        }
         enemy.health -= effDmg;
         enemy.hitFlash = 0.22;
         enemy.shieldFlash = 0;
-        this.applyKnockback(enemy, Math.cos(ang), Math.sin(ang), force, empowered ? 0.9 : 0.45);
+        this.applyKnockback(enemy, Math.cos(ang), Math.sin(ang), force, stunDur);
         this.spawnBlood(enemy.x, enemy.y, empowered ? 18 : 10, enemy.isTurret ? '#ffbe0b' : null);
         this.spawnWallSparks(enemy.x, enemy.y, empowered ? 10 : 5, empowered ? '#ff4d00' : '#ffbe0b');
         if (enemy.health <= 0) {
@@ -4264,7 +4307,9 @@ export class HellfallGame {
     this.player.coins = (this.player.coins || 0) + coinAdd;
     if (rocketAdd > 0) this.player.rockets = Math.min(MAX_ROCKETS, (this.player.rockets || 0) + rocketAdd);
     if (cellAdd > 0) this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + cellAdd);
-    gainedItems.push(`+${ammoAdd} CART · +${fuelAdd}% GAS · +${coinAdd} MONEDAS${rocketAdd ? ` · +${rocketAdd} COH` : ''}${cellAdd ? ` · +${cellAdd} CEL` : ''}`);
+    const canGrenade = (this.player.grenades || 0) < CONFIG.MAX_GRENADES;
+    if (canGrenade) this.player.grenades = Math.min(CONFIG.MAX_GRENADES, (this.player.grenades || 0) + 1);
+    gainedItems.push(`+${ammoAdd} CART · +${fuelAdd}% GAS · +${coinAdd} MONEDAS${rocketAdd ? ` · +${rocketAdd} COH` : ''}${cellAdd ? ` · +${cellAdd} CEL` : ''}${canGrenade ? ' · +1 GRANADA EMP' : ''}`);
 
     if (Math.random() < CONFIG.CHEST_HEALTH_CHANCE) {
       this.player.health = Math.min(100, this.player.health + CONFIG.CHEST_HEALTH_AMOUNT);
@@ -4334,6 +4379,11 @@ export class HellfallGame {
         ...m.CELLS,
         canBuy: () => (this.player.cells || 0) < MAX_CELLS,
         apply: () => { this.player.cells = Math.min(MAX_CELLS, (this.player.cells || 0) + m.CELLS.amount); }
+      },
+      {
+        ...m.GRENADE,
+        canBuy: () => (this.player.grenades || 0) < CONFIG.MAX_GRENADES,
+        apply: () => { this.player.grenades = Math.min(CONFIG.MAX_GRENADES, (this.player.grenades || 0) + m.GRENADE.amount); }
       }
     ];
   }
@@ -5322,6 +5372,7 @@ export class HellfallGame {
     this.intermission = null;
     this.level++;
     this.player.health = Math.min(100, this.player.health + 15);
+    this.player.grenades = Math.min(CONFIG.MAX_GRENADES, (this.player.grenades || 0) + 1);
     this.player.invulnerableUntil = 0;
     this.startLevel();
     this.startScreenMelt('SECTOR', snap);
@@ -5344,6 +5395,7 @@ export class HellfallGame {
     this.intermission = null;
     this.level++;
     this.player.health = Math.min(100, this.player.health + 15);
+    this.player.grenades = Math.min(CONFIG.MAX_GRENADES, (this.player.grenades || 0) + 1);
     this.player.invulnerableUntil = 0;
     this.startLevel();
     this.startScreenMelt('SECTOR', snap);
@@ -6066,21 +6118,57 @@ export class HellfallGame {
       }
     }
 
-    // Proyectiles especiales del Jugador: Cohete [5], Plasma [6] y BFG-9000 [7]
+    // Proyectiles especiales del Jugador: Cohete [5], Plasma [6], BFG-9000 [7] y Granadas EMP [G]
     for (let i = this.playerProjectiles.length - 1; i >= 0; i--) {
       const pp = this.playerProjectiles[i];
       const nextX = pp.x + pp.vx * dt;
       const nextY = pp.y + pp.vy * dt;
-      pp.x = nextX;
-      pp.y = nextY;
-      pp.life -= dt;
+      if (pp.kind === 'GRENADE') {
+        const prevX = pp.x;
+        const prevY = pp.y;
+        const hitX = this.isWall(nextX, prevY);
+        const hitY = this.isWall(prevX, nextY);
+        if (hitX) pp.vx *= -0.68;
+        else pp.x = nextX;
+        if (hitY) pp.vy *= -0.68;
+        else pp.y = nextY;
+        if (!hitX && !hitY && this.isWall(pp.x, pp.y)) {
+          pp.x = prevX;
+          pp.y = prevY;
+          pp.vx *= -0.65;
+          pp.vy *= -0.65;
+        }
+        pp.vz = (pp.vz || 0) + 4.8 * dt;
+        pp.z = (pp.z || 0) + pp.vz * dt;
+        if (pp.z > 0.36) {
+          pp.z = 0.36;
+          if (Math.abs(pp.vz) > 0.45) {
+            pp.vz = -Math.abs(pp.vz) * 0.54;
+            pp.vx *= 0.8;
+            pp.vy *= 0.8;
+            if ((pp.bounce || 0) < 3) {
+              pp.bounce = (pp.bounce || 0) + 1;
+              this.spawnWallSparks(pp.x, pp.y, 3, '#00f5d4');
+            }
+          } else {
+            pp.vz = 0;
+            pp.vx *= Math.max(0, 1 - dt * 2.2);
+            pp.vy *= Math.max(0, 1 - dt * 2.2);
+          }
+        }
+        pp.life -= dt;
+      } else {
+        pp.x = nextX;
+        pp.y = nextY;
+        pp.life -= dt;
+      }
 
       // Chispas de estela según el tipo de proyectil
-      if (Math.random() < (pp.kind === 'ROCKET' ? 0.8 : 0.4)) {
+      if (Math.random() < (pp.kind === 'ROCKET' ? 0.8 : (pp.kind === 'GRENADE' ? 0.45 : 0.4))) {
         this.wallSparks.push({
           x: pp.x,
           y: pp.y,
-          z: 0,
+          z: pp.z || 0,
           vx: -pp.vx * 0.08 + (Math.random() - 0.5) * 0.4,
           vy: -pp.vy * 0.08 + (Math.random() - 0.5) * 0.4,
           vz: -0.25,
@@ -6112,7 +6200,7 @@ export class HellfallGame {
         }
       }
 
-      let detonate = pp.life <= 0 || this.isWall(pp.x, pp.y);
+      let detonate = pp.kind === 'GRENADE' ? pp.life <= 0 : (pp.life <= 0 || this.isWall(pp.x, pp.y));
       let directEnemy = null;
 
       if (!detonate) {
@@ -6228,6 +6316,8 @@ export class HellfallGame {
               this.applyEnemyDamage(enemy, pp.damage * falloff, 'BFG', now);
             }
           }
+        } else if (pp.kind === 'GRENADE') {
+          this.detonateGrenade(pp, directEnemy, now);
         }
       }
     }
@@ -6693,10 +6783,13 @@ export class HellfallGame {
         enemy.dashCooldown = Math.max(0, (enemy.dashCooldown || 0) - dt);
 
         if (enemy.kind === 'SHIELD') {
-          const targetAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
-          const diff = Math.atan2(Math.sin(targetAngle - enemy.facingAngle), Math.cos(targetAngle - enemy.facingAngle));
-          const maxTurn = dt * 2.4;
-          enemy.facingAngle += clamp(diff, -maxTurn, maxTurn);
+          enemy.shieldHeat = Math.max(0, (enemy.shieldHeat || 0) - dt * 2.2);
+          if ((enemy.stunTimer || 0) <= 0 && (enemy.guardBrokenUntil || 0) <= now) {
+            const targetAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+            const diff = Math.atan2(Math.sin(targetAngle - enemy.facingAngle), Math.cos(targetAngle - enemy.facingAngle));
+            const maxTurn = dt * 1.45;
+            enemy.facingAngle += clamp(diff, -maxTurn, maxTurn);
+          }
         }
 
         if (enemy.kind === 'LOST_SOUL') {
@@ -7158,6 +7251,87 @@ export class HellfallGame {
     return true;
   }
 
+  throwGrenade() {
+    if (!this.running || this.paused || this.finished || this.intermission || this.shopOpen || this.mapOpen || this.briefingOpen || this.deathSequence || this.victorySequence) return;
+    const now = performance.now();
+    if (now < (this.grenadeUntil || 0)) return;
+    if ((this.player.grenades || 0) <= 0) {
+      this.audio.playEmptyClip();
+      this.grenadeUntil = now + 260;
+      this.onStatus('¡SIN GRANADAS EMP [G]! Abre cofres o compra al Mercader [E] [8]');
+      return;
+    }
+    const dmgMult = (now < this.player.berserkUntil ? 2.0 : 1.0) * (1 + (this.weaponDamageBonus || 0));
+    this.player.grenades -= 1;
+    this.grenadeUntil = now + CONFIG.GRENADE_COOLDOWN_MS;
+    this.recoil = Math.max(this.recoil, 0.45);
+    this.audio.playGrenadeThrow();
+    this.alertNearbyEnemies(this.player.x, this.player.y, 12);
+
+    const ang = this.player.angle;
+    this.playerProjectiles.push({
+      kind: 'GRENADE',
+      x: this.player.x + Math.cos(ang) * 0.35,
+      y: this.player.y + Math.sin(ang) * 0.35,
+      vx: Math.cos(ang) * CONFIG.GRENADE_SPEED,
+      vy: Math.sin(ang) * CONFIG.GRENADE_SPEED,
+      z: -0.05,
+      vz: -1.35,
+      bounce: 0,
+      damage: CONFIG.GRENADE_DAMAGE * dmgMult,
+      life: CONFIG.GRENADE_FUSE_SEC,
+      sprite: this.grenadeSprites?.[0]
+    });
+  }
+
+  detonateGrenade(pp, directEnemy = null, now = performance.now()) {
+    const rad = CONFIG.GRENADE_RADIUS;
+    this.audio.playExplosion();
+    this.audio.playGuardBreak();
+    this.screenShake = Math.max(this.screenShake, this.reducedEffects ? 0.1 : 0.28);
+    this.shockwaves.push({ x: pp.x, y: pp.y, radius: 0.25, maxRadius: rad, life: 0.38, maxLife: 0.38, color: '#00f5d4' });
+    this.shockwaves.push({ x: pp.x, y: pp.y, radius: 0.18, maxRadius: rad * 0.72, life: 0.28, maxLife: 0.28, color: '#ffbe0b' });
+    this.spawnWallSparks(pp.x, pp.y, 18, '#00f5d4');
+
+    const dP = distance(pp.x, pp.y, this.player.x, this.player.y);
+    if (dP < rad * 0.5) {
+      this.damagePlayer(Math.max(2, Math.round(7 * (1 - dP / rad))), pp.x, pp.y, now);
+    }
+    for (const barrel of this.barrels) {
+      if (!barrel.exploded && distance(pp.x, pp.y, barrel.x, barrel.y) <= rad) this.explodeBarrel(barrel, now);
+    }
+    for (const gen of this.generators) {
+      if (gen.alive && distance(pp.x, pp.y, gen.x, gen.y) <= rad) this.damageGenerator(gen, pp.damage * 0.85, now);
+    }
+    for (const pylon of this.arenaPylons) {
+      if (!pylon.destroyed && pylon.active && distance(pp.x, pp.y, pylon.x, pylon.y) <= rad) this.damagePylon(pylon, pp.damage * 0.85, now);
+    }
+
+    let brokeShieldCount = 0;
+    for (const enemy of this.enemies) {
+      if (!enemy.alive || enemy.dormantCloset) continue;
+      const dE = distance(pp.x, pp.y, enemy.x, enemy.y);
+      if (dE <= rad) {
+        const falloff = enemy === directEnemy ? 1.0 : Math.max(0.45, 1 - dE / (rad * 1.15));
+        const shieldMult = (enemy.kind === 'SHIELD' || enemy.isTurret) ? 1.45 : 1.0;
+        if (enemy.kind === 'SHIELD') {
+          enemy.guardBrokenUntil = now + CONFIG.GRENADE_BREAK_MS;
+          enemy.shieldFlash = 0;
+          enemy.shieldHeat = 0;
+          brokeShieldCount++;
+        }
+        const stunSec = enemy.isBoss ? 0.35 : (enemy.kind === 'SHIELD' ? 0.9 : 0.45);
+        this.applyKnockback(enemy, enemy.x - pp.x, enemy.y - pp.y, 5.2 * falloff, stunSec);
+        this.spawnBlood(enemy.x, enemy.y, 12, '#00f5d4');
+        this.hitmarkerUntil = now + 120;
+        this.applyEnemyDamage(enemy, pp.damage * falloff * shieldMult, 'GRENADE', now);
+      }
+    }
+    if (brokeShieldCount > 0) {
+      this.onStatus('💥 ¡GRANADA EMP! Escudo enemigo destruido: remátalo ahora');
+    }
+  }
+
   shoot() {
     if (!this.running || this.paused || this.finished || this.intermission || this.shopOpen || this.mapOpen) return;
     const now = performance.now();
@@ -7386,6 +7560,7 @@ export class HellfallGame {
     const hitPylonSet = new Set();
     let hitAnyBarrel = false;
     let shieldBlocked = false;
+    let nonShieldHit = false;
 
     for (let p = 0; p < pelletCount; p++) {
       const ratio = pelletCount === 1 ? 0 : (p / (pelletCount - 1)) - 0.5;
@@ -7458,12 +7633,28 @@ export class HellfallGame {
           Math.sin(angleToPlayer - (selected.facingAngle || 0)),
           Math.cos(angleToPlayer - (selected.facingAngle || 0))
         ));
-        if (selected.kind === 'SHIELD' && facingDiff < CONFIG.SHIELD_BLOCK_ARC) {
+        if (selected.kind === 'SHIELD' && (selected.guardBrokenUntil || 0) <= now && facingDiff < CONFIG.SHIELD_BLOCK_ARC) {
           selected.shieldFlash = 0.28;
-          selected.hitFlash = 0.05;
-          shieldBlocked = true;
+          selected.hitFlash = 0.08;
+          selected.shieldHeat = (selected.shieldHeat || 0) + (isChaingun ? 1.4 : 1);
+          if (selected.shieldHeat >= 6) {
+            selected.shieldHeat = 0;
+            selected.guardBrokenUntil = now + 1800;
+            selected.stunTimer = Math.max(selected.stunTimer || 0, 0.7);
+            selected.shieldFlash = 0;
+            this.audio.playGuardBreak();
+            this.shockwaves.push({ x: selected.x, y: selected.y, radius: 0.2, maxRadius: 1.5, life: 0.28, maxLife: 0.28, color: '#00f5d4' });
+            this.onStatus('💥 ¡ESCUDO SOBRECARGADO! Flanco abierto para rematar');
+          } else {
+            shieldBlocked = true;
+          }
+          const chip = hitMap.get(selected) || { pellets: 0, dist: bestEnemyDist };
+          chip.pellets += 0.22;
+          chip.dist = Math.min(chip.dist, bestEnemyDist);
+          hitMap.set(selected, chip);
           continue;
         }
+        nonShieldHit = true;
         const prev = hitMap.get(selected) || { pellets: 0, dist: bestEnemyDist };
         prev.pellets += 1;
         prev.dist = Math.min(prev.dist, bestEnemyDist);
@@ -7481,14 +7672,14 @@ export class HellfallGame {
     for (const gen of hitGenSet) this.damageGenerator(gen, baseObjDmg * dmgMult, now);
     for (const pylon of hitPylonSet) this.damagePylon(pylon, baseObjDmg * dmgMult, now);
 
-    if (shieldBlocked && hitMap.size === 0) {
+    if (shieldBlocked && !nonShieldHit) {
       if (now - this.lastShieldBlockAt > 140) {
         this.lastShieldBlockAt = now;
         this.audio.playShieldBlock();
       }
       if (now - (this.lastShieldStatusAt || 0) > 1100) {
         this.lastShieldStatusAt = now;
-        this.onStatus('🛡️ EL DEMONIO CON ESCUDO BLOQUEA EL FUEGO FRONTAL: rodéalo, quémalo o usa Plasma/Motosierra');
+        this.onStatus('🛡️ ESCUDO RESISTENTE: Lanza Granada EMP [G], golpea [V], sobrecárgalo o rodéalo');
       }
       this.hitmarkerUntil = now + 80;
     }
@@ -7849,7 +8040,7 @@ export class HellfallGame {
       points: this.player.kills * 100 + cappedBonus,
       durationMs: Math.max(1000, Math.round(now - this.startTime)),
       medals,
-      characterName: this.characterProfile?.callsign || 'MARCUS VANE',
+      characterName: this.characterProfile?.callsign || 'SLAYER',
       characterGender: this.characterGender,
       runStats: { ...this.runStats }
     });
@@ -7906,7 +8097,7 @@ export class HellfallGame {
     c.textAlign = 'center';
     c.font = 'bold 9.5px monospace';
     c.fillStyle = '#ffbe0b';
-    const charLabel = this.characterProfile?.callsign || 'MARCUS VANE';
+    const charLabel = this.characterProfile?.callsign || 'SLAYER';
     c.fillText(`HELLFALL // MANUAL TÁCTICO · ${charLabel}`, WIDTH / 2, 15.5);
 
     // Columna Izquierda: COMANDOS Y CONTROLES
@@ -7923,28 +8114,27 @@ export class HellfallGame {
 
     const controls = [
       ['[WASD / Ratón]', 'Moverse y apuntar'],
-      ['[Shift]', 'Correr rápido'],
-      ['[Clic Izq / Esp]', 'Disparar arma'],
-      ['[R]', 'Recargar cartuchos'],
+      ['[Shift / Space]', 'Correr / Disparar'],
+      ['[G]', 'Granada EMP (rompe escudos)'],
+      ['[V / Clic Der]', 'Puñetazo (rompe guardia)'],
       ['[1]-[4]', 'Escopeta/Chain/Flamer/Sierra'],
-      ['[5]-[7]', 'Cohetes / Plasma / BFG-9000'],
-      ['[V / Clic Der]', 'Puñetazo (empuja/estampa)'],
-      ['[E] Interactuar', 'Puertas/Cofres/VIP/Núcleo'],
-      ['[C] Embestida', 'Dash (Altar de Mejoras)'],
-      ['[TAB] / [F]', 'Automapa / Pant. Completa'],
-      ['[ESC] / [H]', 'Pausa y Ajustes / Ayuda']
+      ['[5]-[7]', 'Cohetes / Plasma / BFG'],
+      ['[R] / [E]', 'Recargar / Interactuar'],
+      ['[C] / [TAB]', 'Embestida Dash / Automapa'],
+      ['[F] / [ESC]', 'Pantalla completa / Pausa'],
+      ['[H]', 'Abrir/cerrar esta ayuda']
     ];
     controls.forEach(([key, desc], idx) => {
-      const y = 39 + idx * 8.8;
-      c.font = 'bold 5.3px monospace';
+      const y = 39 + idx * 9.5;
+      c.font = 'bold 5.1px monospace';
       c.fillStyle = '#ffbe0b';
-      c.fillText(key, 14, y);
-      c.font = '5.1px monospace';
+      c.fillText(key, 14, y, 52);
+      c.font = '4.9px monospace';
       c.fillStyle = '#fff3b0';
-      c.fillText(desc, 68, y);
+      c.fillText(desc, 68, y, 85);
     });
 
-    // Columna Derecha: QUÉ PUEDES HACER EN EL JUEGO
+    // Columna Derecha: TÁCTICA Y OBJETIVOS
     c.fillStyle = 'rgba(24, 10, 12, 0.94)';
     c.fillRect(163, 21, 147, 118);
     c.strokeStyle = '#70e000';
@@ -7953,23 +8143,23 @@ export class HellfallGame {
 
     c.font = 'bold 6.5px monospace';
     c.fillStyle = '#70e000';
-    c.fillText('🔥 QUÉ HACER EN EL JUEGO', 168, 30);
+    c.fillText('🔥 OBJETIVOS Y TÁCTICA', 168, 30);
 
     const actions = [
-      { title: '1. ENCUENTRA ARSENAL [1-7]:', l1: 'Empiezas con Super Escopeta.', l2: 'Busca pedestales de armas y cofres.' },
-      { title: '2. MERCADER DE ALMAS:', l1: 'Compra munición pesada [1-7],', l2: 'blindaje, vida o +12% daño.' },
-      { title: '3. MISIONES Y RUTAS:', l1: 'Reactores, oleadas, escolta VIP,', l2: 'cuenta atrás, 3 llaves y puertas.' },
-      { title: '4. DIRECTOR Y JEFES:', l1: 'Cuidado con emboscadas ocultas.', l2: 'Sector 10: ICON OF SIN en 3 fases.' }
+      { title: '1. ARSENAL [1-7] + [G]:', l1: 'Busca pedestales y cofres UAC.', l2: 'Guarda [G] contra escudos.' },
+      { title: '2. MERCADER DE ALMAS:', l1: 'Compra granadas [8], munición', l2: 'o mejoras de +12% daño.' },
+      { title: '3. MISIONES Y PUERTAS:', l1: 'Reactores, VIP, 3 llaves y', l2: 'rutas Roguelite entre sectores.' },
+      { title: '4. SECTOR 10:', l1: 'Activa y vence a cada Jefe.', l2: 'Derrota al ICON OF SIN (3 fases).' }
     ];
     actions.forEach((act, idx) => {
       const by = 40 + idx * 24.5;
       c.font = 'bold 5.7px monospace';
       c.fillStyle = '#00f5d4';
-      c.fillText(act.title, 167, by);
+      c.fillText(act.title, 167, by, 138);
       c.font = '5.3px monospace';
       c.fillStyle = '#d8d2c5';
-      c.fillText(act.l1, 167, by + 7.5);
-      c.fillText(act.l2, 167, by + 14.5);
+      c.fillText(act.l1, 167, by + 7.5, 138);
+      c.fillText(act.l2, 167, by + 14.5, 138);
     });
 
     c.fillStyle = 'rgba(22, 42, 16, 0.95)';
@@ -8845,6 +9035,7 @@ export class HellfallGame {
       o.holdsKey = !!e.holdsKey;
       o.invisible = !!e.invisible && e.alive;
       o.shieldActive = !!e.shieldActive;
+      o.guardBroken = e.kind === 'SHIELD' && (e.guardBrokenUntil || 0) > now;
       o.objHpRatio = -1;
     }
 
@@ -8924,12 +9115,14 @@ export class HellfallGame {
     }
     for (let i = 0; i < this.playerProjectiles.length; i++) {
       const pp = this.playerProjectiles[i];
-      const sc = pp.kind === 'BFG' ? 0.9 : (pp.kind === 'ROCKET' ? 0.56 : 0.44);
+      const sc = pp.kind === 'BFG' ? 0.9 : (pp.kind === 'ROCKET' ? 0.56 : (pp.kind === 'GRENADE' ? 0.36 : 0.44));
       const ppSprite =
         (pp.kind === 'BFG'
           ? this.bfgSprites?.[pulseFrame]
-          : (pp.kind === 'ROCKET' ? this.rocketSprites?.[pulseFrame] : this.plasmaSprites?.[pulseFrame])) || pp.sprite;
-      pushItem(pp.x, pp.y, 'orb', ppSprite, sc);
+          : (pp.kind === 'ROCKET'
+            ? this.rocketSprites?.[pulseFrame]
+            : (pp.kind === 'GRENADE' ? this.grenadeSprites?.[pulseFrame] : this.plasmaSprites?.[pulseFrame]))) || pp.sprite;
+      pushItem(pp.x, pp.y, 'orb', ppSprite, sc, 0, pp.z || 0);
     }
     for (let i = 0; i < this.enemyProjectiles.length; i++) {
       const ep = this.enemyProjectiles[i];
@@ -9014,6 +9207,9 @@ export class HellfallGame {
         } else if (obj.stunTimer > 0) {
           tintCol = '#ffbe0b';
           tintAlpha = 0.35;
+        } else if (obj.guardBroken) {
+          tintCol = Math.floor(now / 120) % 2 === 0 ? '#ff9e00' : '#00f5d4';
+          tintAlpha = 0.34;
         } else if (obj.shieldFlash > 0) {
           tintCol = '#00b4d8';
           tintAlpha = 0.5;
@@ -10171,6 +10367,14 @@ export class HellfallGame {
       c.fillStyle = active ? '#140708' : (!owned ? '#4a3538' : (num === 7 ? '#70e000' : (num === 6 ? '#00f5d4' : (num >= 4 ? '#ff4d00' : '#adb5bd'))));
       c.fillText(String(num), bx + 3.25, by + 6.5);
     });
+    const grenCount = this.player.grenades || 0;
+    const gbx = 135;
+    const gby = VIEW_HEIGHT + 13;
+    c.fillStyle = grenCount > 0 ? '#112c38' : '#241214';
+    c.fillRect(gbx, gby, 8.5, 8.5);
+    c.fillStyle = grenCount > 0 ? '#00f5d4' : '#6c4246';
+    c.font = 'bold 5.6px monospace';
+    c.fillText(`G${grenCount}`, gbx + 4.25, gby + 6.4);
 
     c.font = 'bold 13px monospace';
     drawDoomNum(`${this.player.armor || 0}%`, 204, VIEW_HEIGHT + 17, '#70e000');
@@ -10228,25 +10432,25 @@ export class HellfallGame {
 
     const items = this.merchantItems();
     items.forEach((item, idx) => {
-      const y = 27 + idx * 17;
+      const y = 27 + idx * 15;
       const affordable = (this.player.coins || 0) >= item.price && item.canBuy();
       c.fillStyle = affordable ? 'rgba(74, 37, 17, 0.92)' : 'rgba(30, 18, 18, 0.92)';
-      c.fillRect(24, y, WIDTH - 48, 15.5);
+      c.fillRect(24, y, WIDTH - 48, 13.8);
       c.strokeStyle = affordable ? '#ffbe0b' : '#4a2c30';
-      c.strokeRect(24, y, WIDTH - 48, 15.5);
+      c.strokeRect(24, y, WIDTH - 48, 13.8);
 
       c.textAlign = 'left';
-      c.font = 'bold 6.2px monospace';
+      c.font = 'bold 6px monospace';
       c.fillStyle = affordable ? '#fff3b0' : '#8d7b6a';
-      c.fillText(`[${idx + 1}] ${item.label}`, 29, y + 6.5);
-      c.font = '5.1px monospace';
+      c.fillText(`[${idx + 1}] ${item.label}`, 29, y + 6);
+      c.font = '4.9px monospace';
       c.fillStyle = affordable ? '#d8d2c5' : '#6b5a4a';
-      c.fillText(item.detail, 29, y + 12.8);
+      c.fillText(item.detail, 29, y + 11.6);
 
       c.textAlign = 'right';
-      c.font = 'bold 7.5px monospace';
+      c.font = 'bold 7.2px monospace';
       c.fillStyle = affordable ? '#ffbe0b' : '#6b5a4a';
-      c.fillText(`${item.price}`, WIDTH - 30, y + 10.5);
+      c.fillText(`${item.price}`, WIDTH - 30, y + 9.4);
     });
 
     c.textAlign = 'center';
@@ -10258,7 +10462,7 @@ export class HellfallGame {
 
     c.fillStyle = '#adb5bd';
     c.font = 'bold 5.8px monospace';
-    c.fillText('[1]-[7] COMPRAR · [E] O [ESC] SALIR', WIDTH / 2, 160);
+    c.fillText('[1]-[8] COMPRAR · [E] O [ESC] SALIR', WIDTH / 2, 160);
     c.restore();
   }
 

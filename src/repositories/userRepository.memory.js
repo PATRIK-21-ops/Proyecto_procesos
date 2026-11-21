@@ -1,18 +1,19 @@
 import { randomUUID } from 'node:crypto';
+import { generateRandomNickname } from '../utils/nickname.js';
 
 /** Implementación de desarrollo/pruebas. Tiene la misma interfaz que userRepository.pg.js. */
 export class UserRepositoryMemory {
   constructor(seed = []) {
-    this.users = seed.map((user) => ({ ...user }));
+    this.users = seed.map((user) => ({ nickname: user.nickname || generateRandomNickname(), ...user }));
   }
 
-  async create({ id = randomUUID(), email, passwordHash, role = 'user', status = 'active', createdAt = new Date().toISOString() }) {
+  async create({ id = randomUUID(), email, nickname = generateRandomNickname(), passwordHash, role = 'user', status = 'active', createdAt = new Date().toISOString() }) {
     if (this.users.some((user) => user.email === email)) {
       const error = new Error('El correo ya está registrado.');
       error.code = '23505';
       throw error;
     }
-    const user = { id, email, passwordHash, role, status, createdAt };
+    const user = { id, email, nickname, passwordHash, role, status, createdAt };
     this.users.push(user);
     return { ...user };
   }

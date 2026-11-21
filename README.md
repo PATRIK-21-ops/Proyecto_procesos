@@ -1,6 +1,10 @@
 # HELLFALL: Pixel Siege
 
-Aplicación FPS retro en primera persona, con motor JavaScript, backend Node.js/Express, registro/login, sesiones, roles, PostgreSQL ejecutado en contenedores docker, panel de administración, logs, pruebas y CI. Está organizada para cubrir con los requisitos de la especificación de Procesos de Ingeniería del Software. 
+Aplicación FPS retro en primera persona, con motor JavaScript, backend Node.js/Express, registro/login, sesiones, roles, PostgreSQL ejecutado en contenedores docker, panel de administración, logs, pruebas y CI. Está organizada para cubrir con los requisitos de la especificación de Procesos de Ingeniería del Software.
+
+## URL de la aplicación desplegada
+
+- **Producción (Render):** [https://hellfall-game.onrender.com](https://hellfall-game.onrender.com)
 
 > **Importante:** Para realizar la ejecución de este codigo primero debes disponer de una maquina virtual docker mediante la cual instales postgres para la base de datos. Debes tener node.js para la librería de javascript.
 
@@ -56,23 +60,23 @@ El CI de GitHub ejecuta `npm install` y `npm test` en cada pull request y en cad
 
 ```text
 Navegador
-  ├── public/index.html + css/styles.css          (presentación)
-  ├── public/js/ui/main.js                        (pantallas; no hace fetch)
-  ├── public/js/api/apiClient.js                  (único cliente HTTP del frontend)
-  └── public/js/game/game.js                      (motor raycasting en Canvas)
+  ├── public/index.html + css/styles.css + css/universe.css  (presentación y Universo SLAYER)
+  ├── public/js/ui/main.js                                   (vistas, router popstate y formularios; no hace fetch)
+  ├── public/js/api/apiClient.js                             (único cliente HTTP del frontend)
+  └── public/js/game/{game,weapons,voxels,portrait,rng}.js   (motor raycasting 2.5D en Canvas)
                          │ misma procedencia
                          ▼
-src/api/ + src/middleware/                          (API / autorización / CSRF)
+src/api/ + src/middleware/                                   (API / autorización / CSRF)
                          ▼
-src/services/                                      (reglas de negocio)
+src/services/                                                (reglas de negocio)
                          ▼
-src/repositories/                                  (acceso a datos)
+src/repositories/                                            (acceso a datos)
              ┌───────────┴───────────┐
              ▼                       ▼
    userRepository.memory.js   userRepository.pg.js
    scoreRepository.memory.js  scoreRepository.pg.js
                                      ▼
-                              PostgreSQL
+                              PostgreSQL (`sql/schema.sql`)
 ```
 
 La regla principal: `UserService` recibe un repositorio por constructor. En el Hito 3 se sustituye el repositorio de memoria por PostgreSQL **sin modificar las reglas de negocio**.
@@ -83,51 +87,58 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 |---|---|---|---|
 | `GET` | `/api/health` | Público | Health check |
 | `GET` | `/api/auth/csrf` | Público | Obtener token CSRF |
-| `POST` | `/api/auth/register` | CSRF | Crear cuenta |
+| `POST` | `/api/auth/register` | CSRF | Crear cuenta local (con confirmación opcional por correo) |
+| `GET` | `/api/auth/confirm?token=...` | Público | Activar cuenta tras confirmación por correo |
 | `POST` | `/api/auth/login` | CSRF | Iniciar sesión |
-| `GET` | `/api/auth/me` | Sesión | Usuario actual y CSRF |
+| `GET` | `/api/auth/google` | Público | Flujo OAuth 2.0 con Google |
+| `GET` | `/api/auth/google/callback` | Público | Callback OAuth 2.0 y creación de sesión |
+| `GET` | `/api/auth/me` | Sesión | Usuario actual (`publicUser` con `nickname`) y CSRF |
 | `POST` | `/api/auth/logout` | Sesión + CSRF | Invalidar la sesión |
 | `GET` | `/api/users` | Administrador | Listar email/rol/estado |
+| `PATCH` | `/api/users/me/nickname` | Sesión + CSRF | Actualizar el nickname público del usuario en BD |
 | `GET` | `/api/users/:id/active` | Administrador | Consultar estado activo |
 | `DELETE` | `/api/users/:id` | Sesión + CSRF | Admin elimina cualquiera; usuario normal solo a sí mismo |
-| `GET` | `/api/scores/top?limit=10` | Público | Tabla de mejores puntuaciones |
-| `GET` | `/api/scores/mine` | Sesión | Historial personal |
-| `POST` | `/api/scores` | Sesión + CSRF | Registrar el resultado de una partida |
+| `GET` | `/api/scores/top?limit=10` | Público / Sesión | Ranking filtrable (`period=day\|week\|all`, `dailyOnly`), excluye 0 pts y resalta al jugador actual (`viewerRank`) |
+| `GET` | `/api/scores/stats` | Público | Estadísticas globales: partidas, bajas totales, jugadores registrados y sector máximo |
+| `GET` | `/api/scores/mine` | Sesión | Historial personal de partidas |
+| `POST` | `/api/scores` | Sesión + CSRF | Registrar bajas, duración, bonus, `sector`, `isDaily` y `nickname` de la partida |
 | `GET` | `/api/challenge/today` | Público | Fecha y semilla del desafío diario |
 
 Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticamente. Las contraseñas no se devuelven en la API. La eliminación de usuarios es lógica (`status = deleted`) para conservar trazabilidad y evitar que una cuenta borrada vuelva a iniciar sesión.
 
-## Roles y administrador inicial
+## Sistema de Nicknames y Privacidad del Ranking
 
-- `user`: puede jugar, guardar sus puntuaciones y eliminar su propia cuenta.
-- `admin`: además puede listar usuarios, consultar su estado y eliminar otras cuentas.
-- `ADMIN_EMAIL` y `ADMIN_PASSWORD` se leen del entorno. Al arrancar, el servidor crea el primer administrador si no existe; si el email ya existe, lo promociona a admin sin cambiar la contraseña existente. No se escribe ninguna contraseña en el código.
-- Las comprobaciones se realizan en el backend, no solo ocultando botones en la interfaz.
+- **Nickname obligatorio al guardar partida (`POST /api/scores`):** tanto al morir como al completar los 10 sectores, la pantalla de informe exige introducir o confirmar tu `nickname` (2–24 caracteres) antes de guardar la puntuación en la base de datos.
+- **Nickname aleatorio por defecto:** cualquier usuario nuevo o existente en BD sin `nickname` recibe automáticamente uno aleatorio (por ejemplo `Phobos-742` o migración SQL `Slayer-...`), y puede cambiarlo en cualquier momento desde **Mi Cuenta**, antes de iniciar partida o justo al guardar su puntuación.
+- **Ranking libre de correos:** `GET /api/scores/top` y `ScoreService.top()` omiten el campo `email` y devuelven únicamente el `nickname` público del jugador (con `formatPublicAlias` como respaldo).
+- **Límite de bajas configurable:** `MAX_SCORE_KILLS` permite hasta `100000` bajas por defecto (configurable hasta `500000` en `.env`) para partidas frenéticas.
 
-## El juego
+## Portal Web y Protagonista Único (`SLAYER`)
 
-El motor de `public/js/game/game.js` dibuja a 320 × 200 y usa DDA/raycasting para las paredes, texturas pixeladas procedurales, billboards para enemigos y objetos, colisiones, daño, munición, kits médicos, HUD, pausa, victoria y Game Over. Los gráficos se generan por código y son originales; no se incluyen sprites ni logotipos de DOOM.
+- **Protagonista único:** se ha unificado la experiencia alrededor de **SLAYER** (*Centinela del Abismo*) en portada, retrato animado HUD (`public/js/game/portrait.js`) y pantalla de despliegue.
+- **Portal web Universo SLAYER y portada interactiva:** en inicio aparecen únicamente `▶ DESPLEGAR SLAYER` junto a `INICIAR SESIÓN` y `CREAR CUENTA` (desaparecen al iniciar sesión), franja de estadísticas en vivo (`GET /api/scores/stats`), demo de gameplay 2.5D en bucle con soporte `prefers-reduced-motion`, tarjeta de **Desafío de Hoy** con cuenta atrás a medianoche de España y Top 3 diario, tira de controles PC, características del juego, retratos voxel del bestiario (`public/js/ui/heroDemo.js`), medallas, novedades, ranking por periodos (`Hoy / Semana / Histórico`) con columna `Sector`, metadatos Open Graph/favicon y sección legal RGPD/LSSI/Cookies y aviso de proyecto de fans (`#view-legal`).
+
+## El juego y Mejoras Recientes (`MEJORIAS`)
+
+El motor de [public/js/game/game.js](file:///c:/Users/Patrik/Documents/Universidad/Quinto%20a%C3%B1o/Procesos/Proyecto_procesos/public/js/game/game.js) dibuja a `320 × 200` usando DDA/raycasting procedural, iluminación dinámica, pathfinding sobre rejilla (flow field), enemigos voxel (`public/js/game/voxels.js`), efectos *Screen Melt* al cambiar de sector o morir, medallas arcade (*Carnicero*, *Intocable*, *Cazatesoros*, *Pirómano*) y pantalla completa ajustada.
+
+### Novedades de combate y progresión
+- **Granada EMP `[G]` (`makeGrenadeSprite` + `throwGrenade` / `detonateGrenade`):** empiezas con 3 granadas (máx. 6), recargas en cofres o al avanzar de sector y compras +2 al Mercader `[8]`. Rebotan contra muros y suelos, aturden en área y rompen escudos enemigos durante `3.4 s` con multiplicador `1.45×`.
+- **Balanceo del Centinela del Escudo (`SHIELD`):** reducida su vida (`7.8`), ángulo de bloqueo frontal (`0.76 rad`) y velocidad de giro (`1.45 rad/s`); además recibe `22%` de daño residual frontal, se sobrecarga tras `6` impactos (`shieldHeat`) y pierde la guardia al golpearle con puñetazo `[V]`.
+- **Arsenal `[1]-[7]` + Mejoras Dinámicas y Jefes:** Super Escopeta, Chaingun, Lanzallamas optimizado, Motosierra, Lanzacohetes, Rifle Plasma y BFG-9000; Altar de Mejoras reactivas (Embestida `[C]`, Contragolpe, Pulso Cinético, Aura Ígnea), Rutas Roguelite `[1-3]`, Jefes de arena e **Icon of Sin** en 3 fases.
 
 ### Desafío diario
 
-El botón **🔥 DESAFÍO DIARIO** del briefing pide al servidor la semilla del día (`GET /api/challenge/today`) y empieza una partida en la que todos los jugadores tienen el mismo plan de sectores, los mismos mapas y los mismos enemigos iniciales. La semilla es un HMAC de la fecha (hora de España) con el secreto del servidor, así que no se puede calcular la de otro día. El juego usa un generador con semilla (`public/js/game/rng.js`) solo para generar la partida; los efectos visuales y de sonido siguen siendo aleatorios. Si el jugador elige rutas distintas entre sectores, los sectores siguientes también pueden cambiar.
+El botón **🔥 DESAFÍO DIARIO** pide al servidor la semilla del día (`GET /api/challenge/today`, HMAC-SHA256 con fecha de España y secreto de sesión) y lanza una partida con el mismo plan de sectores y mapas generados mediante `public/js/game/rng.js`.
 
-## Estructura 
+## Estructura
 
-Backend: Carpeta "src" ->  api, config, archivos.js, etc. 
-Dentro del backend: Capa API, capa de lógica de negocio y capa de acceso a datos, claramente separadas
-en distintos módulos/archivos -> rutas de redes entre clientes (authRoutes,scoreRoutes,userRouter), etc. Base de datos vinculada internamente al código (server.js -> Crea automaticamente las tablas dentro del código)
+- `src/`: backend por capas (`api/`, `services/`, `repositories/`, `middleware/`, `config/`, `utils/`). `src/server.js` inicializa tablas automáticamente con `sql/schema.sql`.
+- `public/`: frontend modular (`index.html`, `css/styles.css`, `css/universe.css`, `js/ui/main.js`, `js/api/apiClient.js`, `js/game/`).
+- `tests/`: pruebas unitarias e integración (`api`, `scoreService`, `userService`, `challenge`, `semilla`, `variante3`).
+- `docs/`: mapa de PBIs (`docs/PBI-MAP.md`) y guía paso a paso (`docs/GUIA-PASO-A-PASO.md`).
 
-Frontend: Publico (public) -> archivos .js, index.html, etc. Portada para el público, enlaces de las rutas con comandos JavaScript. 
+## Hito 4: Servicios externos (Google OAuth 2.0 y Correo)
 
-## Hito 4: Servicios externos (Google OAuth 2.0) y manejo de errores
-
-Se ha integrado el inicio de sesión y registro mediante **Google OAuth 2.0**:
-- **Rutas OAuth (`src/api/authRoutes.js`):**
-  - `GET /api/auth/google`: Redirige al usuario a la pantalla de consentimiento de Google.
-  - `GET /api/auth/google/callback`: Intercambia el código de autorización por el token de acceso, obtiene el correo verificado de Google, invoca `userService.loginWithGoogle()` y regenera la sesión segura (`hellfall.sid`) junto con el token CSRF.
-- **Lógica de negocio (`src/services/userService.js`):** El método `loginWithGoogle({ email })` autentica al usuario si ya existe o crea automáticamente la cuenta activa en caso de ser su primer acceso.
-- **Variables de entorno necesarias:**
-  - `GOOGLE_CLIENT_ID`
-  - `GOOGLE_CLIENT_SECRET`
-  - `GOOGLE_CALLBACK_URL` (en local `http://localhost:8080/api/auth/google/callback` y en producción la URL de Render).
+Se ha integrado el inicio de sesión mediante **Google OAuth 2.0** (`GET /api/auth/google` y `/api/auth/google/callback`) y confirmación opcional por correo con **Brevo** (`REQUIRE_EMAIL_CONFIRMATION=true`). Al iniciar por Google también se asigna automáticamente un `nickname` aleatorio editable.
+- **Variables de entorno clave:** `SESSION_SECRET`, `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `MAX_SCORE_KILLS`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `REQUIRE_EMAIL_CONFIRMATION`, `BREVO_API_KEY`.
