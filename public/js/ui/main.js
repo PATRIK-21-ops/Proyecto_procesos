@@ -16,6 +16,7 @@ let activeView = 'home';
 let activeLoreTab = 'origin';
 let activeRankingPeriod = 'all';
 let activeDailyRun = false;
+let cachedDailyChallenge = null;
 let pendingMatchResult = null;
 let heroArtMode = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 'svg' : 'demo';
 let dailyCountdownTimer = null;
@@ -122,6 +123,7 @@ function showView(name, { sub = '', push = true, replace = false } = {}) {
   if (name !== 'game') {
     stopMetalMenuEffects();
     if (game?.running && !game.paused && !game.finished) game.pause();
+    if (game?.isFullscreenActive?.()) game.exitFullscreenClean();
     globalDoomMusic.setPaused(true);
   }
   if (name !== 'home') {
@@ -361,6 +363,9 @@ async function loadDailyChallengeHome() {
   startDailyCountdown();
   try {
     const challenge = await api.challengeToday();
+    if (challenge?.date && Number.isInteger(challenge?.seed)) {
+      cachedDailyChallenge = challenge;
+    }
     if ($('#daily-home-date') && challenge?.date) {
       $('#daily-home-date').textContent = `HOY · ${challenge.date}`;
     }
@@ -567,11 +572,12 @@ function startMetalMenuEffects() {
 
 function showMetalMenu() {
   globalDoomMusic.stopMatch();
+  if (game?.isFullscreenActive?.()) game.exitFullscreenClean();
   pendingMatchResult = null;
   syncNicknameUI(currentUser?.nickname || '');
   $('#game-status').textContent = 'SLAYER READY';
   $('#game-status-text').textContent = `Slayer listo: ${currentUser?.nickname || 'SLAYER'}`;
-  $('#game-message').textContent = 'Pulsa INICIAR PARTIDA cuando quieras desplegarte (usa [H] en partida para controles).';
+  $('#game-message').textContent = 'Pulsa INICIAR PARTIDA cuando quieras desplegarte.';
   if ($('#metal-menu')) $('#metal-menu').classList.remove('hidden');
   if ($('#briefing-box')) $('#briefing-box').classList.add('hidden');
   if ($('#combat-report')) $('#combat-report').classList.add('hidden');
@@ -614,6 +620,7 @@ async function startGame({ challenge = null } = {}) {
         $('#game-status').textContent = status.toUpperCase();
         $('#game-status-text').textContent = status;
       },
+      onQuit: () => showMetalMenu(),
       onFinish: async (result) => {
         $('#game-overlay').classList.remove('hidden');
         if ($('#metal-menu')) $('#metal-menu').classList.add('hidden');
@@ -672,13 +679,29 @@ async function startGame({ challenge = null } = {}) {
     $('#game-status-text').textContent = `${activeNick} desplegado // DESAFÍO DIARIO ${challenge.date}`;
     $('#game-message').textContent = `Desafío diario del ${challenge.date}: mismos sectores para todos hoy.`;
   }
-  game.start({ showBriefing: false, character: selectedGender, seed: challenge ? challenge.seed : null });
+  game.start({ character: selectedGender, seed: challenge ? challenge.seed : null });
+}
+
+function getMadridDateStr() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const val = (type) => parts.find((p) => p.type === type)?.value || '';
+  return `${val('year')}-${val('month')}-${val('day')}`;
 }
 
 async function startDailyChallenge() {
   if (!currentUser) return showView('login');
+  if (cachedDailyChallenge?.date && cachedDailyChallenge.date === getMadridDateStr()) {
+    startGame({ challenge: cachedDailyChallenge });
+    return;
+  }
   try {
     const challenge = await api.challengeToday();
+    cachedDailyChallenge = challenge;
     startGame({ challenge });
   } catch (error) { showApiError(error); }
 }

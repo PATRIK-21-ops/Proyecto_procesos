@@ -1445,7 +1445,7 @@ function makeFlameBallSprite(stage) {
 // CLASE PRINCIPAL HELLFALL GAME (API pública 100% compatible con main.js)
 // ============================================================================
 export class HellfallGame {
-  constructor(canvas, { onStatus = () => {}, onFinish = () => {} } = {}) {
+  constructor(canvas, { onStatus = () => {}, onFinish = () => {}, onQuit = null } = {}) {
     this.canvas = canvas;
     this.renderScale = clamp(CONFIG.RENDER_SCALE || 2, 1, 2);
     this.worldW = Math.round(WIDTH * this.renderScale);
@@ -1456,6 +1456,7 @@ export class HellfallGame {
     this.ctx.imageSmoothingEnabled = false;
     this.onStatus = onStatus;
     this.onFinish = onFinish;
+    this.onQuit = typeof onQuit === 'function' ? onQuit : null;
     this.audio = new HellAudioEngine();
 
     this.currentTheme = CONFIG.SECTOR_THEMES[0];
@@ -1711,6 +1712,12 @@ export class HellfallGame {
     this.walkBobX = 0;
     this.walkBobY = 0;
     this.wasPointerLocked = false;
+    this.fullscreenDesired = false;
+    this.isViewportFullscreen = false;
+    this._wasNativeFullscreen = Boolean(typeof document !== 'undefined' && document.fullscreenElement);
+    this._exitingFullscreenIntentional = false;
+    this._lastPauseAt = 0;
+    this._lastResumeAt = 0;
 
     this.setupFullscreenSupport();
 
@@ -1896,9 +1903,45 @@ export class HellfallGame {
     } catch (_) {}
   }
 
+  getFullscreenTarget() {
+    return this.canvas.parentElement || this.canvas;
+  }
+
+  isFullscreenActive() {
+    return Boolean(typeof document !== 'undefined' && document.fullscreenElement) || Boolean(this.isViewportFullscreen);
+  }
+
+  lockEscapeKey() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.keyboard && typeof navigator.keyboard.lock === 'function') {
+        const res = navigator.keyboard.lock(['Escape']);
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  unlockEscapeKey() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.keyboard && typeof navigator.keyboard.unlock === 'function') {
+        navigator.keyboard.unlock();
+      }
+    } catch (_) {}
+  }
+
+  setViewportFullscreen(active) {
+    const wrap = this.getFullscreenTarget();
+    this.isViewportFullscreen = Boolean(active);
+    if (wrap && wrap.classList) {
+      wrap.classList.toggle('is-viewport-fullscreen', this.isViewportFullscreen);
+    }
+    if (typeof document !== 'undefined' && document.body && document.body.classList) {
+      document.body.classList.toggle('hellfall-fs-active', this.isViewportFullscreen);
+    }
+  }
+
   setupFullscreenSupport() {
     this.updateFullscreenLayout = () => {
-      const isFs = Boolean(document.fullscreenElement);
+      const isFs = this.isFullscreenActive();
       if (isFs && typeof window !== 'undefined' && window.innerWidth && window.innerHeight && this.canvas?.style?.setProperty) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
@@ -1910,16 +1953,59 @@ export class HellfallGame {
         this.canvas.style.removeProperty('width');
         this.canvas.style.removeProperty('height');
       }
-      const btn = document.getElementById('fullscreen-toggle');
+      const btn = typeof document !== 'undefined' && document.getElementById ? document.getElementById('fullscreen-toggle') : null;
       if (btn) {
         btn.textContent = isFs ? '🗗 MINIMIZAR PANTALLA [F]' : '⛶ PANTALLA COMPLETA [F]';
       }
       if (this.paused) this.drawPauseScreen();
     };
-    document.addEventListener('fullscreenchange', this.updateFullscreenLayout);
-    window.addEventListener('resize', this.updateFullscreenLayout);
 
-    const musicBtn = document.getElementById('music-toggle');
+    this.onFullscreenChange = () => {
+      const isNativeFs = Boolean(typeof document !== 'undefined' && document.fullscreenElement);
+      const exitedNative = this._wasNativeFullscreen && !isNativeFs;
+      this._wasNativeFullscreen = isNativeFs;
+
+      if (isNativeFs) {
+        this._exitingFullscreenIntentional = false;
+        this.lockEscapeKey();
+      } else {
+        this.unlockEscapeKey();
+        if (exitedNative && this._exitingFullscreenIntentional) {
+          this._exitingFullscreenIntentional = false;
+        } else if (exitedNative) {
+          // Si el navegador salió de pantalla completa sin pulsar [F] (p. ej. ESC en navegadores sin Keyboard Lock),
+          // pausamos la partida de inmediato y mantenemos la vista expandida hasta que el jugador pulse [F].
+          if (this.running && !this.finished) {
+            if (this.fullscreenDesired) {
+              this.setViewportFullscreen(true);
+            }
+            if (this.briefingOpen) {
+              this.dismissBriefing();
+            } else if (this.shopOpen) {
+              this.closeShop();
+            } else if (this.mapOpen) {
+              this.mapOpen = false;
+              this.lastTime = performance.now();
+            } else if (!this.paused && !this.intermission && !this.deathSequence && !this.victorySequence) {
+              this.pause();
+            }
+          } else {
+            this.fullscreenDesired = false;
+            this.setViewportFullscreen(false);
+          }
+        }
+      }
+      this.updateFullscreenLayout();
+    };
+
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('fullscreenchange', this.onFullscreenChange);
+    }
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('resize', this.updateFullscreenLayout);
+    }
+
+    const musicBtn = typeof document !== 'undefined' && document.getElementById ? document.getElementById('music-toggle') : null;
     if (musicBtn && musicBtn.parentElement && !document.getElementById('fullscreen-toggle')) {
       const fsBtn = document.createElement('button');
       fsBtn.id = 'fullscreen-toggle';
@@ -1929,30 +2015,98 @@ export class HellfallGame {
       fsBtn.textContent = '⛶ PANTALLA COMPLETA [F]';
       fsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        fsBtn.blur();
         this.toggleFullscreen();
       });
       musicBtn.insertAdjacentElement('afterend', fsBtn);
     }
   }
 
-  toggleFullscreen() {
-    const target = this.canvas.parentElement || this.canvas;
-    if (!document.fullscreenElement) {
-      const req = target.requestFullscreen ? target : this.canvas;
-      if (req.requestFullscreen) {
-        req.requestFullscreen().then(() => {
-          if (this.updateFullscreenLayout) this.updateFullscreenLayout();
-          if (this.running && !this.paused && !this.intermission && !this.deathSequence && !this.victorySequence && this.canvas.requestPointerLock) {
-            this.canvas.requestPointerLock();
-          }
-          if (this.paused) this.drawPauseScreen();
-        }).catch(() => {});
+  enterFullscreen({ lockPointer = false } = {}) {
+    this._exitingFullscreenIntentional = false;
+    this.fullscreenDesired = true;
+    this.setViewportFullscreen(true);
+    const target = this.getFullscreenTarget();
+    const reqTarget = target && target.requestFullscreen ? target : this.canvas;
+    const tryPointerLock = () => {
+      if (lockPointer && this.running && !this.paused && !this.briefingOpen && !this.intermission && !this.deathSequence && !this.victorySequence) {
+        this.safeRequestPointerLock();
       }
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen().then(() => {
+    };
+    if (typeof document !== 'undefined' && !document.fullscreenElement && reqTarget && reqTarget.requestFullscreen) {
+      try {
+        const res = reqTarget.requestFullscreen();
+        if (res && typeof res.then === 'function') {
+          res.then(() => {
+            this._wasNativeFullscreen = Boolean(document.fullscreenElement);
+            this.lockEscapeKey();
+            if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+            tryPointerLock();
+            if (this.paused) this.drawPauseScreen();
+          }).catch(() => {
+            if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+            tryPointerLock();
+            if (this.paused) this.drawPauseScreen();
+          });
+        } else {
+          this.lockEscapeKey();
+          if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+          tryPointerLock();
+        }
+      } catch (_) {
         if (this.updateFullscreenLayout) this.updateFullscreenLayout();
-        if (this.paused) this.drawPauseScreen();
-      }).catch(() => {});
+        tryPointerLock();
+      }
+    } else {
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
+        this._wasNativeFullscreen = true;
+        this.lockEscapeKey();
+      }
+      if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+      tryPointerLock();
+      if (this.paused) this.drawPauseScreen();
+    }
+  }
+
+  exitFullscreenClean() {
+    this.fullscreenDesired = false;
+    this.setViewportFullscreen(false);
+    this.unlockEscapeKey();
+    if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+      this._exitingFullscreenIntentional = true;
+      try {
+        const res = document.exitFullscreen();
+        if (res && typeof res.then === 'function') {
+          res.then(() => {
+            if (!this._wasNativeFullscreen) this._exitingFullscreenIntentional = false;
+            if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+            if (this.paused) this.drawPauseScreen();
+          }).catch(() => {
+            this._exitingFullscreenIntentional = false;
+            this._wasNativeFullscreen = Boolean(document.fullscreenElement);
+            if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+            if (this.paused) this.drawPauseScreen();
+          });
+        } else {
+          if (!this._wasNativeFullscreen) this._exitingFullscreenIntentional = false;
+          if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+          if (this.paused) this.drawPauseScreen();
+        }
+      } catch (_) {
+        this._exitingFullscreenIntentional = false;
+        if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+      }
+    } else {
+      if (this.updateFullscreenLayout) this.updateFullscreenLayout();
+      if (this.paused) this.drawPauseScreen();
+    }
+  }
+
+  toggleFullscreen() {
+    if (this.isFullscreenActive()) {
+      this.exitFullscreenClean();
+    } else {
+      this.enterFullscreen({ lockPointer: this.running && !this.paused });
     }
   }
 
@@ -3549,63 +3703,44 @@ export class HellfallGame {
     }
   }
 
-  start({ showBriefing = false, character = null, seed = null } = {}) {
+  start({ character = null, seed = null } = {}) {
     if (this.frameId) cancelAnimationFrame(this.frameId);
+    if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
     if (character) this.setCharacter(character);
     // Desafío diario: con semilla, el plan de sectores y los mapas salen iguales para todos.
     this.seed = Number.isInteger(seed) ? seed >>> 0 : null;
-    const snap = this.captureCurrentScreen();
     this.reset();
     this.running = true;
     this.paused = false;
-    this.briefingOpen = Boolean(showBriefing);
+    this.briefingOpen = false;
+    this.melt = null;
     this.lastTime = performance.now();
     globalDoomMusic.startMatch();
     this.audio.startAmbience();
-    if (!this.briefingOpen) {
-      this.startScreenMelt('SECTOR', snap);
-    } else {
-      this.onStatus(`${this.characterProfile.name} listo // Pulsa [ESPACIO], [ENTER] o haz clic para desplegarte`);
-    }
+    this.setLogicalTransform();
+    this.renderWorld(this.lastTime);
+    this.drawHUD(this.lastTime);
+    const sectorName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
+    this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} // ¡COMBATE ACTIVO!`);
     this.enterFullscreenOnStart();
     this.frameId = requestAnimationFrame(this.boundLoop);
   }
 
   dismissBriefing() {
     if (!this.briefingOpen) return;
-    this.downloadBriefingSnap = this.captureCurrentScreen();
     this.briefingOpen = false;
     this.keys.clear();
     this.mouseDown = false;
     this.lastTime = performance.now();
-    this.startTime = this.lastTime;
-    this.levelStartTime = this.lastTime;
-    this.audio.playShotgun();
-    this.startScreenMelt('SECTOR', this.downloadBriefingSnap);
     this.safeRequestPointerLock();
     const sectorName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
     this.onStatus(`SECTOR ${this.level}/${MAX_LEVELS}: ${sectorName} // ¡COMBATE ACTIVO!`);
   }
 
   enterFullscreenOnStart() {
-    const target = this.canvas.parentElement || this.canvas;
-    const reqTarget = target.requestFullscreen ? target : this.canvas;
-    if (!document.fullscreenElement && reqTarget.requestFullscreen) {
-      reqTarget.requestFullscreen()
-        .then(() => {
-          this.updateFullscreenLayout();
-          if (this.running && !this.paused && !this.briefingOpen && !this.intermission && !this.deathSequence && !this.victorySequence) {
-            this.safeRequestPointerLock();
-          }
-        })
-        .catch(() => {
-          if (this.running && !this.paused && !this.briefingOpen && !this.intermission) {
-            this.safeRequestPointerLock();
-          }
-        });
-    } else if (this.running && !this.paused && !this.briefingOpen && !this.intermission) {
-      this.safeRequestPointerLock();
-    }
+    this.enterFullscreen({ lockPointer: true });
   }
 
   quitWithoutSaving() {
@@ -3623,13 +3758,19 @@ export class HellfallGame {
     globalDoomMusic.stopMatch();
     if (this.frameId) cancelAnimationFrame(this.frameId);
     this.safeExitPointerLock();
-    if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
-    }
+    this.exitFullscreenClean();
     this.renderAttractScreen();
     this.onStatus('Partida abandonada (No se ha guardado la puntuación)');
-    const overlay = document.getElementById('game-overlay');
-    if (overlay) overlay.classList.remove('hidden');
+    if (this.onQuit) {
+      this.onQuit();
+    } else if (typeof document !== 'undefined' && document.getElementById) {
+      const metalMenu = document.getElementById('metal-menu');
+      const briefingBox = document.getElementById('briefing-box');
+      const overlay = document.getElementById('game-overlay');
+      if (metalMenu) metalMenu.classList.remove('hidden');
+      if (briefingBox) briefingBox.classList.add('hidden');
+      if (overlay) overlay.classList.remove('hidden');
+    }
   }
 
   destroy() {
@@ -3643,20 +3784,29 @@ export class HellfallGame {
     this.audio.stopAmbience();
     globalDoomMusic.stopMatch();
     if (this.frameId) cancelAnimationFrame(this.frameId);
-    this.canvas.removeEventListener('mousedown', this.onMouseDown);
-    this.canvas.removeEventListener('contextmenu', this.onContextMenu);
-    window.removeEventListener('mouseup', this.onMouseUp);
-    window.removeEventListener('blur', this.onWindowBlur);
-    window.removeEventListener('wheel', this.onWheel);
-    window.removeEventListener('keydown', this.onKeyDown);
-    window.removeEventListener('keyup', this.onKeyUp);
-    document.removeEventListener('mousemove', this.onMouseMove);
-    document.removeEventListener('pointerlockchange', this.onPointerLockChange);
-    if (this.updateFullscreenLayout) {
-      document.removeEventListener('fullscreenchange', this.updateFullscreenLayout);
-      window.removeEventListener('resize', this.updateFullscreenLayout);
+    if (this.canvas.removeEventListener) {
+      this.canvas.removeEventListener('mousedown', this.onMouseDown);
+      this.canvas.removeEventListener('contextmenu', this.onContextMenu);
+    }
+    if (typeof window !== 'undefined' && window.removeEventListener) {
+      window.removeEventListener('mouseup', this.onMouseUp);
+      window.removeEventListener('blur', this.onWindowBlur);
+      window.removeEventListener('wheel', this.onWheel);
+      window.removeEventListener('keydown', this.onKeyDown);
+      window.removeEventListener('keyup', this.onKeyUp);
+      if (this.updateFullscreenLayout) {
+        window.removeEventListener('resize', this.updateFullscreenLayout);
+      }
+    }
+    if (typeof document !== 'undefined' && document.removeEventListener) {
+      document.removeEventListener('mousemove', this.onMouseMove);
+      document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+      if (this.onFullscreenChange) {
+        document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+      }
     }
     this.safeExitPointerLock();
+    this.exitFullscreenClean();
   }
 
   cycleMouseSensitivity(dir = 1) {
@@ -3669,10 +3819,17 @@ export class HellfallGame {
   }
 
   handleKeyDown(e) {
+    const target = e.target;
+    const tag = target && target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+    const gameView = typeof document !== 'undefined' && document.getElementById ? document.getElementById('view-game') : null;
+    if (gameView && gameView.classList && gameView.classList.contains('hidden')) return;
+
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     this.keys.add(e.code);
 
     if (e.code === 'KeyF' && !e.repeat) {
+      e.preventDefault();
       this.toggleFullscreen();
       return;
     }
@@ -3691,11 +3848,12 @@ export class HellfallGame {
       this.keys.clear();
       this.wasPointerLocked = false;
       this.safeExitPointerLock();
-      this.onStatus('MANUAL TÁCTICO DE COMBATE // Pulsa [ESPACIO], [ENTER] o haz clic para volver');
+      this.onStatus('MANUAL TÁCTICO DE COMBATE // Pulsa [H], [ESC] o haz clic para volver');
       return;
     }
 
     if (this.victorySequence) {
+      if (e.code === 'Escape') e.preventDefault();
       if (!this.melt && performance.now() - this.victorySequence.startTime > 650 && ['Space', 'Enter', 'Escape', 'KeyE'].includes(e.code)) {
         this.finalizeMatch(true);
       }
@@ -3703,6 +3861,7 @@ export class HellfallGame {
     }
 
     if (this.deathSequence) {
+      if (e.code === 'Escape') e.preventDefault();
       if (!this.melt && performance.now() - this.deathSequence.startTime > 650 && ['Space', 'Enter', 'Escape', 'KeyE'].includes(e.code)) {
         this.finalizeMatch(false);
       }
@@ -3710,7 +3869,8 @@ export class HellfallGame {
     }
 
     if (this.shopOpen) {
-      if (e.code === 'KeyE' || e.code === 'Escape') {
+      if (e.code === 'Escape') e.preventDefault();
+      if ((e.code === 'KeyE' || e.code === 'Escape') && !e.repeat) {
         e.preventDefault();
         this.closeShop();
         return;
@@ -3724,6 +3884,10 @@ export class HellfallGame {
     }
 
     if (this.intermission) {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        return;
+      }
       const im = this.intermission;
       if (im.stage === 'ROUTE') {
         if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
@@ -3768,12 +3932,28 @@ export class HellfallGame {
       }
       return;
     }
-    if (this.mapOpen) return;
+    if (this.mapOpen) {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (!e.repeat) {
+          this.mapOpen = false;
+          this.lastTime = performance.now();
+          this.onStatus('AUTOMAPA CERRADO');
+        }
+      }
+      return;
+    }
 
-    if (e.code === 'Escape' && this.running && !this.finished && !this.intermission) {
+    if (e.code === 'Escape') {
+      if (this.isFullscreenActive()) e.preventDefault();
+      if (!this.running || this.finished || this.intermission) return;
+      e.preventDefault();
+      if (e.repeat) return;
       if (this.paused) {
-        if (performance.now() - (this._lastPointerUnlockAt || 0) > 150) {
+        const now = performance.now();
+        if (now - (this._lastPauseAt || 0) > 200 && now - (this._lastPointerUnlockAt || 0) > 200) {
           this.resume();
+          this.safeRequestPointerLock();
         }
       } else {
         this.pause();
@@ -3805,7 +3985,8 @@ export class HellfallGame {
         }
         return;
       }
-      if (e.code === 'Enter' || e.code === 'Space') {
+      if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat) {
+        e.preventDefault();
         if (this.pauseMenuIndex === 0) {
           this.resume();
           this.safeRequestPointerLock();
@@ -3823,7 +4004,7 @@ export class HellfallGame {
         }
         return;
       }
-      if (e.code === 'KeyQ') {
+      if (e.code === 'KeyQ' && !e.repeat) {
         this.quitWithoutSaving();
         return;
       }
@@ -3883,22 +4064,32 @@ export class HellfallGame {
 
   pause() {
     this.paused = true;
+    this._lastPauseAt = performance.now();
     this.pauseMenuIndex = 0;
     this.mouseDown = false;
     this.keys.clear();
     this.mapOpen = false;
     this.audio.setAmbiencePaused(true);
     globalDoomMusic.setPaused(true);
-    this.onStatus('Pausado (ESC/Enter: Seguir | F: Pantalla Completa / Minimizar | Q: Salir)');
+    this.onStatus('Pausado (ESC: Continuar | F: Minimizar pantalla | Q: Salir)');
     this.safeExitPointerLock();
     this.drawPauseScreen();
   }
 
   resume() {
     if (!this.running || this.finished) return;
+    if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
     this.paused = false;
+    this._lastResumeAt = performance.now();
     this.audio.setAmbiencePaused(false);
     globalDoomMusic.setPaused(false);
+    if (this.fullscreenDesired && typeof document !== 'undefined' && !document.fullscreenElement) {
+      this.enterFullscreen({ lockPointer: true });
+    } else if (typeof document !== 'undefined' && document.fullscreenElement) {
+      this.lockEscapeKey();
+    }
     this.lastTime = performance.now();
     this.frameId = requestAnimationFrame(this.boundLoop);
   }
@@ -8121,7 +8312,7 @@ export class HellfallGame {
       ['[5]-[7]', 'Cohetes / Plasma / BFG'],
       ['[R] / [E]', 'Recargar / Interactuar'],
       ['[C] / [TAB]', 'Embestida Dash / Automapa'],
-      ['[F] / [ESC]', 'Pantalla completa / Pausa'],
+      ['[F] / [ESC]', 'Minimizar pant. / Pausa'],
       ['[H]', 'Abrir/cerrar esta ayuda']
     ];
     controls.forEach(([key, desc], idx) => {
@@ -8170,15 +8361,14 @@ export class HellfallGame {
     c.textAlign = 'center';
     c.font = 'bold 6.8px monospace';
     c.fillStyle = Math.floor(now / 320) % 2 === 0 ? '#70e000' : '#ffbe0b';
-    c.fillText('▶ PULSA [ESPACIO], [ENTER] O HAZ CLIC PARA EMPEZAR LA PARTIDA ◀', WIDTH / 2, 152.5);
+    c.fillText('▶ PULSA [H], [ESC] O HAZ CLIC PARA VOLVER AL COMBATE ◀', WIDTH / 2, 152.5);
   }
 
   renderAttractScreen() {
     this.setLogicalTransform();
-    this.drawBriefingScreen(performance.now());
     const c = this.ctx;
-    c.fillStyle = '#2b1214';
-    c.fillRect(0, VIEW_HEIGHT, WIDTH, HUD_HEIGHT);
+    c.fillStyle = '#090203';
+    c.fillRect(0, 0, WIDTH, HEIGHT);
   }
 
   /** Precalcula hasta 6 luces puntuales activas más cercanas al jugador (cero allocs). */
@@ -10612,7 +10802,7 @@ export class HellfallGame {
   drawPauseScreen() {
     this.setLogicalTransform();
     const c = this.ctx;
-    const isFs = Boolean(document.fullscreenElement);
+    const isFs = this.isFullscreenActive();
     c.fillStyle = 'rgba(14, 4, 6, 0.92)';
     c.fillRect(0, 0, WIDTH, VIEW_HEIGHT);
 
@@ -10633,7 +10823,7 @@ export class HellfallGame {
     const options = [
       { label: '▶ CONTINUAR PARTIDA [ESC]', bg: '#1e3a24', border: '#70e000', y: 46 },
       {
-        label: isFs ? '🗗 SALIR DE PANTALLA COMPLETA [F]' : '⛶ PANTALLA COMPLETA [F]',
+        label: isFs ? '🗗 MINIMIZAR PANTALLA [F]' : '⛶ PANTALLA COMPLETA [F]',
         bg: '#1b2c3b',
         border: '#00f5d4',
         y: 68
