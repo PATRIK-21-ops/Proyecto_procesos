@@ -1,0 +1,928 @@
+/* ============================================================================
+   HELLFALL // UNIVERSO SLAYER, CÓDICE TÁCTICO Y NAVEGACIÓN MULTI-SECTOR
+   ============================================================================ */
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted, #b8b0ab);
+  padding: 0.45rem 0.78rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.nav-tab:hover {
+  color: #fff3b0;
+  background: rgba(240, 68, 55, 0.12);
+  border-color: rgba(240, 68, 55, 0.35);
+}
+
+.nav-tab.active {
+  color: #ffbd65;
+  background: rgba(240, 68, 55, 0.18);
+  border-color: rgba(255, 189, 101, 0.55);
+}
+
+.nav-tab.nav-play-tab {
+  border-color: rgba(240, 68, 55, 0.5);
+  color: #ffe3dc;
+}
+
+.nav-tab.nav-play-tab.active,
+.nav-tab.nav-play-tab:hover {
+  background: rgba(240, 68, 55, 0.28);
+  border-color: #f04437;
+  color: #ffffff;
+}
+
+/* Barra superior contextual con botón VOLVER */
+.section-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.back-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  letter-spacing: 0.08em;
+  border-color: rgba(255, 189, 101, 0.35);
+  color: #ffbd65;
+}
+
+.back-nav-btn:hover {
+  background: rgba(255, 189, 101, 0.14);
+  border-color: #ffbd65;
+}
+
+.breadcrumb-trail {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted, #b8b0ab);
+}
+
+/* Hub de Sectores en Portada (estilo League of Legends Universe) */
+.universe-hub,
+.leaderboard-panel {
+  grid-column: 1 / -1;
+}
+
+.universe-hub {
+  margin-top: 2rem;
+  display: grid;
+  gap: 1.15rem;
+}
+
+.universe-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+}
+
+.universe-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.85rem;
+  text-align: left;
+  padding: 1.2rem 1.25rem;
+  background: linear-gradient(155deg, rgba(31, 18, 22, 0.94), rgba(14, 9, 11, 0.98));
+  border: 1px solid rgba(255, 189, 101, 0.2);
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.universe-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 189, 101, 0.7);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(240, 68, 55, 0.28);
+}
+
+.universe-card-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffbd65;
+}
+
+.universe-card h3 {
+  margin: 0.2rem 0 0.35rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: #fff6ed;
+}
+
+.universe-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted, #b8b0ab);
+}
+
+.universe-card-cta {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f04437;
+}
+
+/* Bloque compacto de portada para Slayer & Controles rápidos */
+.portada-tactical-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1.1rem;
+}
+
+.tactical-pill {
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.tactical-pill strong {
+  display: block;
+  color: #ffbd65;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.2rem;
+}
+
+/* Vista HISTORIA / LORE DE SLAYER */
+.lore-hero-banner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: radial-gradient(circle at top right, rgba(240, 68, 55, 0.18), rgba(18, 11, 13, 0.96) 65%);
+  border: 1px solid rgba(255, 189, 101, 0.32);
+  margin-bottom: 1.35rem;
+}
+
+.slayer-emblem-frame {
+  width: 112px;
+  height: 112px;
+  border-radius: 10px;
+  background: #12080a;
+  border: 2px solid #ffbd65;
+  box-shadow: 0 0 24px rgba(240, 68, 55, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.slayer-emblem-frame canvas {
+  width: 96px;
+  height: 90px;
+  image-rendering: pixelated;
+}
+
+.lore-hero-copy blockquote {
+  margin: 0.75rem 0 0;
+  padding-left: 0.85rem;
+  border-left: 3px solid #f04437;
+  color: #ffe8d6;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.lore-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 1.25rem;
+}
+
+.lore-tab-btn {
+  padding: 0.6rem 1.05rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 189, 101, 0.25);
+  background: rgba(24, 15, 18, 0.9);
+  color: var(--muted, #b8b0ab);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lore-tab-btn:hover {
+  color: #fff6ed;
+  border-color: rgba(255, 189, 101, 0.6);
+}
+
+.lore-tab-btn.active {
+  color: #14090b;
+  background: linear-gradient(135deg, #ffbd65, #ff7b00);
+  border-color: #ffbd65;
+}
+
+.lore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 1rem;
+}
+
+.lore-card {
+  padding: 1.2rem;
+  border-radius: 10px;
+  background: rgba(21, 14, 16, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.lore-card.featured {
+  border-color: rgba(0, 245, 212, 0.42);
+  background: linear-gradient(160deg, rgba(12, 34, 42, 0.55), rgba(18, 12, 14, 0.95));
+}
+
+.lore-card h3 {
+  margin: 0;
+  color: #ffbd65;
+  font-size: 1.06rem;
+}
+
+.lore-card p {
+  margin: 0;
+  line-height: 1.58;
+  color: #ded7d2;
+  font-size: 0.92rem;
+}
+
+.lore-chip {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(240, 68, 55, 0.18);
+  color: #ff9c8a;
+  border: 1px solid rgba(240, 68, 55, 0.4);
+}
+
+.lore-chip.counter {
+  background: rgba(0, 245, 212, 0.14);
+  color: #00f5d4;
+  border-color: rgba(0, 245, 212, 0.45);
+}
+
+.lore-chapter-footer {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+/* Vista COMANDOS Y ARSENAL */
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 1.1rem;
+}
+
+.keycap-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keycap-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.58rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.9rem;
+}
+
+.keycap-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 0.22rem 0.55rem;
+  border-radius: 5px;
+  background: #23171a;
+  border: 1px solid rgba(255, 189, 101, 0.45);
+  color: #ffbd65;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* Menú de despliegue SLAYER único dentro del canvas wrapper */
+.slayer-deploy-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  width: 100%;
+  max-width: 520px;
+  padding: 0.9rem 1.05rem;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(44, 15, 19, 0.9), rgba(18, 9, 11, 0.95));
+  border: 1px solid rgba(255, 189, 101, 0.55);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  text-align: left;
+}
+
+.slayer-deploy-portrait {
+  width: 72px;
+  height: 68px;
+  border-radius: 8px;
+  border: 2px solid #ffbd65;
+  background: #120709;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.slayer-deploy-meta strong {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  color: #fff3b0;
+}
+
+.slayer-deploy-meta small {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #ffbd65;
+  margin-bottom: 0.25rem;
+}
+
+.slayer-deploy-meta p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.38;
+  color: #ddd4cd;
+}
+
+.game-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.metal-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+/* Alias y privacidad en Ranking */
+.privacy-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(124, 226, 173, 0.1);
+  border: 1px solid rgba(124, 226, 173, 0.35);
+  color: #7ce2ad;
+  font-size: 0.82rem;
+}
+
+/* Barra de Nickname y guardado tras victoria / muerte */
+.metal-nickname-bar,
+.score-submit-box,
+.profile-nickname-form {
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  background: rgba(18, 10, 12, 0.92);
+  border: 1px solid rgba(255, 189, 101, 0.38);
+  text-align: left;
+}
+
+.score-submit-box {
+  margin: 0.75rem auto;
+  border-color: rgba(124, 226, 173, 0.45);
+  background: linear-gradient(155deg, rgba(16, 28, 22, 0.92), rgba(18, 10, 12, 0.96));
+}
+
+.metal-nickname-bar label,
+.score-submit-box label,
+.profile-nickname-form label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffbd65;
+}
+
+.score-submit-controls,
+.nickname-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.score-submit-controls input,
+.nickname-inline-row input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 189, 101, 0.35);
+  background: #0d0708;
+  color: #fff6ed;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.score-submit-controls input:focus,
+.nickname-inline-row input:focus {
+  outline: none;
+  border-color: #ffbd65;
+  box-shadow: 0 0 0 2px rgba(255, 189, 101, 0.2);
+}
+
+.score-save-feedback {
+  font-size: 0.8rem;
+  color: #d6ccc5;
+}
+
+.score-save-feedback.saved {
+  color: #7ce2ad;
+  font-weight: 700;
+}
+
+.score-save-feedback.error {
+  color: #ff7b72;
+}
+
+/* Live stats strip bajo acciones del hero */
+.home-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1.15rem;
+}
+
+.stat-chip {
+  padding: 0.7rem 0.75rem;
+  border-radius: 9px;
+  background: linear-gradient(155deg, rgba(28, 16, 19, 0.9), rgba(14, 8, 10, 0.96));
+  border: 1px solid rgba(255, 189, 101, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-chip span {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #b8b0ab);
+}
+
+.stat-chip strong {
+  font-size: 1.25rem;
+  color: #ffbd65;
+  font-weight: 800;
+}
+
+/* Toggle & Canvas demo en vivo en hero */
+.art-mode-btn {
+  background: rgba(255, 189, 101, 0.14);
+  border: 1px solid rgba(255, 189, 101, 0.45);
+  color: #ffbd65;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#hero-demo-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* Tarjeta Desafío Diario + Controles rápidos en portada */
+.home-band {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.daily-card {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.35rem;
+  border-radius: 12px;
+  background: radial-gradient(circle at top left, rgba(240, 68, 55, 0.2), rgba(18, 10, 12, 0.96) 70%);
+  border: 1px solid rgba(255, 189, 101, 0.42);
+}
+
+.daily-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.45rem 0 0.75rem;
+}
+
+.countdown-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(0, 245, 212, 0.12);
+  border: 1px solid rgba(0, 245, 212, 0.45);
+  color: #00f5d4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.daily-top3-box {
+  background: rgba(11, 6, 8, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  padding: 0.85rem 1rem;
+}
+
+.daily-top3-box h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffbd65;
+}
+
+.daily-top3-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.daily-top3-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.86rem;
+}
+
+.daily-top3-item strong { color: #fff6ed; }
+.daily-top3-item span { color: #ffbd65; font-weight: 700; }
+
+/* Tira de controles de un vistazo */
+.quick-controls-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.8rem 1.05rem;
+  border-radius: 10px;
+  background: rgba(20, 12, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quick-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.quick-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #ded5ce;
+}
+
+.pc-only-badge {
+  font-size: 0.78rem;
+  color: #ffbd65;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* Cuadrícula de características (6 iconos) */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 0.75rem;
+}
+
+.feature-tile {
+  padding: 0.9rem 1rem;
+  border-radius: 9px;
+  background: rgba(22, 13, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.feature-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.feature-tile strong {
+  color: #fff3b0;
+  font-size: 0.92rem;
+}
+
+.feature-tile small {
+  color: var(--muted, #b8b0ab);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* Bestiario voxel + Medallas + Changelog */
+.depth-split {
+  display: grid;
+  grid-template-columns: 1.35fr 0.95fr;
+  gap: 1rem;
+}
+
+.bestiary-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.bestiary-card {
+  padding: 0.85rem;
+  border-radius: 9px;
+  background: rgba(14, 8, 10, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+
+.bestiary-sprite-canvas {
+  width: 92px;
+  height: 96px;
+  image-rendering: pixelated;
+  background: radial-gradient(circle, rgba(240, 68, 55, 0.16), transparent 70%);
+  border-radius: 6px;
+}
+
+.bestiary-card strong {
+  color: #ffbd65;
+  font-size: 0.9rem;
+}
+
+.bestiary-card small {
+  color: #cfc6bf;
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+.medals-showcase {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.medal-showcase-chip {
+  padding: 0.58rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(255, 189, 101, 0.07);
+  border: 1px solid rgba(255, 189, 101, 0.25);
+}
+
+.medal-showcase-chip strong {
+  display: block;
+  font-size: 0.84rem;
+  color: #ffbd65;
+}
+
+.medal-showcase-chip small {
+  font-size: 0.76rem;
+  color: #cfc6bf;
+}
+
+.changelog-list {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.38rem;
+  font-size: 0.84rem;
+  color: #ddd4cd;
+}
+
+/* Ranking pestañas Hoy / Semana / Histórico y resaltado usuario actual */
+.ranking-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ranking-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 8px;
+  background: rgba(12, 6, 8, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rank-tab-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted, #b8b0ab);
+  padding: 0.38rem 0.75rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.rank-tab-btn.active {
+  background: rgba(240, 68, 55, 0.22);
+  border-color: rgba(255, 189, 101, 0.5);
+  color: #ffbd65;
+}
+
+.viewer-rank-banner {
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  background: rgba(0, 245, 212, 0.09);
+  border: 1px solid rgba(0, 245, 212, 0.35);
+  color: #9bf6e8;
+  font-size: 0.84rem;
+}
+
+.leaderboard-table tr.is-current-user td {
+  background: rgba(255, 189, 101, 0.14);
+  color: #fff6ed;
+  font-weight: 700;
+  border-top: 1px solid rgba(255, 189, 101, 0.45);
+  border-bottom: 1px solid rgba(255, 189, 101, 0.45);
+}
+
+/* Footer legal y fan-project disclaimer */
+.footer-rich {
+  display: grid;
+  gap: 0.65rem;
+  border-top: 1px solid #352526;
+  padding: 1.25rem 0 1.65rem;
+  font-size: 0.8rem;
+  color: #a49490;
+}
+
+.footer-top-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.footer-link-btn,
+.footer-links a {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #ffbd65;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.footer-link-btn:hover,
+.footer-links a:hover {
+  text-decoration: underline;
+  color: #fff3b0;
+}
+
+.footer-disclaimer {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #8c7a75;
+}
+
+.legal-cards {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 850px) {
+  .home-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .daily-card,
+  .depth-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .lore-hero-banner,
+  .slayer-deploy-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .topbar-nav {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/AppError.js';
 import { EmailService } from './emailService.js';
+import { generateRandomNickname, isValidNickname, normalizeNickname } from '../utils/nickname.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -58,8 +59,12 @@ export class UserService {
     return verificarDominioEmail(email);
   }
 
-  async register({ email, password }) {
+  async register({ email, password, nickname: rawNickname }) {
     const normalizedEmail = normalizeEmail(email);
+    const requestedNickname = rawNickname ? normalizeNickname(rawNickname) : '';
+    if (requestedNickname && !isValidNickname(requestedNickname)) {
+      throw badRequest('El nickname debe tener entre 2 y 24 caracteres válidos.', 'INVALID_NICKNAME');
+    }
     if (!EMAIL_RE.test(normalizedEmail) || normalizedEmail.length > 254) {
       throw badRequest('Introduce una dirección de correo válida.', 'INVALID_EMAIL');
     }
@@ -93,14 +98,17 @@ export class UserService {
       const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
 
       try {
+        const assignedNickname = requestedNickname || existing?.nickname || generateRandomNickname();
         if (existing && existing.status === 'deleted') {
           return await this.userRepository.update(existing.id, {
             status: 'active',
-            passwordHash
+            passwordHash,
+            nickname: assignedNickname
           });
         }
         return await this.userRepository.create({
           email: normalizedEmail,
+          nickname: assignedNickname,
           passwordHash,
           role: 'user',
           status: 'active'
@@ -204,6 +212,9 @@ export class UserService {
     if (user.status !== 'active') {
       throw forbidden('La cuenta todavía no está activa.', 'ACCOUNT_NOT_ACTIVE');
     }
+    if (!user.nickname) {
+      return this.userRepository.update(user.id, { nickname: generateRandomNickname() });
+    }
     return user;
   }
 
@@ -215,16 +226,18 @@ export class UserService {
 
     const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {
+      const nextNick = existing.nickname || generateRandomNickname();
       if (existing.status === 'deleted') {
         const randomPassword = crypto.randomUUID();
         const passwordHash = await bcrypt.hash(randomPassword, this.bcryptRounds);
         return await this.userRepository.update(existing.id, {
           status: 'active',
-          passwordHash
+          passwordHash,
+          nickname: nextNick
         });
       }
-      if (existing.status !== 'active') {
-        return await this.userRepository.update(existing.id, { status: 'active' });
+      if (existing.status !== 'active' || !existing.nickname) {
+        return await this.userRepository.update(existing.id, { status: 'active', nickname: nextNick });
       }
       return existing;
     }
@@ -235,6 +248,7 @@ export class UserService {
     try {
       return await this.userRepository.create({
         email: normalizedEmail,
+        nickname: generateRandomNickname(),
         passwordHash,
         role: 'user',
         status: 'active'
@@ -256,7 +270,23 @@ export class UserService {
     if (!user || user.status === 'deleted' || user.status !== 'active') {
       throw unauthorized('La sesión ya no es válida.', 'INVALID_SESSION');
     }
+    if (!user.nickname) {
+      return this.userRepository.update(user.id, { nickname: generateRandomNickname() });
+    }
     return user;
+  }
+
+  async updateNickname(actor, rawNickname) {
+    if (!actor?.id) throw unauthorized();
+    const nickname = normalizeNickname(rawNickname);
+    if (!isValidNickname(nickname)) {
+      throw badRequest('El nickname debe tener entre 2 y 24 caracteres válidos (letras, números, espacios, _, -, .).', 'INVALID_NICKNAME');
+    }
+    const user = await this.userRepository.findById(actor.id);
+    if (!user || user.status === 'deleted') {
+      throw notFound('No existe ese usuario.', 'USER_NOT_FOUND');
+    }
+    return this.userRepository.update(actor.id, { nickname });
   }
 
   assertAdmin(actor) {

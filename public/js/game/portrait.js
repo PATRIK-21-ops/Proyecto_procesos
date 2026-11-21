@@ -1,41 +1,33 @@
 // ============================================================================
-// RETRATO REALISTA PIXEL-ART Y PERFILES DE PERSONAJES JUGABLES
+// RETRATO REALISTA PIXEL-ART Y PERFIL CANÓNICO DEL SLAYER
 // ============================================================================
 
-export const CHARACTERS = {
-  male: {
-    id: 'male',
-    gender: 'HOMBRE',
-    name: 'MARCUS VANE',
-    callsign: 'MARCUS "IRONJAW" VANE',
-    role: 'SARGENTO DE ASALTO UAC',
-    bio: 'Veterano blindado de las líneas de choque de Deimos. Sangre fría bajo fuego demoníaco.',
-    hurtPitch: 1.0,
-    accent: '#ff4d00'
-  },
-  female: {
-    id: 'female',
-    gender: 'MUJER',
-    name: 'VALERIA KARN',
-    callsign: 'VALERIA "HELLFIRE" KARN',
-    role: 'COMANDANTE TÁCTICA UAC',
-    bio: 'Especialista en incursiones abisales y armamento de plasma. Letal a quemarropa.',
-    hurtPitch: 1.38,
-    accent: '#00f5d4'
-  }
+const SLAYER_PROFILE = {
+  id: 'slayer',
+  gender: 'SLAYER',
+  name: 'SLAYER',
+  callsign: 'SLAYER',
+  role: 'CENTINELA DEL ABISMO',
+  bio: 'Único superviviente del Protocolo Phobos. Forjado en acero y pólvora para purgar los diez sectores del infierno.',
+  hurtPitch: 1.0,
+  accent: '#ff4d00'
 };
 
-export function getCharacterProfile(gender) {
-  return CHARACTERS[gender === 'female' ? 'female' : 'male'];
+export const CHARACTERS = {
+  slayer: SLAYER_PROFILE,
+  male: SLAYER_PROFILE
+};
+
+export function getCharacterProfile() {
+  return SLAYER_PROFILE;
 }
 
 /**
- * Dibuja un retrato pixel-art detallado (32x30 lógico) con sombreado anatómico,
- * diferencias claras entre hombre y mujer, mirada dinámica y heridas/sangre realistas.
+ * Dibuja el retrato pixel-art del Slayer (32x30 lógico) con sombreado anatómico,
+ * mirada dinámica y heridas/sangre progresivas según su salud.
  */
 export function drawCharacterFace(c, x, y, opts = {}) {
   const {
-    gender = 'male',
     hp = 100,
     isHit = false,
     isGrin = false,
@@ -44,7 +36,7 @@ export function drawCharacterFace(c, x, y, opts = {}) {
     now = 0
   } = opts;
 
-  const isFemale = gender === 'female';
+  const isFemale = false;
   const px = (dx, dy, w, h, col) => {
     c.fillStyle = col;
     c.fillRect(x + dx, y + dy, w, h);

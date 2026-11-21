@@ -3,6 +3,7 @@ export function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
+    nickname: user.nickname || null,
     role: user.role,
     status: user.status,
     createdAt: user.createdAt

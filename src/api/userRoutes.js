@@ -17,6 +17,12 @@ export function userRoutes({ userService, logger, cookieName = 'hellfall.sid' })
     res.json({ users: users.map(publicUser) });
   }));
 
+  router.patch('/me/nickname', authenticated, csrfProtection, asyncHandler(async (req, res) => {
+    const updated = await userService.updateNickname({ id: req.currentUser.id }, req.body?.nickname);
+    logger.info({ event: 'user.nickname.updated', userId: req.currentUser.id, nickname: updated.nickname }, 'Nickname actualizado');
+    res.json({ user: publicUser(updated) });
+  }));
+
   router.get('/:id/active', authenticated, asyncHandler(async (req, res) => {
     const active = await userService.isActive(req.currentUser, req.params.id);
     res.json({ id: req.params.id, active });

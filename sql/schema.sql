@@ -2,11 +2,16 @@
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email VARCHAR(254) NOT NULL,
+  nickname VARCHAR(24),
   password_hash TEXT NOT NULL,
   role VARCHAR(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'deleted')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(24);
+UPDATE users
+  SET nickname = 'Slayer-' || UPPER(SUBSTRING(MD5(id) FOR 5))
+  WHERE nickname IS NULL OR TRIM(nickname) = '';
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (LOWER(email));
 CREATE INDEX IF NOT EXISTS users_status_idx ON users (status);
 
@@ -16,8 +21,14 @@ CREATE TABLE IF NOT EXISTS scores (
   kills INTEGER NOT NULL CHECK (kills >= 0),
   points INTEGER NOT NULL CHECK (points >= 0),
   duration_ms INTEGER NOT NULL CHECK (duration_ms >= 1000),
+  nickname VARCHAR(24),
+  sector INTEGER NOT NULL DEFAULT 1 CHECK (sector >= 1 AND sector <= 10),
+  is_daily BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS nickname VARCHAR(24);
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS sector INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS is_daily BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS scores_points_idx ON scores (points DESC, created_at ASC);
 CREATE INDEX IF NOT EXISTS scores_user_idx ON scores (user_id);
 
