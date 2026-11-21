@@ -18,6 +18,7 @@ import {
   makeColoredKeySprite,
   makeCoreSprite
 } from './weapons.js';
+import { crearAleatorio, mezclarSemilla } from './rng.js';
 
 // ============================================================================
 // CONFIGURACIÓN CENTRALIZADA DE BALANCE Y MOTOR (HELLFALL // BRUTAL EDITION)
@@ -2265,11 +2266,20 @@ export class HellfallGame {
   // ============================================================================
   // PLANIFICACIÓN ALEATORIA DE PARTIDA, EVENTOS Y RUTAS (ESTILO HADES / SLAY)
   // ============================================================================
+  // Azar del plan de la partida (sectores y rutas) y del mapa de cada sector. Sin semilla es Math.random().
+  azarPlan() {
+    return this.rngPlan ? this.rngPlan() : Math.random();
+  }
+
+  azarMapa() {
+    return this.rngMapa ? this.rngMapa() : Math.random();
+  }
+
   initRunPlan() {
     const shuffle = (arr) => {
       const copy = [...arr];
       for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(this.azarPlan() * (i + 1));
         [copy[i], copy[j]] = [copy[j], copy[i]];
       }
       return copy;
@@ -2283,15 +2293,15 @@ export class HellfallGame {
     this.runPlan = [];
     for (let lvl = 1; lvl <= MAX_LEVELS; lvl++) {
       const themeIdx = themeOrder[lvl - 1] ?? ((lvl - 1) % CONFIG.SECTOR_THEMES.length);
-      const layout = lvl === 1 ? 'GRID' : (lvl === 10 ? 'CITADEL' : layouts[Math.floor(Math.random() * layouts.length)]);
+      const layout = lvl === 1 ? 'GRID' : (lvl === 10 ? 'CITADEL' : layouts[Math.floor(this.azarPlan() * layouts.length)]);
       const event = lvl === 10
         ? { type: 'APOCALYPSE', label: 'CATACLISMO ABISAL', short: 'ABISMO', detail: 'Tormenta de fuego y energía en el trono del Icon of Sin' }
         : (lvl === 1
           ? { ...eventsPool.find((e) => e.type === 'PATROL' || e.type === 'AMBUSH') || eventsPool[0] }
-          : { ...eventsPool[(lvl - 1 + Math.floor(Math.random() * 2)) % eventsPool.length] });
+          : { ...eventsPool[(lvl - 1 + Math.floor(this.azarPlan() * 2)) % eventsPool.length] });
       const objectiveType = lvl === 1
         ? 'BOSS_KEY'
-        : (lvl === 10 ? 'FINAL_ICON' : objectivePool[(lvl + Math.floor(Math.random() * objectivePool.length)) % objectivePool.length]);
+        : (lvl === 10 ? 'FINAL_ICON' : objectivePool[(lvl + Math.floor(this.azarPlan() * objectivePool.length)) % objectivePool.length]);
 
       this.runPlan.push({
         level: lvl,
@@ -2319,17 +2329,17 @@ export class HellfallGame {
     }
     const modKeys = ['TREASURE', 'MERCHANT', 'ELITE', 'ARCANE'];
     for (let i = modKeys.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.azarPlan() * (i + 1));
       [modKeys[i], modKeys[j]] = [modKeys[j], modKeys[i]];
     }
     const layouts = ['GRID', 'RING', 'CORRIDORS', 'CROSS', 'CITADEL'];
     const objPool = ['BOSS_KEY', 'GENERATORS', 'SURVIVAL_WAVES', 'ESCORT_RESCUE', 'ESCAPE_COUNTDOWN', 'THREE_KEYS'];
     for (let i = objPool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.azarPlan() * (i + 1));
       [objPool[i], objPool[j]] = [objPool[j], objPool[i]];
     }
-    const evPool = [...CONFIG.SECTOR_EVENTS_POOL].sort(() => Math.random() - 0.5);
-    const themePool = [1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5);
+    const evPool = [...CONFIG.SECTOR_EVENTS_POOL].sort(() => this.azarPlan() - 0.5);
+    const themePool = [1, 2, 3, 4, 5, 6, 7, 8].sort(() => this.azarPlan() - 0.5);
 
     const doorCount = 3;
     const choices = [];
@@ -2340,7 +2350,7 @@ export class HellfallGame {
         routeMod: CONFIG.ROUTE_MODIFIERS[modKey],
         themeIndex,
         themeName: CONFIG.SECTOR_THEMES[themeIndex].name,
-        layout: layouts[(nextLevel + i + Math.floor(Math.random() * 3)) % layouts.length],
+        layout: layouts[(nextLevel + i + Math.floor(this.azarPlan() * 3)) % layouts.length],
         objectiveType: objPool[i % objPool.length],
         event: { ...evPool[i % evPool.length] },
         isFinal: false
@@ -2353,7 +2363,7 @@ export class HellfallGame {
     if (this.nextRouteChoice?.event) return this.nextRouteChoice.event;
     if (this.runPlan && this.runPlan[level - 1]?.event) return this.runPlan[level - 1].event;
     const pool = CONFIG.SECTOR_EVENTS_POOL;
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool[Math.floor(this.azarMapa() * pool.length)];
   }
 
   // ============================================================================
@@ -2440,7 +2450,7 @@ export class HellfallGame {
     if (layoutType === 'RING') {
       const ringPairs = [[0, 1], [1, 2], [2, 5], [5, 8], [8, 7], [7, 6], [6, 3], [3, 0]];
       for (const [a, b] of ringPairs) carveTunnel(nodes[a].cx, nodes[a].cy, nodes[b].cx, nodes[b].cy, 1);
-      if (Math.random() < 0.5) {
+      if (this.azarMapa() < 0.5) {
         carveTunnel(nodes[1].cx, nodes[1].cy, nodes[4].cx, nodes[4].cy, 1);
         carveTunnel(nodes[7].cx, nodes[7].cy, nodes[4].cx, nodes[4].cy, 1);
       } else {
@@ -2478,12 +2488,12 @@ export class HellfallGame {
       { roomX: 2, roomY: 8, w: 4, h: 5, doorX: 6, doorY: 10, orient: 'V', secret: true },
       { roomX: 16, roomY: 43, w: 5, h: 3, doorX: 18, doorY: 42, orient: 'H', secret: true }
     ];
-    const secStart = Math.floor(Math.random() * secretPool.length);
+    const secStart = Math.floor(this.azarMapa() * secretPool.length);
     const secA = secretPool[secStart % secretPool.length];
     const secB = secretPool[(secStart + 1) % secretPool.length];
     const secC = secretPool[(secStart + 2) % secretPool.length];
 
-    const merchantAtNorth = Math.random() < 0.5;
+    const merchantAtNorth = this.azarMapa() < 0.5;
     const vaultSpecs = [
       { roomX: 22, roomY: 2, w: 5, h: 4, doorX: 24, doorY: 6, orient: 'H', secret: false, merchant: merchantAtNorth },
       { roomX: 2, roomY: 22, w: 4, h: 5, doorX: 6, doorY: 24, orient: 'V', secret: false },
@@ -2586,7 +2596,7 @@ export class HellfallGame {
     }
 
     const chestLimit = CONFIG.CHEST_COUNT + (routeMod?.id === 'TREASURE' ? 2 : 0);
-    regularVaultCenters.sort(() => Math.random() - 0.5);
+    regularVaultCenters.sort(() => this.azarMapa() - 0.5);
     for (let i = 0; i < Math.min(chestLimit, regularVaultCenters.length); i++) {
       const vc = regularVaultCenters[i];
       this.chests.push({ x: vc.x, y: vc.y, opened: false, trapped: i % 2 === 1 });
@@ -2738,7 +2748,7 @@ export class HellfallGame {
       !this.isCellInsideArena(cell.x, cell.y)
     );
     for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.azarMapa() * (i + 1));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
 
@@ -2762,13 +2772,13 @@ export class HellfallGame {
     for (const cell of candidates) {
       if (this.hazards.length >= CONFIG.HAZARD_COUNT) break;
       if (this.hazards.some((h) => distance(h.x, h.y, cell.x, cell.y) < 6)) continue;
-      const radius = CONFIG.HAZARD_RADIUS[0] + Math.random() * (CONFIG.HAZARD_RADIUS[1] - CONFIG.HAZARD_RADIUS[0]);
+      const radius = CONFIG.HAZARD_RADIUS[0] + this.azarMapa() * (CONFIG.HAZARD_RADIUS[1] - CONFIG.HAZARD_RADIUS[0]);
       this.hazards.push({
         x: cell.x,
         y: cell.y,
         radius,
         kind: evType,
-        phase: Math.random() * 10
+        phase: this.azarMapa() * 10
       });
     }
   }
@@ -2846,6 +2856,7 @@ export class HellfallGame {
       berserkUntil: 0,
       invulnerableUntil: 0
     };
+    this.rngPlan = this.seed == null ? null : crearAleatorio(mezclarSemilla(this.seed, 0));
     this.initRunPlan();
     this.startTime = performance.now();
     this.level = 1;
@@ -3002,6 +3013,7 @@ export class HellfallGame {
     this.player.coloredKeys = { RED: false, BLUE: false, YELLOW: false };
     this.player.invulnerableUntil = 0;
     this.levelStartTime = performance.now();
+    this.rngMapa = this.seed == null ? null : crearAleatorio(mezclarSemilla(this.seed, this.level));
     this.sectorEvent = this.getSectorEventForLevel(this.level);
 
     const plan = this.nextRouteChoice || this.runPlan?.[this.level - 1] || {};
@@ -3027,7 +3039,7 @@ export class HellfallGame {
     );
     const takeCell = () => {
       if (farFloorCells.length === 0) return null;
-      return farFloorCells.splice(Math.floor(Math.random() * farFloorCells.length), 1)[0];
+      return farFloorCells.splice(Math.floor(this.azarMapa() * farFloorCells.length), 1)[0];
     };
 
     const ammoPacksCount = 1 + Math.floor((this.level - 1) / 3) + (this.activeRouteMod?.id === 'TREASURE' ? 1 : 0);
@@ -3045,9 +3057,9 @@ export class HellfallGame {
       });
     }
 
-    const medkitCount = this.level >= 4 && Math.random() < CONFIG.FLOOR_MEDKIT_CHANCE ? 2 : 1;
+    const medkitCount = this.level >= 4 && this.azarMapa() < CONFIG.FLOOR_MEDKIT_CHANCE ? 2 : 1;
     for (let i = 0; i < medkitCount; i++) {
-      if (i > 0 && Math.random() > CONFIG.FLOOR_MEDKIT_CHANCE) break;
+      if (i > 0 && this.azarMapa() > CONFIG.FLOOR_MEDKIT_CHANCE) break;
       const cell = takeCell();
       if (!cell) break;
       this.medkits.push({ x: cell.x, y: cell.y, active: true });
@@ -3067,7 +3079,7 @@ export class HellfallGame {
     if (weaponQueue.length === 0) {
       const bonusChoices = [5, 6, 7].filter((w) => this.isWeaponOwned(w));
       if (bonusChoices.length > 0) {
-        weaponQueue.push(bonusChoices[Math.floor(Math.random() * bonusChoices.length)]);
+        weaponQueue.push(bonusChoices[Math.floor(this.azarMapa() * bonusChoices.length)]);
       }
     }
 
@@ -3176,17 +3188,17 @@ export class HellfallGame {
         gloryArmed: false,
         gloryUntil: 0,
         revivesLeft: specKey === 'SUMMONER' ? CONFIG.SUMMONER_REVIVES + Math.floor(this.level / 6) : 0,
-        reviveCd: specKey === 'SUMMONER' ? 2.4 + Math.random() * 2.2 : 0,
+        reviveCd: specKey === 'SUMMONER' ? 2.4 + this.azarMapa() * 2.2 : 0,
         reviveCount: 0,
-        rangedCooldown: cfg.rangedCd[0] + Math.random() * (cfg.rangedCd[1] - cfg.rangedCd[0]),
+        rangedCooldown: cfg.rangedCd[0] + this.azarMapa() * (cfg.rangedCd[1] - cfg.rangedCd[0]),
         dashChance: Math.min(0.85, (cfg.dashChance || 0) + (this.level - 1) * 0.03 + totalUpgrades * 0.015),
-        dashCooldown: 1.8 + Math.random() * 2.6,
+        dashCooldown: 1.8 + this.azarMapa() * 2.6,
         dashTime: 0,
         dashDirX: 0,
         dashDirY: 0,
-        walkCycle: Math.random() * 10,
+        walkCycle: this.azarMapa() * 10,
         strafeDir: nextEnemyId % 2 === 0 ? 1 : -1,
-        growlTimer: 2 + Math.random() * 4,
+        growlTimer: 2 + this.azarMapa() * 4,
         cooldown: 0
       };
     };
@@ -3204,22 +3216,22 @@ export class HellfallGame {
     let summonersSpawned = 0;
 
     for (let i = 0; i < initialCount && spawns.length > 0; i++) {
-      let chosenIdx = Math.floor(Math.random() * spawns.length);
+      let chosenIdx = Math.floor(this.azarMapa() * spawns.length);
       for (let attempt = 0; attempt < 25; attempt++) {
-        const testIdx = Math.floor(Math.random() * spawns.length);
+        const testIdx = Math.floor(this.azarMapa() * spawns.length);
         if (!this.enemies.some((e) => distance(e.x, e.y, spawns[testIdx].x, spawns[testIdx].y) < CONFIG.MIN_ENEMY_SPACING)) {
           chosenIdx = testIdx;
           break;
         }
       }
       const pos = spawns.splice(chosenIdx, 1)[0];
-      const isElite = (this.level >= CONFIG.ELITE_START_LEVEL || totalUpgrades >= 2 || isEliteRoute) && Math.random() < eliteChance;
+      const isElite = (this.level >= CONFIG.ELITE_START_LEVEL || totalUpgrades >= 2 || isEliteRoute) && this.azarMapa() < eliteChance;
 
       let specKey;
       if (i % 3 === 0 && sigPool.length > 0) {
-        specKey = sigPool[Math.floor(Math.random() * sigPool.length)];
+        specKey = sigPool[Math.floor(this.azarMapa() * sigPool.length)];
       } else {
-        specKey = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'IMP';
+        specKey = sectorPool[Math.floor(this.azarMapa() * sectorPool.length)] || 'IMP';
       }
       if (specKey === 'SUMMONER') {
         if (summonersSpawned >= maxSummoners) specKey = sigPool[0] || 'IMP';
@@ -3245,7 +3257,7 @@ export class HellfallGame {
     // Monster Closets sellados
     for (const closet of this.monsterClosets) {
       const closetSpecA = sigPool[0] || sectorPool[0] || 'IMP';
-      const closetSpecB = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'PINKY';
+      const closetSpecB = sectorPool[Math.floor(this.azarMapa() * sectorPool.length)] || 'PINKY';
       const e1 = buildRegularEnemy(closetSpecA === 'TURRET' ? 'PINKY' : closetSpecA, { x: closet.spawnX - 0.35, y: closet.spawnY }, false);
       const e2 = buildRegularEnemy(closetSpecB === 'TURRET' ? 'RIFLEMAN' : closetSpecB, { x: closet.spawnX + 0.35, y: closet.spawnY }, false);
       for (const ce of [e1, e2]) {
@@ -3258,7 +3270,7 @@ export class HellfallGame {
 
     const reserveSpecs = [];
     for (let r = 0; r < reserveCount; r++) {
-      const sp = sectorPool[Math.floor(Math.random() * sectorPool.length)] || 'IMP';
+      const sp = sectorPool[Math.floor(this.azarMapa() * sectorPool.length)] || 'IMP';
       reserveSpecs.push(sp === 'TURRET' ? 'RIFLEMAN' : sp);
     }
     this.director = {
@@ -3299,10 +3311,10 @@ export class HellfallGame {
     this.prebakeSectorSprites();
 
     this.ambientEmbers = Array.from({ length: 18 }, () => ({
-      x: this.player.x + (Math.random() - 0.5) * 10,
-      y: this.player.y + (Math.random() - 0.5) * 10,
-      z: (Math.random() - 0.5) * 0.8,
-      vz: -0.15 - Math.random() * 0.25
+      x: this.player.x + (this.azarMapa() - 0.5) * 10,
+      y: this.player.y + (this.azarMapa() - 0.5) * 10,
+      z: (this.azarMapa() - 0.5) * 0.8,
+      vz: -0.15 - this.azarMapa() * 0.25
     }));
 
     const sectorName = this.currentTheme?.name || CONFIG.SECTOR_NAMES[(this.level - 1) % CONFIG.SECTOR_NAMES.length];
@@ -3504,9 +3516,11 @@ export class HellfallGame {
     }
   }
 
-  start({ showBriefing = false, character = null } = {}) {
+  start({ showBriefing = false, character = null, seed = null } = {}) {
     if (this.frameId) cancelAnimationFrame(this.frameId);
     if (character) this.setCharacter(character);
+    // Desafío diario: con semilla, el plan de sectores y los mapas salen iguales para todos.
+    this.seed = Number.isInteger(seed) ? seed >>> 0 : null;
     const snap = this.captureCurrentScreen();
     this.reset();
     this.running = true;

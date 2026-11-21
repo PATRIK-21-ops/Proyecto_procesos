@@ -93,6 +93,7 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 | `GET` | `/api/scores/top?limit=10` | Público | Tabla de mejores puntuaciones |
 | `GET` | `/api/scores/mine` | Sesión | Historial personal |
 | `POST` | `/api/scores` | Sesión + CSRF | Registrar el resultado de una partida |
+| `GET` | `/api/challenge/today` | Público | Fecha y semilla del desafío diario |
 
 Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticamente. Las contraseñas no se devuelven en la API. La eliminación de usuarios es lógica (`status = deleted`) para conservar trazabilidad y evitar que una cuenta borrada vuelva a iniciar sesión.
 
@@ -106,6 +107,10 @@ Las rutas mutables requieren `X-CSRF-Token`; el cliente lo solicita automáticam
 ## El juego
 
 El motor de `public/js/game/game.js` dibuja a 320 × 200 y usa DDA/raycasting para las paredes, texturas pixeladas procedurales, billboards para enemigos y objetos, colisiones, daño, munición, kits médicos, HUD, pausa, victoria y Game Over. Los gráficos se generan por código y son originales; no se incluyen sprites ni logotipos de DOOM.
+
+### Desafío diario
+
+El botón **🔥 DESAFÍO DIARIO** del briefing pide al servidor la semilla del día (`GET /api/challenge/today`) y empieza una partida en la que todos los jugadores tienen el mismo plan de sectores, los mismos mapas y los mismos enemigos iniciales. La semilla es un HMAC de la fecha (hora de España) con el secreto del servidor, así que no se puede calcular la de otro día. El juego usa un generador con semilla (`public/js/game/rng.js`) solo para generar la partida; los efectos visuales y de sonido siguen siendo aleatorios. Si el jugador elige rutas distintas entre sectores, los sectores siguientes también pueden cambiar.
 
 ## Estructura 
 
