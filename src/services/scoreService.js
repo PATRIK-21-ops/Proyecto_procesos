@@ -14,6 +14,38 @@ export function formatPublicAlias(email) {
   return `${local.slice(0, 3)}***`;
 }
 
+const MADRID_DATE_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+const DAY_MS = 86400 * 1000;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function dayNumber(day) {
+  if (typeof day !== 'string' || !DAY_RE.test(day)) return null;
+  const [y, m, d] = day.split('-').map(Number);
+  const ms = Date.UTC(y, m - 1, d);
+  return Number.isFinite(ms) ? Math.round(ms / DAY_MS) : null;
+}
+
+/**
+ * Calcula las rachas de días jugados a partir de fechas de calendario 'YYYY-MM-DD' (hora de España).
+ * - bestStreak: la secuencia más larga de días consecutivos.
+ * - currentStreak: la racha que sigue viva; cuenta si se jugó hoy o ayer (aún se puede prolongar hoy).
+ */
+export function computePlayStreaks(days, today) {
+  const unique = [...new Set((days || []).map(dayNumber).filter((n) => n !== null))].sort((a, b) => a - b);
+  if (!unique.length) return { currentStreak: 0, bestStreak: 0 };
+  let bestStreak = 1;
+  let run = 1;
+  for (let i = 1; i < unique.length; i += 1) {
+    run = unique[i] - unique[i - 1] === 1 ? run + 1 : 1;
+    bestStreak = Math.max(bestStreak, run);
+  }
+  const todayNumber = dayNumber(today);
+  const last = unique[unique.length - 1];
+  // `run` es la longitud de la racha que termina en el último día jugado.
+  const alive = todayNumber !== null && (todayNumber - last === 0 || todayNumber - last === 1);
+  return { currentStreak: alive ? run : 0, bestStreak };
+}
+
 export class ScoreService {
   constructor(scoreRepository, { maxKills = 100000 } = {}) {
     this.scoreRepository = scoreRepository;
@@ -57,6 +89,30 @@ export class ScoreService {
   async mine(actor) {
     if (!actor?.id) throw unauthorized();
     return this.scoreRepository.mine(actor.id);
+  }
+
+  async personalStats(actor, { now = new Date() } = {}) {
+    if (!actor?.id) throw unauthorized();
+    const raw = typeof this.scoreRepository.personalStats === 'function'
+      ? await this.scoreRepository.personalStats(actor.id, { recentLimit: 10 })
+      : null;
+    const matchesPlayed = raw?.matchesPlayed || 0;
+    const totalPoints = raw?.totalPoints || 0;
+    const { currentStreak, bestStreak } = computePlayStreaks(raw?.playedDays || [], MADRID_DATE_FMT.format(now));
+    return {
+      matchesPlayed,
+      totalKills: raw?.totalKills || 0,
+      totalPoints,
+      bestPoints: raw?.bestPoints || 0,
+      averagePoints: matchesPlayed > 0 ? Math.round(totalPoints / matchesPlayed) : 0,
+      maxSector: raw?.maxSector || 0,
+      totalDurationMs: raw?.totalDurationMs || 0,
+      dailyMatches: raw?.dailyMatches || 0,
+      daysPlayed: (raw?.playedDays || []).length,
+      currentStreak,
+      bestStreak,
+      recent: (raw?.recent || []).slice(-10)
+    };
   }
 
   _sanitizeRows(rows, viewerUserId = null) {

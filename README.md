@@ -101,6 +101,7 @@ La regla principal: `UserService` recibe un repositorio por constructor. En el H
 | `GET` | `/api/scores/top?limit=10` | Público / Sesión | Ranking filtrable (`period=day\|week\|all`, `dailyOnly`), excluye 0 pts y resalta al jugador actual (`viewerRank`) |
 | `GET` | `/api/scores/stats` | Público | Estadísticas globales: partidas, bajas totales, jugadores registrados y sector máximo |
 | `GET` | `/api/scores/mine` | Sesión | Historial personal de partidas |
+| `GET` | `/api/scores/mine/stats` | Sesión | Estadísticas personales agregadas: totales, media, sector máximo, tiempo jugado, rachas de días (hora de España) y progresión de las 10 últimas partidas |
 | `POST` | `/api/scores` | Sesión + CSRF | Registrar bajas, duración, bonus, `sector`, `isDaily` y `nickname` de la partida |
 | `GET` | `/api/challenge/today` | Público | Fecha y semilla del desafío diario |
 
@@ -127,6 +128,10 @@ El motor de [public/js/game/game.js](file:///c:/Users/Patrik/Documents/Universid
 - **Balanceo del Centinela del Escudo (`SHIELD`):** reducida su vida (`7.8`), ángulo de bloqueo frontal (`0.76 rad`) y velocidad de giro (`1.45 rad/s`); además recibe `22%` de daño residual frontal, se sobrecarga tras `6` impactos (`shieldHeat`) y pierde la guardia al golpearle con puñetazo `[V]`.
 - **Arsenal `[1]-[7]` + Mejoras Dinámicas y Jefes:** Super Escopeta, Chaingun, Lanzallamas optimizado, Motosierra, Lanzacohetes, Rifle Plasma y BFG-9000; Altar de Mejoras reactivas (Embestida `[C]`, Contragolpe, Pulso Cinético, Aura Ígnea), Rutas Roguelite `[1-3]`, Jefes de arena e **Icon of Sin** en 3 fases.
 
+### Estadísticas personales y progresión
+
+En **Mi Cuenta**, el panel **MI PROGRESIÓN** consulta `GET /api/scores/mine/stats` y muestra partidas jugadas, bajas totales, mejor puntuación, media por partida, sector máximo, tiempo en combate, desafíos diarios completados, la racha actual y la mejor racha de días consecutivos jugando (calendario `Europe/Madrid`; la racha sigue viva si jugaste ayer), y una gráfica de barras con las 10 últimas partidas en orden cronológico (las del desafío diario se resaltan en ámbar). La agregación se hace en cada repositorio (`personalStats`) y el cálculo de rachas en `computePlayStreaks` (`src/services/scoreService.js`), cubierto por `tests/personalStats.test.js`.
+
 ### Desafío diario
 
 El botón **🔥 DESAFÍO DIARIO** pide al servidor la semilla del día (`GET /api/challenge/today`, HMAC-SHA256 con fecha de España y secreto de sesión) y lanza una partida con el mismo plan de sectores y mapas generados mediante `public/js/game/rng.js`.
@@ -135,7 +140,7 @@ El botón **🔥 DESAFÍO DIARIO** pide al servidor la semilla del día (`GET /a
 
 - `src/`: backend por capas (`api/`, `services/`, `repositories/`, `middleware/`, `config/`, `utils/`). `src/server.js` inicializa tablas automáticamente con `sql/schema.sql`.
 - `public/`: frontend modular (`index.html`, `css/styles.css`, `css/universe.css`, `js/ui/main.js`, `js/api/apiClient.js`, `js/game/`).
-- `tests/`: pruebas unitarias e integración (`api`, `scoreService`, `userService`, `challenge`, `semilla`, `variante3`).
+- `tests/`: pruebas unitarias e integración (`api`, `scoreService`, `personalStats`, `userService`, `challenge`, `semilla`, `variante3`).
 - `docs/`: mapa de PBIs (`docs/PBI-MAP.md`) y guía paso a paso (`docs/GUIA-PASO-A-PASO.md`).
 
 ## Hito 4: Servicios externos (Google OAuth 2.0 y Correo)

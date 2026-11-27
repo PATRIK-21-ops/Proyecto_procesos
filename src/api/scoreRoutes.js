@@ -10,6 +10,11 @@ export function scoreRoutes({ userService, scoreService, logger }) {
     res.json({ scores });
   }));
 
+  router.get('/mine/stats', requireAuth(userService), asyncHandler(async (req, res) => {
+    const stats = await scoreService.personalStats({ id: req.currentUser.id, role: req.currentUser.role });
+    res.json({ stats });
+  }));
+
   router.get('/top', asyncHandler(async (req, res) => {
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit || '10', 10) || 10));
     const period = ['day', 'week', 'all'].includes(req.query.period) ? req.query.period : 'all';

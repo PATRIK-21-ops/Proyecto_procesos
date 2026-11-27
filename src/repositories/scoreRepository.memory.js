@@ -81,6 +81,33 @@ export class ScoreRepositoryMemory {
     return [...best.values()].sort((a, b) => b.points - a.points || a.durationMs - b.durationMs).slice(0, safeLimit);
   }
 
+  async personalStats(userId, { recentLimit = 10 } = {}) {
+    const user = await this.userRepository.findById(userId);
+    const own = (!user || user.status === 'deleted') ? [] : this.scores.filter((score) => score.userId === userId);
+    const days = new Set(own.map((score) => MADRID_DATE_FMT.format(new Date(score.createdAt))));
+    const chronological = own
+      .map((score, index) => ({ score, index }))
+      .sort((a, b) => Date.parse(a.score.createdAt) - Date.parse(b.score.createdAt) || a.index - b.index)
+      .map(({ score }) => score);
+    return {
+      matchesPlayed: own.length,
+      totalKills: own.reduce((acc, s) => acc + (s.kills || 0), 0),
+      totalPoints: own.reduce((acc, s) => acc + (s.points || 0), 0),
+      bestPoints: own.reduce((max, s) => Math.max(max, s.points || 0), 0),
+      maxSector: own.reduce((max, s) => Math.max(max, s.sector || 1), 0),
+      totalDurationMs: own.reduce((acc, s) => acc + (s.durationMs || 0), 0),
+      dailyMatches: own.filter((s) => s.isDaily).length,
+      playedDays: [...days].sort(),
+      recent: chronological.slice(-recentLimit).map((s) => ({
+        points: s.points,
+        kills: s.kills,
+        sector: s.sector || 1,
+        isDaily: Boolean(s.isDaily),
+        createdAt: s.createdAt
+      }))
+    };
+  }
+
   async stats() {
     const users = await this.userRepository.list();
     const activeIds = new Set(users.filter((u) => u.status !== 'deleted').map((u) => u.id));

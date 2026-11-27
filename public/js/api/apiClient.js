@@ -60,6 +60,7 @@ export const api = {
   },
   scoreStats: () => request('/scores/stats'),
   myScores: () => request('/scores/mine'),
+  myStats: () => request('/scores/mine/stats'),
   submitScore: (data) => request('/scores', { method: 'POST', body: data }),
   challengeToday: () => request('/challenge/today')
 };
