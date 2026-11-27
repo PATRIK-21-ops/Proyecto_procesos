@@ -109,6 +109,57 @@ export class ScoreRepositoryPg {
     }));
   }
 
+  async personalStats(userId, { recentLimit = 10 } = {}) {
+    const activeFilter = `s.user_id = $1 AND u.status <> 'deleted'`;
+    const [totals, days, recent] = await Promise.all([
+      this.pool.query(
+        `SELECT COUNT(*)::int AS matches_played,
+                COALESCE(SUM(s.kills), 0)::bigint AS total_kills,
+                COALESCE(SUM(s.points), 0)::bigint AS total_points,
+                COALESCE(MAX(s.points), 0)::int AS best_points,
+                COALESCE(MAX(s.sector), 0)::int AS max_sector,
+                COALESCE(SUM(s.duration_ms), 0)::bigint AS total_duration_ms,
+                COUNT(*) FILTER (WHERE s.is_daily)::int AS daily_matches
+         FROM scores s JOIN users u ON u.id = s.user_id
+         WHERE ${activeFilter}`,
+        [userId]
+      ),
+      this.pool.query(
+        `SELECT DISTINCT TO_CHAR(s.created_at AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS day
+         FROM scores s JOIN users u ON u.id = s.user_id
+         WHERE ${activeFilter}
+         ORDER BY day ASC`,
+        [userId]
+      ),
+      this.pool.query(
+        `SELECT s.points, s.kills, s.sector, s.is_daily, s.created_at
+         FROM scores s JOIN users u ON u.id = s.user_id
+         WHERE ${activeFilter}
+         ORDER BY s.created_at DESC
+         LIMIT $2`,
+        [userId, recentLimit]
+      )
+    ]);
+    const row = totals.rows[0] || {};
+    return {
+      matchesPlayed: row.matches_played || 0,
+      totalKills: Number(row.total_kills || 0),
+      totalPoints: Number(row.total_points || 0),
+      bestPoints: row.best_points || 0,
+      maxSector: row.max_sector || 0,
+      totalDurationMs: Number(row.total_duration_ms || 0),
+      dailyMatches: row.daily_matches || 0,
+      playedDays: days.rows.map((d) => d.day),
+      recent: recent.rows.reverse().map((r) => ({
+        points: r.points,
+        kills: r.kills,
+        sector: r.sector || 1,
+        isDaily: Boolean(r.is_daily),
+        createdAt: r.created_at?.toISOString?.() ?? r.created_at
+      }))
+    };
+  }
+
   async stats() {
     const { rows } = await this.pool.query(
       `SELECT

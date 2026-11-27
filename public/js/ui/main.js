@@ -412,6 +412,71 @@ async function renderProfile() {
     const best = scores.reduce((max, score) => Math.max(max, score.points || 0), 0);
     $('#personal-best').textContent = `${best} PTS`;
   } catch (error) { showApiError(error); }
+  try {
+    const { stats } = await api.myStats();
+    renderProfileStats(stats);
+  } catch (error) { showApiError(error); }
+}
+
+function formatPlayTime(ms) {
+  const totalMinutes = Math.floor((ms || 0) / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} h ${minutes} min`;
+  if (totalMinutes > 0) return `${minutes} min`;
+  return `${Math.floor((ms || 0) / 1000)} s`;
+}
+
+function renderProfileStats(stats = {}) {
+  const grid = $('#profile-stats-grid');
+  const trend = $('#profile-trend');
+  const streakTag = $('#profile-streak-tag');
+  if (!grid || !trend) return;
+  const current = stats.currentStreak || 0;
+  if (streakTag) streakTag.textContent = `RACHA ${current} ${current === 1 ? 'DÍA' : 'DÍAS'}`;
+
+  const items = [
+    ['PARTIDAS', stats.matchesPlayed || 0],
+    ['BAJAS TOTALES', stats.totalKills || 0],
+    ['MEJOR PUNTUACIÓN', `${stats.bestPoints || 0} PTS`],
+    ['MEDIA / PARTIDA', `${stats.averagePoints || 0} PTS`],
+    ['SECTOR MÁXIMO', stats.maxSector ? `S${String(stats.maxSector).padStart(2, '0')}` : '—'],
+    ['TIEMPO EN COMBATE', formatPlayTime(stats.totalDurationMs)],
+    ['DESAFÍOS DIARIOS', stats.dailyMatches || 0],
+    ['MEJOR RACHA', `${stats.bestStreak || 0} ${(stats.bestStreak || 0) === 1 ? 'DÍA' : 'DÍAS'}`]
+  ];
+  grid.replaceChildren(...items.map(([label, value]) => {
+    const chip = document.createElement('div');
+    chip.className = 'profile-stat-chip';
+    const span = document.createElement('span');
+    span.textContent = label;
+    const strong = document.createElement('strong');
+    strong.textContent = String(value);
+    chip.append(span, strong);
+    return chip;
+  }));
+
+  const recent = Array.isArray(stats.recent) ? stats.recent : [];
+  trend.replaceChildren();
+  if (!recent.length) {
+    trend.classList.add('leaderboard-empty');
+    trend.textContent = 'Juega una partida para ver tu progresión.';
+    return;
+  }
+  trend.classList.remove('leaderboard-empty');
+  const maxPoints = Math.max(1, ...recent.map((r) => r.points || 0));
+  recent.forEach((match) => {
+    const col = document.createElement('div');
+    col.className = `profile-trend-col${match.isDaily ? ' is-daily' : ''}`;
+    col.title = `${match.points || 0} pts · ${match.kills || 0} bajas · S${String(match.sector || 1).padStart(2, '0')} · ${formatDate(match.createdAt)}${match.isDaily ? ' · Desafío diario' : ''}`;
+    const value = document.createElement('small');
+    value.textContent = String(match.points || 0);
+    const bar = document.createElement('div');
+    bar.className = 'profile-trend-bar';
+    bar.style.height = `${Math.max(4, Math.round(((match.points || 0) / maxPoints) * 100))}%`;
+    col.append(value, bar);
+    trend.append(col);
+  });
 }
 
 async function loadAdminUsers() {
